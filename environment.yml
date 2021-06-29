@@ -3,7 +3,7 @@ channels:
   - defaults
   - conda-forge
 dependencies:
-  - python=3.8.*
+  - python=3.9.*
   - ipython
   - jupyter
   - jupyterlab
@@ -18,10 +18,11 @@ dependencies:
   - pytest-repeat
   - pytest-xdist
   - pytest-cov
-  - pre-commit
-  - black
   - tqdm
   - matplotlib
+  - pre-commit
+  - black
+  - isort
   - pip
   - pip:
     - -e . # install this package
