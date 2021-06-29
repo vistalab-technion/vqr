@@ -1,0 +1,110 @@
+[build-system]
+requires = ["setuptools>=42", "wheel", "setuptools_scm[toml]>=3.4"]
+
+[tool.setuptools_scm]
+write_to = "src/vqr/__version__.py"
+
+[tool.pytest.ini_options]
+addopts = [
+    # Show names of all tests and parametrizations
+    "--verbose",
+    # Calculate code coverage with coverage.py
+    "--cov",
+    # Show a detailed coverage report on the terminal output
+    "--cov-report=term-missing",
+    # Write coverage reports
+    "--cov-report=xml:tests/out/reports/cov.xml",
+    "--cov-report=html:tests/out/reports/cov.html",
+    # Write test results to xml
+    "--junitxml=tests/out/reports/junit.xml",
+    # Use multiprocessing for speed.
+    "--numprocesses=4",
+    # Benchmark-disable means that tests with benchmarks will be run as regular tests,
+    # without benchmarking (but with asserts or course).
+    # Benchmarking is disabled anyway when using multi-process runs, this just supresses
+    # a warning. Benchmarking can be enabled again via CLI with --enable-benchmark,
+    # e.g. when writing a new benchmark test. In CI we enable this.
+    "--benchmark-disable",
+    # Show durations of slowest tests.
+    "--durations=10",
+    # Force colored output even on CI
+    "--color=yes"
+]
+
+testpaths = [
+    "tests",
+]
+
+[tool.isort]
+multi_line_output = 3
+include_trailing_comma = true
+force_grid_wrap = 0
+use_parentheses = true
+ensure_newline_before_comments = true
+line_length = 88
+length_sort = true
+# There's some weirdness between pymol and biopython: seems like it pymol must
+# be imported after biopython for some unknown reason, otherwise it pymol's
+# __init__ fails.  This fixes the issue by createing a section specifically for
+# pymol after all the third-party stuff.
+sections = ['FUTURE', 'STDLIB', 'THIRDPARTY', 'PYMOL', 'FIRSTPARTY', 'LOCALFOLDER']
+known_pymol = ['pymol']
+
+[tool.black]
+line-length = 88
+target-version = ['py37']
+include = '\.pyi?$'
+exclude = '''
+
+(
+  /(
+      \.eggs         # exclude a few common directories in the
+    | \.git          # root of the project
+    | \.hg
+    | \.mypy_cache
+    | \.tox
+    | \.venv
+    | _build
+    | buck-out
+    | build
+    | dist
+    | data
+    | out
+  )/
+  | __foo__.py           # also separately exclude a specific file (example)
+)
+'''
+
+
+# Configure coverage.py (provides code coverage report through pytest)
+[tool.coverage.run]
+branch = true
+source = ["vqr"]
+disable_warnings = ["module-not-measured"]
+data_file = ".coverage/coverage"
+# omit = bad_file.py
+
+[tool.coverage.paths]
+# Paths considered equivalent.
+# The first entry must exist in the directory from which we run the tests.
+# This configures */site-packages/vqr to be equivalent to src/vqr
+source = [
+    "src/",
+    "*/site-packages/",
+]
+
+[tool.coverage.report]
+# Regexes for lines to exclude from consideration
+exclude_lines = [
+    # Have to re-enable the standard pragma
+    "pragma: no cover",
+    # Don't complain about missing debug-only code:
+    "def __repr__",
+    "if self\\.debug",
+    # Don't complain if tests don't hit defensive assertion code:
+    "raise AssertionError",
+    "raise NotImplementedError",
+    # Don't complain if non-runnable code isn't run:
+    "if 0:",
+    "if __name__ == .__main__.:",
+]
