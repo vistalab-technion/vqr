@@ -1,0 +1,27 @@
+name: vqr
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.8.*
+  - ipython
+  - jupyter
+  - jupyterlab
+  - requests
+  - nodejs
+  - numpy
+  - scikit-learn
+  - scipy
+  - pandas
+  - pytest
+  - pytest-benchmark
+  - pytest-repeat
+  - pytest-xdist
+  - pytest-cov
+  - pre-commit
+  - black
+  - tqdm
+  - matplotlib
+  - pip
+  - pip:
+    - -e . # install this package
