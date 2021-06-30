@@ -7,12 +7,14 @@ dependencies:
   - ipython
   - jupyter
   - jupyterlab
+  - jupyterlab-spellchecker
   - requests
   - nodejs
   - numpy
   - scikit-learn
   - scipy
   - pandas
+  - cvxpy
   - pytest
   - pytest-benchmark
   - pytest-repeat
