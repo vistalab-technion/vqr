@@ -11,16 +11,6 @@ from sklearn.utils.validation import check_is_fitted
 DEFAULT_METRIC = lambda x, y: np.dot(x, y)
 
 
-def _slice(
-    a: ndarray,
-    axis: int,
-    start: Optional[int] = None,
-    end: Optional[int] = None,
-    step: int = 1,
-):
-    return a[(slice(None),) * (axis % a.ndim) + (slice(start, end, step),)]
-
-
 class VectorQuantileRegressor(RegressorMixin, BaseEstimator):
     """
     Performs vector quantile regression and estimation.
@@ -30,7 +20,7 @@ class VectorQuantileRegressor(RegressorMixin, BaseEstimator):
         self,
         n_levels: int = 50,
         metric: Union[str, Callable] = DEFAULT_METRIC,
-        solver_opts: Dict[str, Any] = {},
+        solver_opts: Optional[Dict[str, Any]] = None,
     ):
         """
         :param n_levels: Number of quantile levels. The range of possible
@@ -48,7 +38,7 @@ class VectorQuantileRegressor(RegressorMixin, BaseEstimator):
 
         self.n_levels = n_levels
         self.metric = metric
-        self.solver_opts = solver_opts
+        self.solver_opts = solver_opts or {}
 
     def fit(self, X: ndarray, y: ndarray):
         """
