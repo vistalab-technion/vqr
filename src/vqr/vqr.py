@@ -6,6 +6,7 @@ from numpy import ndarray
 from sklearn.base import BaseEstimator, RegressorMixin
 from sklearn.utils import check_X_y
 from scipy.spatial.distance import cdist
+from sklearn.utils.validation import check_is_fitted
 
 DEFAULT_METRIC = lambda x, y: np.dot(x, y)
 
@@ -120,11 +121,47 @@ class VectorQuantileRegressor(RegressorMixin, BaseEstimator):
             Q_surfaces[d - 1 - axis] = dB_du
 
         # Save fitted model
-        self.T_ = T
-        self.d_ = d
-        self.k_ = k
-        self.U_grids_ = U_grids
-        self.Q_surfaces_ = Q_surfaces
+        self.T_: int = T
+        self.d_: int = d
+        self.k_: int = k
+        self.u_: ndarray = u
+        self.U_grids_: Sequence[ndarray] = tuple(U_grids)
+        self.Q_surfaces_: Sequence[ndarray] = tuple(Q_surfaces)
 
     def predict(self, X: ndarray):
+        """
+        TODO
+        :param X:
+        :return:
+        """
+        check_is_fitted(self)
         pass
+
+    @property
+    def quantile_values(self) -> Sequence[ndarray]:
+        """
+        :return: A sequence of quantile value ndarrays. The sequence is of length d,
+            where d is the dimension of the target variable (Y). The j-th ndarray is
+            the d-dimensional vector quantile of the j-th variable in Y.
+        """
+        check_is_fitted(self)
+        return self.Q_surfaces_
+
+    @property
+    def quantile_grid(self) -> Sequence[ndarray]:
+        """
+        :return: A sequence of quantile level grids as ndarrays. This is a
+            d-dimensional meshgrid (see np.meshgrid) where d is the dimension of the
+            target variable Y.
+        """
+        check_is_fitted(self)
+        return self.U_grids_
+
+    @property
+    def quantile_levels(self) -> Sequence[ndarray]:
+        """
+        :return: An ndarray containing the levels at which the vector quantiles were
+            estimated along each target dimension.
+        """
+        check_is_fitted(self)
+        return self.u_
