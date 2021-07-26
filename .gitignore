@@ -526,6 +526,7 @@ $RECYCLE.BIN/
 .idea/**/dictionaries
 .idea/**/shelf
 .idea/**/watcherTasks.xml
+.idea/**/webResources.xml
 
 # AWS User-specific
 .idea/**/aws.xml
