@@ -2,13 +2,10 @@ import numpy as np
 import pytest
 
 from vqr import VectorQuantileRegressor
+from vqr.data import generate_mvn_data
 
 
 class TestVectorQuantileRegressor(object):
-    @pytest.fixture(autouse=True)
-    def setup_rng(self):
-        self.rng = np.random.default_rng()
-
     @pytest.fixture(
         params=[
             #
@@ -27,22 +24,7 @@ class TestVectorQuantileRegressor(object):
         params = request.param
         d, k = params["d"], params["k"]
         N = 100
-
-        # Generate random orthonormal matrix Q
-        Q, R = np.linalg.qr(self.rng.normal(size=(d, d)))
-
-        # Generate positive eigenvalues
-        eigs = self.rng.uniform(size=(d,))
-
-        # PSD Covariance matrix, zero mean
-        S = Q.T @ np.diag(eigs) @ Q
-        mu = np.zeros(d)
-
-        # Generate correlated targets (Y) and uncorrelated features (X)
-        Y = self.rng.multivariate_normal(mean=mu, cov=S, size=(N,))
-        X = self.rng.normal(size=(N, k))
-
-        return X, Y
+        return generate_mvn_data(N, d, k)
 
     def test_shapes(self, dataset):
         X, Y = dataset
@@ -50,7 +32,6 @@ class TestVectorQuantileRegressor(object):
         T = 10
 
         vqr = VectorQuantileRegressor(n_levels=T, solver_opts={"verbose": True})
-
         vqr.fit(X, Y)
 
         assert len(vqr.quantile_values) == d
