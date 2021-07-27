@@ -256,3 +256,17 @@ class VectorQuantileRegressor(RegressorMixin, BaseEstimator):
             ax.locator_params(axis="both", tight=True, nbins=10)
 
         return fig
+
+    def __repr__(self):
+        cls = self.__class__.__name__
+        fitted = True
+        try:
+            check_is_fitted(self)
+        except NotFittedError:
+            fitted = False
+
+        fields_strs = [f"{fitted=}", f"n_levels={self.n_levels}"]
+        if fitted:
+            fields_strs.append(f"d={self.quantile_dimension}")
+
+        return f"{cls}({str.join(', ', fields_strs)})"
