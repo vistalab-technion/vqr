@@ -9,6 +9,7 @@ from matplotlib.cm import ScalarMappable
 from sklearn.utils import check_X_y
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
+from sklearn.exceptions import NotFittedError
 from mpl_toolkits.mplot3d import Axes3D
 from scipy.spatial.distance import cdist
 from sklearn.utils.validation import check_is_fitted
@@ -47,10 +48,11 @@ class VectorQuantileRegressor(RegressorMixin, BaseEstimator):
 
     def fit(self, X: ndarray, y: ndarray):
         """
-        TODO
-        :param X:
-        :param y:
-        :return:
+        Fits a quantile regression model to the given data. In case the response
+        variable y is high-dimentional, a vector-quantile model will be fitted.
+        :param X: Features, (n, k). Currently ignored (TODO: Handle X)
+        :param y: Responses, (n, d).
+        :return: self.
         """
 
         # Input validation.
@@ -117,6 +119,7 @@ class VectorQuantileRegressor(RegressorMixin, BaseEstimator):
         self.u_: ndarray = u
         self.U_grids_: Sequence[ndarray] = tuple(U_grids)
         self.Q_surfaces_: Sequence[ndarray] = tuple(Q_surfaces)
+        return self
 
     def predict(self, X: ndarray):
         """
@@ -165,6 +168,13 @@ class VectorQuantileRegressor(RegressorMixin, BaseEstimator):
         return self.u_
 
     def plot_quantiles(self, figsize: Optional[Tuple[int, int]] = None) -> Figure:
+        """
+        Plots 1d or 2d quantiles. A new figure will be created. 1d quantiles will be
+        plotted using a simple line plot, while 2d quantiles will be plottes as an
+        image, where the pixel colors correspont to quantile value.
+        :param figsize: Size of figure to create. Will be passed to plt.subplots.
+        :return: The created figure.
+        """
         if self.quantile_dimension > 2:
             raise RuntimeError("Can't plot quantiles with dimension greater than 2")
 
@@ -212,6 +222,13 @@ class VectorQuantileRegressor(RegressorMixin, BaseEstimator):
         return fig
 
     def plot_quantiles_3d(self, figsize: Optional[Tuple[int, int]] = None) -> Figure:
+        """
+        Plots 2d or 3d quantiles. A new figure will be created. 2d quantiles will be
+        plotted as surfaces, while 3d quantiles will be plotted as voxels, where the
+        color of the quantile corresponds to the value of the quantile.
+        :param figsize: Size of figure to create. Will be passed to plt.subplots.
+        :return: The created figure.
+        """
         if not 1 < self.quantile_dimension < 4:
             raise RuntimeError("Can't plot 3d quantiles with dimension other than 2, 3")
 
