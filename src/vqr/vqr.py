@@ -1,10 +1,13 @@
-from typing import Any, Dict, List, Union, Callable, Optional, Sequence
+from typing import Any, Dict, List, Tuple, Union, Callable, Optional, Sequence
 
 import cvxpy as cp
 import numpy as np
+import matplotlib.pyplot as plt
 from numpy import ndarray
 from sklearn.base import BaseEstimator, RegressorMixin
 from sklearn.utils import check_X_y
+from matplotlib.axes import Axes
+from matplotlib.figure import Figure
 from scipy.spatial.distance import cdist
 from sklearn.utils.validation import check_is_fitted
 
@@ -148,10 +151,65 @@ class VectorQuantileRegressor(RegressorMixin, BaseEstimator):
         return self.U_grids_
 
     @property
-    def quantile_levels(self) -> Sequence[ndarray]:
+    def quantile_dimension(self) -> int:
+        """
+        :return: The dimension of the fitted vector quantiles.
+        """
+        check_is_fitted(self)
+        return self.d_
+
+    @property
+    def quantile_levels(self) -> ndarray:
         """
         :return: An ndarray containing the levels at which the vector quantiles were
             estimated along each target dimension.
         """
         check_is_fitted(self)
         return self.u_
+
+    def plot_quantiles(self, figsize: Optional[Tuple[int, int]] = None) -> Figure:
+        if self.quantile_dimension > 2:
+            raise RuntimeError("Can't plot quantiles with dimension greater than 2")
+
+        fig: Figure
+        _axes: ndarray
+        fig, _axes = plt.subplots(
+            nrows=1,
+            ncols=self.quantile_dimension,
+            figsize=figsize,
+            squeeze=False,
+        )
+        axes: Sequence[Axes] = list(
+            # _axes is (1, d), take first row to get (d,)
+            _axes[0]
+        )
+
+        tick_labels = [f"{t:.2f}" for t in self.quantile_levels]
+
+        for i, (ax, Q) in enumerate(zip(axes, self.quantile_values)):
+            if self.quantile_dimension == 1:
+                ax.plot(*self.quantile_grid, self.quantile_values[i])
+                ax.set_xticks(self.quantile_levels)
+                ax.set_xticklabels(
+                    tick_labels, rotation=90, ha="right", rotation_mode="anchor"
+                )
+
+            elif self.quantile_dimension == 2:
+                m = ax.matshow(Q)
+
+                ticks = self.quantile_levels * self.n_levels - 1
+                ax.set_yticks(ticks)
+                ax.set_yticklabels(tick_labels)
+                ax.set_ylabel("$u_1$")
+                ax.set_title(f"$Q_{{{i+1}}}(u_1, u_2)$")
+                ax.xaxis.set_ticks_position("bottom")
+                ax.set_xticks(ticks)
+                ax.set_xticklabels(
+                    tick_labels, rotation=90, ha="right", rotation_mode="anchor"
+                )
+                ax.set_xlabel("$u_2$")
+
+                fig.colorbar(m, ax=[ax], shrink=0.2)
+
+            ax.locator_params(axis="both", tight=True, nbins=20)
+        return fig
