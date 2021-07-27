@@ -5,9 +5,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 from numpy import ndarray
 from sklearn.base import BaseEstimator, RegressorMixin
+from matplotlib.cm import ScalarMappable
 from sklearn.utils import check_X_y
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
+from mpl_toolkits.mplot3d import Axes3D
 from scipy.spatial.distance import cdist
 from sklearn.utils.validation import check_is_fitted
 
@@ -65,12 +67,7 @@ class VectorQuantileRegressor(RegressorMixin, BaseEstimator):
         u: ndarray = (np.arange(T) + 1) * (1 / T)
 
         # Quantile levels grid: list of grid coordinate matrices, one per dimension
-        U_grids: Sequence[ndarray] = np.meshgrid(
-            *[
-                u,
-            ]
-            * d
-        )
+        U_grids: Sequence[ndarray] = np.meshgrid(*([u] * d))
         # Stack all nd-grid coordinates into one long matrix, of shape (T**d, d)
         U: ndarray = np.stack([U_grid.reshape(-1) for U_grid in U_grids], axis=1)
         assert U.shape == (Td, d)
@@ -179,29 +176,29 @@ class VectorQuantileRegressor(RegressorMixin, BaseEstimator):
             figsize=figsize,
             squeeze=False,
         )
-        axes: Sequence[Axes] = list(
-            # _axes is (1, d), take first row to get (d,)
-            _axes[0]
-        )
+        # _axes is (1, d), take first row to get (d,)
+        axes: Sequence[Axes] = list(_axes[0])
 
         tick_labels = [f"{t:.2f}" for t in self.quantile_levels]
 
+        U = self.quantile_grid
         for i, (ax, Q) in enumerate(zip(axes, self.quantile_values)):
+
             if self.quantile_dimension == 1:
-                ax.plot(*self.quantile_grid, self.quantile_values[i])
+                ax.plot(*U, Q)
                 ax.set_xticks(self.quantile_levels)
                 ax.set_xticklabels(
                     tick_labels, rotation=90, ha="right", rotation_mode="anchor"
                 )
 
             elif self.quantile_dimension == 2:
-                m = ax.matshow(Q)
+                m = ax.imshow(Q, aspect="equal", interpolation="none", origin="lower")
 
                 ticks = self.quantile_levels * self.n_levels - 1
+                ax.set_title(f"$Q_{{{i+1}}}(u_1, u_2)$")
                 ax.set_yticks(ticks)
                 ax.set_yticklabels(tick_labels)
                 ax.set_ylabel("$u_1$")
-                ax.set_title(f"$Q_{{{i+1}}}(u_1, u_2)$")
                 ax.xaxis.set_ticks_position("bottom")
                 ax.set_xticks(ticks)
                 ax.set_xticklabels(
@@ -212,4 +209,50 @@ class VectorQuantileRegressor(RegressorMixin, BaseEstimator):
                 fig.colorbar(m, ax=[ax], shrink=0.2)
 
             ax.locator_params(axis="both", tight=True, nbins=20)
+        return fig
+
+    def plot_quantiles_3d(self, figsize: Optional[Tuple[int, int]] = None) -> Figure:
+        if not 1 < self.quantile_dimension < 4:
+            raise RuntimeError("Can't plot 3d quantiles with dimension other than 2, 3")
+
+        fig: Figure
+        _axes: ndarray
+        fig, _axes = plt.subplots(
+            nrows=1,
+            ncols=self.quantile_dimension,
+            figsize=figsize,
+            squeeze=False,
+            subplot_kw={"projection": "3d"},
+        )
+        axes: Sequence[Axes3D] = list(_axes[0])
+
+        tick_labels = [f"{t:.2f}" for t in self.quantile_levels]
+
+        U = self.quantile_grid
+        for i, (ax, Q) in enumerate(zip(axes, self.quantile_values)):
+            if self.quantile_dimension == 2:
+                ticks = self.quantile_levels
+                m = ax.plot_surface(*U, Q, cmap="viridis")
+                fig.colorbar(m, ax=[ax], shrink=0.2)
+
+            if self.quantile_dimension == 3:
+                ticks = self.quantile_levels * self.n_levels - 1
+                cmap = plt.get_cmap("viridis")
+                norm = plt.Normalize(Q.min(), Q.max())
+                ax.voxels(np.ones_like(Q), facecolors=cmap(norm(Q)), edgecolors="black")
+                fig.colorbar(ScalarMappable(norm=norm, cmap=cmap), ax=[ax], shrink=0.2)
+                ax.set_zticks(ticks)
+                ax.set_zticklabels(tick_labels)
+                ax.set_zlabel("$u_3$")
+
+            ax.set_title(f"$Q_{{{i+1}}}(u_1, u_2, u_3)$")
+            ax.set_yticks(ticks)
+            ax.set_yticklabels(tick_labels)
+            ax.set_ylabel("$u_1$")
+            ax.set_xticks(ticks)
+            ax.set_xticklabels(tick_labels)
+            ax.set_xlabel("$u_2$")
+
+            ax.locator_params(axis="both", tight=True, nbins=10)
+
         return fig
