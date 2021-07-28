@@ -4,51 +4,50 @@ import numpy as np
 import pytest
 from sklearn.exceptions import NotFittedError
 
-from vqr import VectorQuantileRegressor
+from vqr import VectorQuantileEstimator
 from vqr.data import generate_mvn_data
 
 
-class TestVectorQuantileRegressor(object):
+class TestVectorQuantileEstimator(object):
     @pytest.fixture(
         params=[
-            #
-            {"d": 1, "k": 2},
-            {"d": 2, "k": 1},
-            {"d": 3, "k": 3},
+            {"d": 1},
+            {"d": 2},
+            {"d": 3},
         ],
         ids=[
-            #
-            "d=1, k=2",
-            "d=2, k=1",
-            "d=3, k=3",
+            "d=1",
+            "d=2",
+            "d=3",
         ],
     )
     def dataset(self, request):
         params = request.param
-        d, k = params["d"], params["k"]
+        d = params["d"]
         N = 100
-        return generate_mvn_data(N, d, k)
+        X, Y = generate_mvn_data(N, d, k=1)
+        return Y
 
     def test_shapes(self, dataset):
-        X, Y = dataset
-        N, d, k = Y.shape[0], Y.shape[1], X.shape[1]
+        Y = dataset
+        N, d = Y.shape[0], Y.shape[1]
         T = 10
 
-        vqr = VectorQuantileRegressor(n_levels=T, solver_opts={"verbose": True})
-        vqr.fit(X, Y)
+        vq = VectorQuantileEstimator(n_levels=T, solver_opts={"verbose": True})
+        vq.fit(Y)
 
-        assert vqr.quantile_dimension == d
-        assert len(vqr.quantile_values) == d
-        assert all(q.shape == (T,) * d for q in vqr.quantile_values)
-        assert len(vqr.quantile_grid) == d
-        assert all(q.shape == (T,) * d for q in vqr.quantile_grid)
+        assert vq.quantile_dimension == d
+        assert len(vq.quantile_values) == d
+        assert all(q.shape == (T,) * d for q in vq.quantile_values)
+        assert len(vq.quantile_grid) == d
+        assert all(q.shape == (T,) * d for q in vq.quantile_grid)
 
     def test_not_fitted(self):
-        vqr = VectorQuantileRegressor(n_levels=100)
+        vq = VectorQuantileEstimator(n_levels=100)
         with pytest.raises(NotFittedError):
-            _ = vqr.quantile_grid
+            _ = vq.quantile_grid
         with pytest.raises(NotFittedError):
-            _ = vqr.quantile_values
+            _ = vq.quantile_values
 
     @pytest.mark.repeat(5)
     def test_monotonicity(self):
@@ -57,11 +56,11 @@ class TestVectorQuantileRegressor(object):
         d = 2
         EPS = 0.0001
 
-        X, Y = generate_mvn_data(n=N, d=d, k=1)
-        vqr = VectorQuantileRegressor(n_levels=T, solver_opts={"verbose": True})
-        vqr.fit(X, Y)
-        U1, U2 = vqr.quantile_grid
-        Q1, Q2 = vqr.quantile_values
+        _, Y = generate_mvn_data(n=N, d=d, k=1)
+        vq = VectorQuantileEstimator(n_levels=T, solver_opts={"verbose": True})
+        vq.fit(Y)
+        U1, U2 = vq.quantile_grid
+        Q1, Q2 = vq.quantile_values
 
         ii = jj = tuple(range(1, T))
 
