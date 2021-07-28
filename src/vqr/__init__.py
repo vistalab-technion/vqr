@@ -1,1 +1,1 @@
-from vqr.vqr import VectorQuantileRegressor
+from vqr.api import VectorQuantileRegressor
