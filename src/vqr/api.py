@@ -109,33 +109,6 @@ class VectorQuantileBase(BaseEstimator, ABC):
         """
         pass
 
-    @property
-    @abstractmethod
-    def vqr_U(self) -> ndarray:
-        """
-        :return: Encoded quantile function evaluation grid of shape (T**d, d),
-            for which the VQR problem was solved.
-        """
-        pass
-
-    @property
-    @abstractmethod
-    def vqr_A(self) -> ndarray:
-        """
-        :return: VQR regression coefficient Alpha of shape (T**d, 1), obtained by
-            solving the VQR problem.
-        """
-        pass
-
-    @property
-    @abstractmethod
-    def vqr_B(self) -> Optional[ndarray]:
-        """
-        :return: VQR regression coefficient Beta of shape (T**d, k), obtained by
-            solving the VQR problem.
-        """
-        pass
-
     def plot_quantiles(
         self, surf_2d: bool = False, figsize: Optional[Tuple[int, int]] = None
     ) -> Figure:
@@ -156,8 +129,8 @@ class VectorQuantileBase(BaseEstimator, ABC):
         plot_kwargs = dict(
             T=self.n_levels,
             d=self.quantile_dimension,
-            U=self.U_,
-            A=self.A_,
+            U=self.vqr_U,
+            A=self.vqr_A,
             figsize=figsize,
         )
 
@@ -199,9 +172,9 @@ class VectorQuantileEstimator(VectorQuantileBase):
 
         self.d_: int = Y.shape[1]  # number or target dimensions
         self.U_, self.A_, B_ = vqr_ot(
+            T=self.n_levels,
             Y=Y,
             X=None,
-            n_levels=self.n_levels,
             metric=self.metric,
             solver_opts=self.solver_opts,
         )
@@ -261,11 +234,7 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
         self.d_: int = Y.shape[1]  # number or target dimensions
 
         vqr_solution = vqr_ot(
-            Y=Y,
-            X=X,
-            n_levels=self.n_levels,
-            metric=self.metric,
-            solver_opts=self.solver_opts,
+            T=self.n_levels, Y=Y, X=X, metric=self.metric, solver_opts=self.solver_opts
         )
         assert all(x is not None for x in vqr_solution)
         self.U_, self.A_, self.B_ = vqr_solution

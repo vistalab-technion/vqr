@@ -9,12 +9,12 @@ DEFAULT_METRIC = lambda x, y: np.dot(x, y)
 
 
 def vqr_ot(
+    T: int,
     Y: ndarray,
     X: Optional[ndarray] = None,
-    n_levels: int = 50,
     metric: Union[str, Callable] = DEFAULT_METRIC,
     solver_opts: Optional[Dict[str, Any]] = None,
-) -> tuple[ndarray, ndarray, ndarray]:
+) -> tuple[ndarray, ndarray, Optional[ndarray]]:
     """
     Solves the Optimal Transport formulation of Vector Quantile Regression.
 
@@ -23,6 +23,8 @@ def vqr_ot(
         An optimal transport approach,
         Annals of Statistics, 2016
 
+    :param T: Number of quantile levels to estimate along each of the
+        d dimensions. The quantile level will be spaced uniformly between 0 to 1.
     :param Y: The regression target variable, of shape (N, d) where N is the number
         of samples and d is the dimension of the target, which is also the
         dimension of the quantiles which will be estimated.
@@ -30,8 +32,6 @@ def vqr_ot(
         the number of features. Note that X may be None, in which case the problem
         becomes quantile estimation (estimating the quantiles of Y) instead of
         quantile regression.
-    :param n_levels: Number of quantile levels to estimate along each of the
-        d dimensions. The quantile level will be spaced uniformly between 0 to 1.
     :param metric: The metric to use in order to compute pairwise distances between
         vectors. Should accept to vectors in dimension d and return a scalar.
     :param solver_opts: Extra arguments for CVXPY's solve().
@@ -44,7 +44,8 @@ def vqr_ot(
             into the d vector quantiles of Y using the
             :obj:`decode_quantile_values` function.
         - B, of shape (T**d, k): This contains the "beta" Lagrange multiplier
-            which contains the regression coefficients.
+            which contains the regression coefficients. Will be None if the input
+            was an estimation problem (X=None).
 
         The outputs should be used as follows:
         Given a sample x of shape (1, k), the conditional quantiles Y|X=x are given by
@@ -70,7 +71,6 @@ def vqr_ot(
     X_bar = np.mean(X, axis=0, keepdims=True)  # (1, k+1)
 
     # All quantile levels
-    T: int = n_levels
     Td: int = T ** d
     u: ndarray = quantile_levels(T)
 
@@ -110,13 +110,13 @@ def vqr_ot(
     return U, A, B
 
 
-def quantile_levels(n_levels: int) -> ndarray:
+def quantile_levels(T: int) -> ndarray:
     """
     Creates a vector of evenly-spaced quantile levels between zero and one.
-    :param n_levels: Number of
-    :return: An ndarray of shape (n_levels,).
+    :param T: Number of levels to create.
+    :return: An ndarray of shape (T,).
     """
-    T = n_levels
+    T = T
     return (np.arange(T) + 1) * (1 / T)
 
 
