@@ -241,15 +241,29 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
 
         return self
 
-    def predict(self, X: ndarray):
+    def predict(self, X: ndarray) -> ndarray:
         """
-        TODO
-        :param X:
-        :return:
+        Estimates conditional quantiles of Y|X=x.
+        :param X: Samples at which to estimate. Should have shape (N, k).
+        :return: An array Y_hat of shape (N, T**d). Each row j contains the vector
+        quantile values of Y|X=x for x = X[j, :]. The vector quantiles for each
+        sample can be decoded with :obj:`decode_quantile_values`.
         """
         check_is_fitted(self)
-        X = check_array(X)
-        raise NotImplementedError("Not yet implemented")
+        check_array(X, ensure_2d=True, allow_nd=False)
+        N, k = X.shape
+
+        if k != self.features_dimension:
+            raise ValueError(
+                f"VQR model was fitted with k={self.features_dimension}, "
+                f"but got data with {k=} features."
+            )
+
+        B = self.vqr_B  # (T**d, k)
+        A = self.vqr_A  # (T**d, 1) -> will be broadcast to (T**d, N)
+        Y_hat = B @ X.T + A  # result is (T**d, N)
+
+        return Y_hat.T
 
     @property
     def features_dimension(self) -> int:
