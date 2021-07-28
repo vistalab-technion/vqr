@@ -1,9 +1,9 @@
 from typing import Tuple
-import numpy as np
-import cvxpy as cp
 
+import cvxpy as cp
+import numpy as np
+from numpy import sqrt, array, quantile
 from scipy.spatial.distance import cdist
-from numpy import array, sqrt, quantile
 
 EPS = 0.0001
 
@@ -42,15 +42,20 @@ def vector_quantile(Y: array, U: array) -> Tuple[array, array]:
         one_T.T @ Pi_cp == 1 / N * one_N.T,
     ]
     problem = cp.Problem(objective=cp.Maximize(objective), constraints=constraints)
-    problem.solve(verbose=True, )
+    problem.solve(
+        verbose=True,
+    )
     u = 1 / T * (np.arange(0, T) + 1)
-    U1, U2 = np.meshgrid(*([u, ] * d))
+    U1, U2 = np.meshgrid(
+        *(
+            [
+                u,
+            ]
+            * d
+        )
+    )
     Q1, Q2 = b_to_quantile(
-        constraints[0].dual_value,
-        u,
-        U1.reshape(-1),
-        U2.reshape(-1),
-        1 / T
+        constraints[0].dual_value, u, U1.reshape(-1), U2.reshape(-1), 1 / T
     )
     return Q1, Q2
 
