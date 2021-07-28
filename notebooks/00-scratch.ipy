@@ -1,0 +1,14 @@
+# %%
+
+def foo(x, y):
+    print(x, y)
+    return 42
+
+# %%
+
+
+foo(2, 3)
+
+# %%
+
+import vqr
