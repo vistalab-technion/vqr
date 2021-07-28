@@ -2,14 +2,10 @@ from typing import Any, Dict, Tuple, Union, Callable, Optional, Sequence
 
 import numpy as np
 from numpy import ndarray
-from matplotlib import pyplot as plt
 from sklearn.base import BaseEstimator, RegressorMixin
-from matplotlib.cm import ScalarMappable
 from sklearn.utils import check_X_y
-from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from sklearn.exceptions import NotFittedError
-from mpl_toolkits.mplot3d import Axes3D
 from sklearn.utils.validation import check_is_fitted
 
 from vqr.vqr import (
@@ -19,6 +15,7 @@ from vqr.vqr import (
     decode_quantile_grid,
     decode_quantile_values,
 )
+from vqr.plot import plot_quantiles, plot_quantiles_3d
 
 
 class VectorQuantileRegressor(RegressorMixin, BaseEstimator):
@@ -131,112 +128,37 @@ class VectorQuantileRegressor(RegressorMixin, BaseEstimator):
         check_is_fitted(self)
         return self.u_
 
-    def plot_quantiles(self, figsize: Optional[Tuple[int, int]] = None) -> Figure:
+    def plot_quantiles(
+        self, surf_2d: bool = False, figsize: Optional[Tuple[int, int]] = None
+    ) -> Figure:
         """
-        Plots 1d or 2d quantiles. A new figure will be created. 1d quantiles will be
-        plotted using a simple line plot, while 2d quantiles will be plottes as an
-        image, where the pixel colors correspont to quantile value.
+        Plots scalar (d=1) or vector quantiles (d=2 and d=3).
+        A new figure will be created.
+        - Scalar quantiles (d=1) will be plotted using a simple line plot
+        - Vector d=2 quantiles will be plotted either as images (surf_2d=False) or as
+            surface plots (surf_2d=True).
+        - Vector d=3 quantiles will be plotted as voxels.
+        :param surf_2d: Whether for d=2 the quantiles should be plotted as a surface
+            or an image.
         :param figsize: Size of figure to create. Will be passed to plt.subplots.
         :return: The created figure.
         """
-        if self.quantile_dimension > 2:
-            raise RuntimeError("Can't plot quantiles with dimension greater than 2")
+        check_is_fitted(self)
 
-        fig: Figure
-        _axes: ndarray
-        fig, _axes = plt.subplots(
-            nrows=1,
-            ncols=self.quantile_dimension,
+        plot_kwargs = dict(
+            T=self.n_levels,
+            d=self.quantile_dimension,
+            U=self.U_,
+            A=self.A_,
             figsize=figsize,
-            squeeze=False,
         )
-        # _axes is (1, d), take first row to get (d,)
-        axes: Sequence[Axes] = list(_axes[0])
 
-        tick_labels = [f"{t:.2f}" for t in self.quantile_levels]
+        if self.quantile_dimension == 3 or self.quantile_dimension == 2 and surf_2d:
+            plot_fn = plot_quantiles_3d
+        else:
+            plot_fn = plot_quantiles
 
-        U = self.quantile_grid
-        for i, (ax, Q) in enumerate(zip(axes, self.quantile_values)):
-
-            if self.quantile_dimension == 1:
-                ax.plot(*U, Q)
-                ax.set_xticks(self.quantile_levels)
-                ax.set_xticklabels(
-                    tick_labels, rotation=90, ha="right", rotation_mode="anchor"
-                )
-
-            elif self.quantile_dimension == 2:
-                m = ax.imshow(Q, aspect="equal", interpolation="none", origin="lower")
-
-                ticks = self.quantile_levels * self.n_levels - 1
-                ax.set_title(f"$Q_{{{i+1}}}(u_1, u_2)$")
-                ax.set_yticks(ticks)
-                ax.set_yticklabels(tick_labels)
-                ax.set_ylabel("$u_1$")
-                ax.xaxis.set_ticks_position("bottom")
-                ax.set_xticks(ticks)
-                ax.set_xticklabels(
-                    tick_labels, rotation=90, ha="right", rotation_mode="anchor"
-                )
-                ax.set_xlabel("$u_2$")
-
-                fig.colorbar(m, ax=[ax], shrink=0.2)
-
-            ax.locator_params(axis="both", tight=True, nbins=20)
-        return fig
-
-    def plot_quantiles_3d(self, figsize: Optional[Tuple[int, int]] = None) -> Figure:
-        """
-        Plots 2d or 3d quantiles. A new figure will be created. 2d quantiles will be
-        plotted as surfaces, while 3d quantiles will be plotted as voxels, where the
-        color of the quantile corresponds to the value of the quantile.
-        :param figsize: Size of figure to create. Will be passed to plt.subplots.
-        :return: The created figure.
-        """
-        if not 1 < self.quantile_dimension < 4:
-            raise RuntimeError("Can't plot 3d quantiles with dimension other than 2, 3")
-
-        fig: Figure
-        _axes: ndarray
-        fig, _axes = plt.subplots(
-            nrows=1,
-            ncols=self.quantile_dimension,
-            figsize=figsize,
-            squeeze=False,
-            subplot_kw={"projection": "3d"},
-        )
-        axes: Sequence[Axes3D] = list(_axes[0])
-
-        tick_labels = [f"{t:.2f}" for t in self.quantile_levels]
-
-        U = self.quantile_grid
-        for i, (ax, Q) in enumerate(zip(axes, self.quantile_values)):
-            if self.quantile_dimension == 2:
-                ticks = self.quantile_levels
-                m = ax.plot_surface(*U, Q, cmap="viridis")
-                fig.colorbar(m, ax=[ax], shrink=0.2)
-
-            if self.quantile_dimension == 3:
-                ticks = self.quantile_levels * self.n_levels - 1
-                cmap = plt.get_cmap("viridis")
-                norm = plt.Normalize(Q.min(), Q.max())
-                ax.voxels(np.ones_like(Q), facecolors=cmap(norm(Q)), edgecolors="black")
-                fig.colorbar(ScalarMappable(norm=norm, cmap=cmap), ax=[ax], shrink=0.2)
-                ax.set_zticks(ticks)
-                ax.set_zticklabels(tick_labels)
-                ax.set_zlabel("$u_3$")
-
-            ax.set_title(f"$Q_{{{i+1}}}(u_1, u_2, u_3)$")
-            ax.set_yticks(ticks)
-            ax.set_yticklabels(tick_labels)
-            ax.set_ylabel("$u_1$")
-            ax.set_xticks(ticks)
-            ax.set_xticklabels(tick_labels)
-            ax.set_xlabel("$u_2$")
-
-            ax.locator_params(axis="both", tight=True, nbins=10)
-
-        return fig
+        return plot_fn(**plot_kwargs)
 
     def __repr__(self):
         cls = self.__class__.__name__
