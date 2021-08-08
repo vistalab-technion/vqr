@@ -3,7 +3,12 @@ from typing import Dict
 from numpy import array
 
 from vqr.api import ScalarQuantileEstimator, VectorQuantileEstimator
-from vqr.data import generate_mvn_data, split_train_calib_test
+from vqr.data import (
+    generate_star,
+    generate_heart,
+    generate_mvn_data,
+    split_train_calib_test,
+)
 from vqr.coverage import measure_width, measure_coverage
 
 
@@ -80,11 +85,20 @@ def experiment(X_: array, Y_: array, n_levels: int) -> Dict[str, float]:
 
 
 if __name__ == "__main__":
+    dataset_name = "heart"
     num_trials = 10
-    d_ = 2
     n = 2000
+    d_ = 2
+
     # Generate data
-    X, Y = generate_mvn_data(n=n, d=d_, k=0)
+    if dataset_name == "mvn":
+        X, Y = generate_mvn_data(n=n, d=d_, k=0)
+    elif dataset_name == "heart":
+        X, Y = generate_heart()
+    elif dataset_name == "star":
+        X, Y = generate_star()
+    else:
+        NotImplementedError(f"Unrecognized {dataset_name=}")
 
     vq_coverages = []
     vq_widths = []
