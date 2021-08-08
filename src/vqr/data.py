@@ -1,6 +1,7 @@
 from typing import Dict, Tuple, Optional
 
 import numpy as np
+import pylab as pl
 from numpy import array, ndarray
 from numpy.random import Generator, shuffle
 
@@ -75,9 +76,63 @@ def generate_linear_x_y_mvn_data(
     return X, Y
 
 
+def generate_heart() -> Tuple[ndarray, ndarray]:
+    """
+    Generates independent X and Y.
+    X is sampled i.i.d from a uniform distribution [0, 1]
+    Y is an r.v whose distribution is heart-shaped.
+    :return: X, Y
+    """
+    # generates 2k-3k points heart
+    image = 1 - pl.imread("../data/heart.png")[:, :, 2]
+    image = image[::2, ::2]
+    image = image / np.sum(image)
+    idces = image.nonzero()
+    Y = np.zeros([len(idces[0]), 2])
+    Y[:, 0] = idces[0] / idces[0].max()
+    Y[:, 1] = idces[1] / idces[1].max()
+
+    rng = np.random.default_rng(None)
+    X = rng.uniform(size=(Y.shape[0], 1))
+    return X, Y
+
+
+def generate_star() -> Tuple[ndarray, ndarray]:
+    """
+    Generates independent X and Y.
+    X is sampled i.i.d from a uniform distribution [0, 1]
+    Y is an r.v whose distribution is star-shaped.
+    :return: X, Y
+    """
+    image = 1 - pl.imread("../data/star.jpg") / 255
+    image = image[::7, ::7]
+    image = image / np.sum(image)
+    idces = image.nonzero()
+    Y = np.zeros([len(idces[0]), 2])
+    Y[:, 0] = idces[0] / idces[0].max()
+    Y[:, 1] = idces[1] / idces[1].max()
+    rng = np.random.default_rng(None)
+    X = rng.uniform(size=(Y.shape[0], 1))
+    return X, Y
+
+
 def split_train_calib_test(
     X: array, Y: array, split_ratios: Tuple[float, float]
 ) -> Dict[str, Tuple[array, array]]:
+    """
+    Randomly splits X and Y into train, calib, and test sets.
+
+    Train set contains `split_ratio[0]*n` points.
+    Calibration set contains `(split_ratio[1] - split_ratio[0])*n` points.
+    Test set contains `(1-split_ratio[1])*n` points.
+
+    :param X: features sized (n, k)
+    :param Y: targets sized (n, d)
+    :param split_ratios: Ratios by which to split the dataset (refer to the docstring).
+    :return: Dictionary with keys ('train', 'calib', 'test') -
+    each key consists of X and Y corresponding to train, calibration and test,
+    respectively.
+    """
     assert X.shape[0] == Y.shape[0]
     N, _ = X.shape
     idxes = np.arange(0, N)
