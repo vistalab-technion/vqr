@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, Tuple, Union, Callable, Optional, Sequence
 
 import numpy as np
-from numpy import ndarray
+from numpy import ndarray, quantile
 from sklearn.base import BaseEstimator, RegressorMixin
 from sklearn.utils import check_X_y
 from matplotlib.figure import Figure
@@ -292,3 +292,39 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
     def vqr_B(self) -> Optional[ndarray]:
         check_is_fitted(self)
         return self.B_
+
+
+class ScalarQuantileEstimator:
+    def __init__(
+        self,
+        n_levels: int = 50,
+    ):
+        if n_levels < 2:
+            raise ValueError("n_levels must be >= 2")
+
+        self.n_levels = n_levels
+
+    def fit(self, X: ndarray):
+        N = len(X)
+        Y = np.reshape(X, (N, -1))
+        q = quantile(Y, q=quantile_levels(self.n_levels), axis=0)
+        assert q is not None
+        assert q.shape[0] == len(quantile_levels(self.n_levels))
+        self._alpha = q
+        return self
+
+    @property
+    def sqr_A(self) -> ndarray:
+        return self._alpha
+
+    @property
+    def quantile_levels(self) -> ndarray:
+        """
+        :return: An ndarray containing the levels at which the vector quantiles were
+            estimated along each target dimension.
+        """
+        return quantile_levels(self.n_levels)
+
+    @property
+    def quantile_values(self) -> ndarray:
+        return self.sqr_A
