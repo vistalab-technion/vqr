@@ -146,7 +146,7 @@ def decode_quantile_values(T: int, d: int, Q: ndarray) -> Sequence[ndarray]:
         pad_with[axis] = (1, 0)
         dQ_du = np.pad(dQ_du, pad_width=pad_with, mode="edge")
 
-        Q_functions[d - 1 - axis] = dQ_du
+        Q_functions[d - 1 - axis] = dQ_du * T ** 2
 
     return tuple(Q_functions)
 
