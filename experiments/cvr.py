@@ -10,8 +10,8 @@ from vqr.coverage import measure_width, measure_coverage
 
 
 def experiment(X_: array, Y_: array, n_levels: int) -> Dict[str, float]:
-    assert X.shape[0] == Y.shape[0]
-    d = Y.shape[1]
+    assert X_.shape[0] == Y_.shape[0]
+    d = Y_.shape[1]
 
     # split train-valid-test
     splits = split_train_calib_test(X_, Y_, split_ratios=(0.35, 0.65))
