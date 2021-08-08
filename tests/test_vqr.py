@@ -54,7 +54,7 @@ class TestVectorQuantileEstimator(object):
         T = 25
         N = 100
         d = 2
-        EPS = 0.0001
+        EPS = 0.025
 
         _, Y = generate_mvn_data(n=N, d=d, k=1)
         vq = VectorQuantileEstimator(n_levels=T, solver_opts={"verbose": True})
@@ -87,5 +87,5 @@ class TestVectorQuantileEstimator(object):
                     offending_points.append(offending)
                     offending_dists.append(np.dot(q1 - q0, u1 - u0).item())
                     n_c += 1
-
+        print(offending_points, offending_dists)
         assert len(offending_points) == 0, f"{n=}, {n_c=}, {n_c/n=:.2f}"
