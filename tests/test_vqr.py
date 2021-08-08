@@ -54,7 +54,7 @@ class TestVectorQuantileEstimator(object):
         T = 25
         N = 100
         d = 2
-        EPS = 0.025
+        EPS = 0.04
 
         _, Y = generate_mvn_data(n=N, d=d, k=1)
         vq = VectorQuantileEstimator(n_levels=T, solver_opts={"verbose": True})
