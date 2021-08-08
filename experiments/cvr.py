@@ -131,8 +131,8 @@ if __name__ == "__main__":
     average_sq_width = sum(sq_widths) / len(sq_widths)
 
     print(
-        f"\t\t Experiment summary \t\t \n"
-        f" \t\t ======================== \t \t"
+        f"\t\t     Experiment summary \t\t \n"
+        f" \t\t ========================= \t\t \n"
         f"Vector quantiles: \n"
         f"Marginal coverage over {num_trials} trials: "
         f"{marginal_vq_coverage}, average width = {average_vq_width}.\n"
