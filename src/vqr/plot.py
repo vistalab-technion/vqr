@@ -11,6 +11,18 @@ from mpl_toolkits.mplot3d import Axes3D
 from vqr.vqr import quantile_levels, decode_quantile_grid, decode_quantile_values
 
 
+def _level_label(t: float) -> str:
+    """
+    Generates labels for quantile levels in plots
+    :param t: quantile level
+    :return: plot label
+    """
+    s = f"{t:.2f}"
+    if s.startswith("0"):
+        s = s[1:]
+    return s
+
+
 def plot_quantiles(
     T: int, d: int, U: ndarray, A: ndarray, figsize: Optional[Tuple[int, int]] = None
 ) -> Figure:
@@ -45,17 +57,20 @@ def plot_quantiles(
     axes: Sequence[Axes] = list(_axes[0])
 
     levels: ndarray = quantile_levels(T)
-    tick_labels = [f"{t:.2f}" for t in levels]
+    tick_labels = [_level_label(t) for t in levels]
 
     U_grid = decode_quantile_grid(T, d, U)
     Q_values = decode_quantile_values(T, d, A)
     for i, (ax, Q) in enumerate(zip(axes, Q_values)):
         if d == 1:
             ax.plot(*U_grid, Q)
+            ax.set_title(f"$Q_{{{i + 1}}}(u_1)$")
+            ax.set_xlabel(f"$u_1$")
             ax.set_xticks(levels)
             ax.set_xticklabels(
                 tick_labels, rotation=90, ha="right", rotation_mode="anchor"
             )
+            ax.grid(True)
 
         elif d == 2:
             m = ax.imshow(Q, aspect="equal", interpolation="none", origin="lower")
@@ -111,7 +126,7 @@ def plot_quantiles_3d(T, d, U, A, figsize: Optional[Tuple[int, int]] = None) -> 
     axes: Sequence[Axes3D] = list(_axes[0])
 
     levels: ndarray = quantile_levels(T)
-    tick_labels = [f"{t:.2f}" for t in levels]
+    tick_labels = [_level_label(t) for t in levels]
 
     U_grid = decode_quantile_grid(T, d, U)
     Q_values = decode_quantile_values(T, d, A)
@@ -121,24 +136,28 @@ def plot_quantiles_3d(T, d, U, A, figsize: Optional[Tuple[int, int]] = None) -> 
             m = ax.plot_surface(*U_grid, Q, cmap="viridis")
             fig.colorbar(m, ax=[ax], shrink=0.2)
             ax.set_title(f"$Q_{{{i + 1}}}(u_1, u_2)$")
+            ax.set_ylabel("$u_1$")
+            ax.set_xlabel("$u_2$")
 
         if d == 3:
             ticks = levels * T - 1
             cmap = plt.get_cmap("viridis")
             norm = plt.Normalize(np.min(Q), np.max(Q))
-            ax.voxels(np.ones_like(Q), facecolors=cmap(norm(Q)), edgecolors="black")
+            active_voxesls = np.ones_like(Q)
+            # active_voxesls[T // 2 :, :, T // 2 :] = 0
+            ax.voxels(active_voxesls, facecolors=cmap(norm(Q)), edgecolors="black")
             fig.colorbar(ScalarMappable(norm=norm, cmap=cmap), ax=[ax], shrink=0.2)
             ax.set_zticks(ticks)
             ax.set_zticklabels(tick_labels)
-            ax.set_zlabel("$u_3$")
             ax.set_title(f"$Q_{{{i + 1}}}(u_1, u_2, u_3)$")
+            ax.set_zlabel("$u_3$")
+            ax.set_ylabel("$u_2$")
+            ax.set_xlabel("$u_1$")
 
         ax.set_yticks(ticks)
         ax.set_yticklabels(tick_labels)
-        ax.set_ylabel("$u_1$")
         ax.set_xticks(ticks)
         ax.set_xticklabels(tick_labels)
-        ax.set_xlabel("$u_2$")
 
         ax.locator_params(axis="both", tight=True, nbins=10)
 
