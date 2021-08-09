@@ -2,6 +2,8 @@
 
 __version__.py
 
+notebooks/figs/
+
 # Created by https://www.toptal.com/developers/gitignore/api/macos,windows,linux,python,latex
 # Edit at https://www.toptal.com/developers/gitignore?templates=macos,windows,linux,python,latex
 
@@ -520,6 +522,7 @@ $RECYCLE.BIN/
 # Reference: https://intellij-support.jetbrains.com/hc/en-us/articles/206544839
 
 # User-specific stuff
+.idea/
 .idea/**/workspace.xml
 .idea/**/tasks.xml
 .idea/**/usage.statistics.xml
