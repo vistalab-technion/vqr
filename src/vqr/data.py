@@ -6,15 +6,20 @@ from numpy import array, ndarray
 from numpy.random import Generator, shuffle
 
 
-def _gen_random_mvn_data(n: int, d: int, rng) -> ndarray:
-    # Generate random orthonormal matrix Q
-    Q, R = np.linalg.qr(rng.normal(size=(d, d)))
+def _gen_random_mvn_data(n: int, d: int, rng, random_cov: bool = False) -> ndarray:
+    if (not random_cov) and d == 2:
+        S = np.array([[1.0, -0.7], [-0.7, 1.0]])
 
-    # Generate positive eigenvalues
-    eigs = rng.uniform(size=(d,))
+    else:
+        # Generate random orthonormal matrix Q
+        Q, R = np.linalg.qr(rng.normal(size=(d, d)))
 
-    # PSD Covariance matrix, zero mean
-    S = Q.T @ np.diag(eigs) @ Q
+        # Generate positive eigenvalues
+        eigs = rng.uniform(size=(d,))
+
+        # PSD Covariance matrix, zero mean
+        S = Q.T @ np.diag(eigs) @ Q
+
     mu = np.zeros(d)
 
     # Generate multivariate normal data
@@ -117,7 +122,7 @@ def generate_star() -> Tuple[ndarray, ndarray]:
 
 
 def split_train_calib_test(
-    X: array, Y: array, split_ratios: Tuple[float, float]
+    X: array, Y: array, split_ratios: Tuple[float, float], seed=42
 ) -> Dict[str, Tuple[array, array]]:
     """
     Randomly splits X and Y into train, calib, and test sets.
@@ -129,6 +134,7 @@ def split_train_calib_test(
     :param X: features sized (n, k)
     :param Y: targets sized (n, d)
     :param split_ratios: Ratios by which to split the dataset (refer to the docstring).
+    :param seed: seed the shuffle operation.
     :return: Dictionary with keys ('train', 'calib', 'test') -
     each key consists of X and Y corresponding to train, calibration and test,
     respectively.
