@@ -75,13 +75,13 @@ def vqr_ot(
     u: ndarray = quantile_levels(T)
 
     # Quantile levels grid: list of grid coordinate matrices, one per dimension
-    U_grids: Sequence[ndarray] = np.meshgrid(*([u] * d))
+    U_grids: Sequence[ndarray] = np.meshgrid(*([u] * d))  # d arrays of shape (T,..., T)
     # Stack all nd-grid coordinates into one long matrix, of shape (T**d, d)
     U: ndarray = np.stack([U_grid.reshape(-1) for U_grid in U_grids], axis=1)
     assert U.shape == (Td, d)
 
     # Pairwise distances (similarity)
-    S: ndarray = cdist(U, Y, metric)
+    S: ndarray = cdist(U, Y, metric)  # (Td, d) and (N, d)
 
     # Optimization problem definition: optimal transport formulation
     one_N = np.ones([N, 1])
