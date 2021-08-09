@@ -1,6 +1,6 @@
 from typing import Dict
 
-from numpy import array
+from numpy import array, argsort
 
 from vqr.api import ScalarQuantileEstimator, VectorQuantileEstimator
 from vqr.data import (
@@ -12,7 +12,9 @@ from vqr.data import (
 from vqr.coverage import measure_width, measure_coverage
 
 
-def experiment(X_: array, Y_: array, n_levels: int) -> Dict[str, float]:
+def experiment(
+    X_: array, Y_: array, alpha_low_: float, alpha_high_: float, n_levels: int
+) -> Dict[str, float]:
     assert X_.shape[0] == Y_.shape[0]
     d = Y_.shape[1]
 
@@ -28,17 +30,28 @@ def experiment(X_: array, Y_: array, n_levels: int) -> Dict[str, float]:
 
     # Get the quantiles
     VQ1, VQ2 = fitted_vq.quantile_values
+    T = fitted_vq.quantile_levels
 
-    # Construct a quantile surface
-    vq_surface = (
-        array(
+    # Construct a quantile contour
+    idx_low = argsort(abs(T - alpha_low_))[0]
+    idx_high = argsort(abs(T - alpha_high_))[0]
+
+    vq_contour = array(
+        [
             [
-                [*VQ1[1:-2, -2], *VQ1[1, 1:-2], *VQ1[1:-2, 1], *VQ1[-2, 1:-2]],
-                [*VQ2[1:-2, -2], *VQ2[1, 1:-2], *VQ2[1:-2, 1], *VQ2[-2, 1:-2]],
-            ]
-        ).T
-        * (n_levels ** d)
-    )
+                *VQ1[idx_low : idx_high + 1, idx_high + 1],
+                *VQ1[idx_low, idx_low : idx_high + 1],
+                *VQ1[idx_low : idx_high + 1, idx_low],
+                *VQ1[idx_high + 1, idx_low : idx_high + 1],
+            ],
+            [
+                *VQ2[idx_low : idx_high + 1, idx_high + 1],
+                *VQ2[idx_low, idx_low : idx_high + 1],
+                *VQ2[idx_low : idx_high + 1, idx_low],
+                *VQ2[idx_high + 1, idx_low : idx_high + 1],
+            ],
+        ]
+    ).T
 
     # Fit scalar quantiles
     sq = ScalarQuantileEstimator(n_levels)
@@ -46,19 +59,19 @@ def experiment(X_: array, Y_: array, n_levels: int) -> Dict[str, float]:
     SQ = fitted_sq.quantile_values
     SQ1 = SQ[:, 0]
     SQ2 = SQ[:, 1]
-    sq_surface = array(
+    sq_contour = array(
         [
             [
-                *SQ1[1:-1],
-                *SQ1[1:-1],
-                *[SQ1[1]] * len(SQ2[1:-1]),
-                *[SQ1[-1]] * len(SQ2[1:-1]),
+                *SQ1[idx_low : idx_high + 1],
+                *SQ1[idx_low : idx_high + 1],
+                *[SQ1[idx_low]] * len(SQ2[idx_low : idx_high + 1]),
+                *[SQ1[idx_high + 1]] * len(SQ2[idx_low : idx_high + 1]),
             ],
             [
-                *[SQ2[-1]] * len(SQ1[1:-1]),
-                *[SQ2[1]] * len(SQ1[1:-1]),
-                *SQ2[1:-1],
-                *SQ2[1:-1],
+                *[SQ2[idx_high + 1]] * len(SQ1[idx_low : idx_high + 1]),
+                *[SQ2[idx_low]] * len(SQ1[idx_low : idx_high + 1]),
+                *SQ2[idx_low : idx_high + 1],
+                *SQ2[idx_low : idx_high + 1],
             ],
         ]
     ).T
@@ -67,18 +80,22 @@ def experiment(X_: array, Y_: array, n_levels: int) -> Dict[str, float]:
     _, Y_test = datasets["test"]
 
     # Vector quantile: coverage and width
-    vq_coverage_ = measure_coverage(vq_surface, Y_test)
-    vq_width_ = measure_width(vq_surface)
+    vq_coverage_ = measure_coverage(vq_contour, Y_test)
+    vq_width_ = measure_width(vq_contour)
 
     # Scalar quantile: coverage and width
-    sq_coverage_ = measure_coverage(sq_surface, Y_test)
-    sq_width_ = measure_width(sq_surface)
+    sq_coverage_ = measure_coverage(sq_contour, Y_test)
+    sq_width_ = measure_width(sq_contour)
 
     results_ = {
         "sq_width": sq_width_,
         "sq_coverage": sq_coverage_,
         "vq_width": vq_width_,
         "vq_coverage": vq_coverage_,
+        "realized_alpha_low": T[idx_low],
+        "realized_alpha_high": T[idx_high],
+        "deflated_alpha_low": T[idx_low],
+        "deflated_alpha_high": T[idx_high],
     }
 
     return results_
@@ -86,9 +103,11 @@ def experiment(X_: array, Y_: array, n_levels: int) -> Dict[str, float]:
 
 if __name__ == "__main__":
     dataset_name = "heart"
-    num_trials = 10
-    n = 2000
+    num_trials = 50
+    n = 1500
     d_ = 2
+    alpha_low = 0.05
+    alpha_high = 0.95
 
     # Generate data
     if dataset_name == "mvn":
@@ -98,6 +117,7 @@ if __name__ == "__main__":
     elif dataset_name == "star":
         X, Y = generate_star()
     else:
+        X, Y = None, None
         NotImplementedError(f"Unrecognized {dataset_name=}")
 
     vq_coverages = []
@@ -106,8 +126,8 @@ if __name__ == "__main__":
     sq_coverages = []
     sq_widths = []
 
-    for i in range(num_trials):
-        results = experiment(X, Y, n_levels=40)
+    for j in range(num_trials):
+        results = experiment(X, Y, alpha_low, alpha_high, n_levels=40)
         vq_coverages.append(results["vq_coverage"])
         vq_widths.append(results["vq_width"])
 
@@ -115,11 +135,15 @@ if __name__ == "__main__":
         sq_widths.append(results["sq_width"])
 
         print(
-            f"Trial {i}: \n"
-            f"Vector quantiles: coverage={results['vq_coverage']}%, "
-            f"width={results['vq_width']} \n"
-            f"Scalar quantiles: coverage={results['sq_coverage']}%, "
-            f"width={results['sq_width']} \n"
+            f"Trial {j}: \n"
+            f"Coverage level: [{round(results['realized_alpha_low'], 3)}, "
+            f"{round(results['realized_alpha_high'], 3)}] \n"
+            f"Vector quantiles: coverage={round(results['vq_coverage'], 3)}%, "
+            f"width={round(results['vq_width'], 3)} \n"
+            f"Deflated coverage level: [{round(results['deflated_alpha_low'], 3)}, "
+            f"{round(results['deflated_alpha_high'], 3)}] \n"
+            f"Scalar quantiles: coverage={round(results['sq_coverage'], 3)}%, "
+            f"width={round(results['sq_width'], 3)} \n"
         )
 
     marginal_vq_coverage = sum(vq_coverages) / len(vq_coverages)
@@ -138,3 +162,7 @@ if __name__ == "__main__":
         f"Marginal coverage over {num_trials} trials: "
         f"{marginal_sq_coverage}, average width = {average_sq_width}."
     )
+    print(vq_coverages)
+    print(vq_widths)
+    print(sq_coverages)
+    print(sq_widths)
