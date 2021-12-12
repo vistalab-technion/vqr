@@ -7,6 +7,7 @@ import numpy as np
 from numpy import ndarray
 from torch import Tensor, exp
 from torch import sum as sum_th
+from torch import ones as ones_th
 from torch import randn, zeros, tensor, float32, randn_like
 from torch.optim import SGD, Adam
 from numpy.random import permutation
@@ -149,13 +150,15 @@ def vqr_ot(
             nu = tensor(one_N / N, dtype=dtype)
             X_th = tensor(X, dtype=dtype)
             b = zeros(*(Td, X.shape[-1]), dtype=dtype, requires_grad=True)
-            phi = zeros(Td, requires_grad=True, dtype=dtype)
-            psi = zeros(N, requires_grad=True, dtype=dtype)
+            phi_init = 0.1 * ones_th(Td, dtype=dtype)
+            phi = tensor(phi_init, requires_grad=True)
+            psi_init = 0.1 * ones_th(N, dtype=dtype)
+            psi = tensor(psi_init, requires_grad=True)
             epsilon = 0.1
             num_epochs = 10000
             batch_size = 1000
             optimizer = Adam(params=[b, phi, psi])  # , lr=0.001)
-            # optimizer = SGD(params=[b, phi, psi], lr=0.001, momentum=0.9)
+            # optimizer = SGD(params=[b, phi, psi], lr=0.01, momentum=0.9)
             for epoch_idx in range(num_epochs):
                 permuted_N = permutation(N)
                 total_loss = 0.0
@@ -171,11 +174,10 @@ def vqr_ot(
                     UY = U_th @ Y_batch.T
                     bX = b @ X_batch.T
                     constraint = UY - bX - phi.reshape(-1, 1) - psi_batch.reshape(1, -1)
-                    exp_out = exp(constraint / epsilon)
-                    h_batch = (
-                        psi_batch + sum_th(mu * phi) + epsilon * exp_out.sum(dim=0)
-                    )
-                    loss = sum_th(h_batch * nu_batch) / batch_size
+                    exp_out = exp(-constraint / epsilon)
+                    data_dep = sum_th(psi_batch * nu_batch)
+                    h_batch = data_dep + sum_th(mu * phi) + epsilon * exp_out.sum()
+                    loss = h_batch / batch_size
                     loss.backward()
                     total_loss += loss.item()
                     constraint_sum += exp_out.sum().item() / batch_size
