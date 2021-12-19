@@ -136,8 +136,8 @@ def plot_quantiles_3d(T, d, U, A, figsize: Optional[Tuple[int, int]] = None) -> 
             m = ax.plot_surface(*U_grid, Q, cmap="viridis")
             fig.colorbar(m, ax=[ax], shrink=0.2)
             ax.set_title(f"$Q_{{{i + 1}}}(u_1, u_2)$")
-            ax.set_ylabel("$u_1$")
-            ax.set_xlabel("$u_2$")
+            ax.set_ylabel("$u_2$")
+            ax.set_xlabel("$u_1$")
 
         if d == 3:
             ticks = levels * T - 1
