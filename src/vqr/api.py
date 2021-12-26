@@ -43,16 +43,23 @@ class VectorQuantileBase(BaseEstimator, ABC):
         self.metric = metric
         self.solver_opts = solver_opts or {}
 
-    @property
-    def quantile_values(self) -> Sequence[ndarray]:
+    def vector_quantiles(self, X: Optional[ndarray] = None) -> Sequence[ndarray]:
         """
-        :return: A sequence of quantile value ndarrays. The sequence is of length d,
-            where d is the dimension of the target variable (Y). The j-th ndarray is
-            the d-dimensional vector quantile of the j-th variable in Y.
+        :param X: Covariates, not used by this implementation.
+        :return: A sequence of ndarrays containing the vector-quantile values.
+            The sequence is of length d, where d is the dimension of the target
+            variable (Y).
+            The j-th ndarray is the d-dimensional vector-quantile of
+            the j-th variable in Y.
         """
+        if X is not None:
+            raise ValueError("VectorQuantileBase does not support covariates")
+
         check_is_fitted(self)
         return decode_quantile_values(
-            self.n_levels, self.quantile_dimension, self.vqr_A
+            self.n_levels,
+            self.quantile_dimension,
+            self.vqr_A,
         )
 
     @property
@@ -264,6 +271,33 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
         Y_hat = B @ X.T + A  # result is (T**d, N)
 
         return Y_hat.T
+
+    def vector_quantiles(self, X: Optional[ndarray] = None) -> Sequence[ndarray]:
+        """
+        :param X: Optional covariates. If provided, will return the conditional
+        vector quantiles of Y|X. If not provided, returns the vector quantiles of Y.
+        :return: A sequence of quantile value ndarrays. The sequence is of length d,
+            where d is the dimension of the target variable (Y). The j-th ndarray is
+            the d-dimensional vector quantile of the j-th variable in Y.
+        """
+
+        check_is_fitted(self)
+
+        if X is None:
+            return super().vector_quantiles()
+
+        # Calculate the quantiles of Y|X.
+        # If there are multiple samples in X, average them.
+        Y_hat = self.predict(X)  # X is (N, k) Y_hat is (N, T**d)
+        A = np.mean(Y_hat, axis=0).reshape(-1, 1)  # A is (T**d, 1)
+
+        return decode_quantile_values(
+            # For the regression case we need to get X and calculate B^T X + A
+            # In that case one should call predict and decode that
+            self.n_levels,
+            self.quantile_dimension,
+            A,
+        )
 
     @property
     def features_dimension(self) -> int:
