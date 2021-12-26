@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 from sklearn.exceptions import NotFittedError
 
-from vqr import VectorQuantileEstimator
+from vqr import VectorQuantileEstimator, VectorQuantileRegressor
 from vqr.data import generate_mvn_data
 
 
@@ -89,3 +89,44 @@ class TestVectorQuantileEstimator(object):
                     n_c += 1
         print(offending_points, offending_dists)
         assert len(offending_points) == 0, f"{n=}, {n_c=}, {n_c/n=:.2f}"
+
+
+class TestVectorQuantileRegressor(object):
+    @pytest.fixture(
+        params=[
+            {"d": 1, "k": 5},
+            {"d": 2, "k": 7},
+            {"d": 3, "k": 3},
+        ],
+        ids=[
+            "d=1, k=5",
+            "d=2, k=7",
+            "d=3, k=3",
+        ],
+    )
+    def dataset(self, request):
+        params = request.param
+        d, k = params["d"], params["k"]
+        N = 100
+        X, Y = generate_mvn_data(N, d=d, k=k)
+        return X, Y
+
+    def test_shapes(self, dataset):
+        X, Y = dataset
+        N, d = Y.shape
+        N, k = X.shape
+        T = 10
+
+        vq = VectorQuantileRegressor(n_levels=T, solver_opts={"verbose": True})
+        vq.fit(X, Y)
+
+        assert vq.quantile_dimension == d
+        assert len(vq.quantile_values) == d
+        assert all(q.shape == (T,) * d for q in vq.quantile_values)
+        assert len(vq.quantile_grid) == d
+        assert all(q.shape == (T,) * d for q in vq.quantile_grid)
+
+        assert vq.features_dimension == k
+
+        Y_hat = vq.predict(X)
+        assert Y_hat.shape == (N, T ** d)
