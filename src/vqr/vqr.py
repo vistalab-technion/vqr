@@ -89,7 +89,7 @@ def vqr_ot(
     Pi = cp.Variable(shape=(Td, N))
     Pi_S = cp.sum(cp.multiply(Pi, S))
     constraints = [
-        Pi @ X == 1 / Td * one_T @ X_bar.T,
+        Pi @ X == 1 / Td * one_T @ X_bar,
         Pi >= 0,
         one_T.T @ Pi == 1 / N * one_N.T,
     ]
