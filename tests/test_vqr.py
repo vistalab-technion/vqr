@@ -37,8 +37,8 @@ class TestVectorQuantileEstimator(object):
         vq.fit(Y)
 
         assert vq.quantile_dimension == d
-        assert len(vq.quantile_values) == d
-        assert all(q.shape == (T,) * d for q in vq.quantile_values)
+        assert len(vq.vector_quantiles()) == d
+        assert all(q.shape == (T,) * d for q in vq.vector_quantiles())
         assert len(vq.quantile_grid) == d
         assert all(q.shape == (T,) * d for q in vq.quantile_grid)
 
@@ -47,7 +47,7 @@ class TestVectorQuantileEstimator(object):
         with pytest.raises(NotFittedError):
             _ = vq.quantile_grid
         with pytest.raises(NotFittedError):
-            _ = vq.quantile_values
+            _ = vq.vector_quantiles()
 
     @pytest.mark.repeat(5)
     def test_monotonicity(self):
@@ -60,7 +60,7 @@ class TestVectorQuantileEstimator(object):
         vq = VectorQuantileEstimator(n_levels=T, solver_opts={"verbose": True})
         vq.fit(Y)
         U1, U2 = vq.quantile_grid
-        Q1, Q2 = vq.quantile_values
+        Q1, Q2 = vq.vector_quantiles()
 
         ii = jj = tuple(range(1, T))
 
@@ -121,8 +121,8 @@ class TestVectorQuantileRegressor(object):
         vq.fit(X, Y)
 
         assert vq.quantile_dimension == d
-        assert len(vq.quantile_values) == d
-        assert all(q.shape == (T,) * d for q in vq.quantile_values)
+        assert len(vq.vector_quantiles()) == d
+        assert all(q.shape == (T,) * d for q in vq.vector_quantiles())
         assert len(vq.quantile_grid) == d
         assert all(q.shape == (T,) * d for q in vq.quantile_grid)
 

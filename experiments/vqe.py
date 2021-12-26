@@ -29,7 +29,7 @@ def experiment(
     fitted_vq = vq.fit(Y_calib)
 
     # Get the quantiles
-    VQ1, VQ2 = fitted_vq.quantile_values
+    VQ1, VQ2 = fitted_vq.vector_quantiles()
     T = fitted_vq.quantile_levels
 
     # Construct a quantile contour
@@ -56,7 +56,7 @@ def experiment(
     # Fit scalar quantiles
     sq = ScalarQuantileEstimator(n_levels)
     fitted_sq = sq.fit(Y_calib)
-    SQ = fitted_sq.quantile_values
+    SQ = fitted_sq.vector_quantiles()
     SQ1 = SQ[:, 0]
     SQ2 = SQ[:, 1]
     sq_contour = array(

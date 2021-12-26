@@ -32,7 +32,7 @@ def experiment(
     # Estimate vector quantiles on the calibration set
     vq = VectorQuantileEstimator(n_levels)
     fitted_vq = vq.fit(scores_calib)
-    VQ1, VQ2 = fitted_vq.quantile_values
+    VQ1, VQ2 = fitted_vq.vector_quantiles()
     T = fitted_vq.quantile_levels
 
     # Construct a quantile contour
@@ -59,7 +59,7 @@ def experiment(
     # Fit scalar quantiles
     sq = ScalarQuantileEstimator(n_levels)
     fitted_sq = sq.fit(scores_calib)
-    SQ = fitted_sq.quantile_values
+    SQ = fitted_sq.vector_quantiles()
     SQ1 = SQ[:, 0]
     SQ2 = SQ[:, 1]
     sq_contour = array(
