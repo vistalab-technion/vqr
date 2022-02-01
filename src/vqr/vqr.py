@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Union, Callable, Optional, Sequence
 import ot
 import cvxpy as cp
 import numpy as np
+import torch
 from numpy import ndarray
 from torch import Tensor, exp
 from torch import sum as sum_th
@@ -12,6 +13,8 @@ from torch import randn, zeros, tensor, float32, randn_like
 from torch.optim import SGD, Adam
 from numpy.random import permutation
 from scipy.spatial.distance import cdist
+
+from vqr.sinkhorn import sinkhorn_stabilized_vqr
 
 DEFAULT_METRIC = lambda x, y: np.dot(x, y)
 
@@ -94,22 +97,55 @@ def vqr_ot(
     # Optimization problem definition: optimal transport formulation
     one_N = np.ones([N, 1])
     one_T = np.ones([Td, 1])
-    dual = True
+    dual = False
     if not dual:
-        Pi = cp.Variable(shape=(Td, N))
-        Pi_S = cp.sum(cp.multiply(Pi, S))
-        constraints = [
-            Pi @ X == 1 / Td * one_T @ X_bar.T,
-            Pi >= 0,
-            one_T.T @ Pi == 1 / N * one_N.T,
-        ]
-        problem = cp.Problem(objective=cp.Maximize(Pi_S), constraints=constraints)
+        POT = False
+        if POT and k == 0:
+            method = "sinkhorn_stabilized"
+            reg = 0.003
+            gamma, log = ot.sinkhorn2(
+                M=-S,
+                a=np.ones([Td]) / Td,
+                b=np.ones([N]) / N,
+                log=True,
+                reg=reg,
+                numItermax=1000,
+                verbose=True,
+                method=method,
+            )
+            if method in ("sinkhorn_stabilized", "sinkhorn_epsilon_scaling"):
+                AB = -reg * log["logu"][:, None]
+            else:
+                AB = -log["u"][:, None]
+        elif POT and k >= 1:
+            gamam, log = sinkhorn_stabilized_vqr(
+                M=-S,
+                a=np.ones([Td]) / Td,
+                b=np.ones([N]) / N,
+                X=X,
+                log=True,
+                reg=0.1,
+                numItermax=1000,
+                verbose=True,
+            )
 
-        # Solve the problem
-        problem.solve(**solver_opts)
+            ...
+        else:
+            Pi = cp.Variable(shape=(Td, N))
+            Pi_S = cp.sum(cp.multiply(Pi, S))
+            constraints = [
+                Pi @ X == 1 / Td * one_T @ X_bar,
+                Pi >= 0,
+                one_T.T @ Pi == 1 / N * one_N.T,
+            ]
+            problem = cp.Problem(objective=cp.Maximize(Pi_S), constraints=constraints)
 
-        # Obtain the lagrange multipliers Alpha (A) and Beta (B)
-        AB: ndarray = constraints[0].dual_value
+            # Solve the problem
+            problem.solve(**solver_opts)
+
+            # Obtain the lagrange multipliers Alpha (A) and Beta (B)
+            AB: ndarray = constraints[0].dual_value
+
         AB = np.reshape(AB, newshape=[Td, k + 1])
         A = AB[:, [0]]  # A is (T**d, 1)
         if k == 0:
@@ -143,54 +179,95 @@ def vqr_ot(
             return U, A, B
 
         else:
-            dtype = float32
-            Y_th = tensor(Y, dtype=dtype)
-            U_th = tensor(U, dtype=dtype)
-            mu = tensor(one_T / Td, dtype=dtype)
-            nu = tensor(one_N / N, dtype=dtype)
-            X_th = tensor(X, dtype=dtype)
-            b = zeros(*(Td, X.shape[-1]), dtype=dtype, requires_grad=True)
-            phi_init = 0.1 * ones_th(Td, dtype=dtype)
-            phi = tensor(phi_init, requires_grad=True)
-            psi_init = 0.1 * ones_th(N, dtype=dtype)
-            psi = tensor(psi_init, requires_grad=True)
-            epsilon = 0.1
-            num_epochs = 10000
-            batch_size = 1000
-            optimizer = Adam(params=[b, phi, psi])  # , lr=0.001)
-            # optimizer = SGD(params=[b, phi, psi], lr=0.01, momentum=0.9)
-            for epoch_idx in range(num_epochs):
-                permuted_N = permutation(N)
-                total_loss = 0.0
-                constraint_sum = 0.0
-                for batch_idx in range(ceil(N / batch_size)):
-                    batch_slice = permuted_N[
-                        batch_size * batch_idx : min(batch_size * (batch_idx + 1), N)
-                    ]
-                    X_batch = X_th[batch_slice]
-                    Y_batch = Y_th[batch_slice]
-                    psi_batch = psi[batch_slice]
-                    nu_batch = nu[batch_slice]
-                    UY = U_th @ Y_batch.T
-                    bX = b @ X_batch.T
-                    constraint = UY - bX - phi.reshape(-1, 1) - psi_batch.reshape(1, -1)
-                    exp_out = exp(-constraint / epsilon)
-                    data_dep = sum_th(psi_batch * nu_batch)
-                    h_batch = data_dep + sum_th(mu * phi) + epsilon * exp_out.sum()
-                    loss = h_batch / batch_size
-                    loss.backward()
-                    total_loss += loss.item()
-                    constraint_sum += exp_out.sum().item() / batch_size
-                    optimizer.step()
-                    optimizer.zero_grad()
-                print(f"{epoch_idx=}, {total_loss=:.3f}, {constraint_sum=:.3f}")
+            logsumexp = True
+            if not logsumexp:
+                dtype = float32
+                Y_th = tensor(Y, dtype=dtype)
+                U_th = tensor(U, dtype=dtype)
+                mu = tensor(one_T / Td, dtype=dtype)
+                nu = tensor(one_N / N, dtype=dtype)
+                X_th = tensor(X, dtype=dtype)
+                b = zeros(*(Td, X.shape[-1]), dtype=dtype, requires_grad=True)
+                phi_init = 0.1 * ones_th(Td, dtype=dtype)
+                phi = tensor(phi_init, requires_grad=True)
+                psi_init = 0.1 * ones_th(N, dtype=dtype)
+                psi = tensor(psi_init, requires_grad=True)
+                epsilon = 0.1
+                num_epochs = 100
+                batch_size = 1000
+                optimizer = Adam(params=[b, phi, psi], lr=0.2)
+                # optimizer = SGD(params=[b, phi, psi], lr=0.01, momentum=0.9)
+                for epoch_idx in range(num_epochs):
+                    permuted_N = permutation(N)
+                    total_loss = 0.0
+                    constraint_sum = 0.0
+                    for batch_idx in range(ceil(N / batch_size)):
+                        batch_slice = permuted_N[
+                            batch_size
+                            * batch_idx : min(batch_size * (batch_idx + 1), N)
+                        ]
+                        X_batch = X_th[batch_slice]
+                        Y_batch = Y_th[batch_slice]
+                        psi_batch = psi[batch_slice]
+                        nu_batch = nu[batch_slice]
+                        UY = U_th @ Y_batch.T
+                        bX = b @ X_batch.T
+                        constraint = (
+                            UY - bX - phi.reshape(-1, 1) - psi_batch.reshape(1, -1)
+                        )
+                        exp_out = exp(constraint / epsilon)
+                        data_dep = sum_th(psi_batch * nu_batch)
+                        h_batch = data_dep + sum_th(mu * phi) + epsilon * exp_out.sum()
+                        loss = h_batch / batch_size
+                        loss.backward()
+                        total_loss += loss.item()
+                        constraint_sum += exp_out.sum().item() / batch_size
+                        optimizer.step()
+                        optimizer.zero_grad()
+                    print(f"{epoch_idx=}, {total_loss=:.3f}, {constraint_sum=:.3f}")
 
-            A = phi.detach().numpy()[:, None]
-            if k == 0:
-                B = None
+                A = phi.detach().numpy()[:, None]
+                if k == 0:
+                    B = None
+                else:
+                    B = b.detach().numpy()
+                return U, A, B
             else:
-                B = b.detach().numpy()
-            return U, A, B
+                dtype = float32
+                Y_th = tensor(Y, dtype=dtype)
+                U_th = tensor(U, dtype=dtype)
+                mu = tensor(one_T / Td, dtype=dtype)
+                nu = tensor(one_N / N, dtype=dtype)
+                X_th = tensor(X, dtype=dtype)
+                b = zeros(*(Td, X.shape[-1] - 1), dtype=dtype, requires_grad=True)
+                psi_init = 0.1 * ones_th(N, dtype=dtype)
+                psi = tensor(psi_init, requires_grad=True)
+                epsilon = 0.1
+                num_epochs = 1800
+                # optimizer = Adam(params=[b, psi], lr=0.1)
+                optimizer = SGD(params=[b, psi], lr=0.9, momentum=0.9)
+                UY = U_th @ Y_th.T
+                for epoch_idx in range(num_epochs):
+                    optimizer.zero_grad()
+                    bX = b @ X_th[:, 1:].T
+                    phi = epsilon * torch.log(
+                        sum_th(exp((UY - bX - psi.reshape(1, -1)) / epsilon), dim=1)
+                    )
+                    obj = psi @ nu + phi @ mu
+                    obj.backward()
+                    optimizer.step()
+                    total_loss = obj.item()
+                    constraint_loss = (phi @ mu).item()
+                    print(f"{epoch_idx=}, {total_loss=:.6f} {constraint_loss=:.6f}")
+                phi = epsilon * torch.log(
+                    sum_th(exp((UY - bX - psi.reshape(1, -1)) / epsilon), dim=1)
+                )
+                A = phi.detach().numpy()[:, None]
+                if k == 0:
+                    B = None
+                else:
+                    B = b.detach().numpy()
+                return U, A, B
 
 
 def quantile_levels(T: int) -> ndarray:
