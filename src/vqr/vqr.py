@@ -97,7 +97,7 @@ def vqr_ot(
     # Optimization problem definition: optimal transport formulation
     one_N = np.ones([N, 1])
     one_T = np.ones([Td, 1])
-    dual = False
+    dual = True
     if not dual:
         POT = False
         if POT and k == 0:
@@ -242,16 +242,27 @@ def vqr_ot(
                 b = zeros(*(Td, X.shape[-1] - 1), dtype=dtype, requires_grad=True)
                 psi_init = 0.1 * ones_th(N, dtype=dtype)
                 psi = tensor(psi_init, requires_grad=True)
-                epsilon = 0.1
-                num_epochs = 1800
+                epsilon = 0.001
+                num_epochs = 1000
                 # optimizer = Adam(params=[b, psi], lr=0.1)
                 optimizer = SGD(params=[b, psi], lr=0.9, momentum=0.9)
                 UY = U_th @ Y_th.T
                 for epoch_idx in range(num_epochs):
                     optimizer.zero_grad()
                     bX = b @ X_th[:, 1:].T
-                    phi = epsilon * torch.log(
-                        sum_th(exp((UY - bX - psi.reshape(1, -1)) / epsilon), dim=1)
+                    max_arg = UY - bX - psi.reshape(1, -1)
+                    phi = (
+                        epsilon
+                        * torch.log(
+                            sum_th(
+                                exp(
+                                    (max_arg - torch.max(max_arg, dim=1)[0][:, None])
+                                    / epsilon
+                                ),
+                                dim=1,
+                            )
+                        )
+                        + torch.max(max_arg, dim=1)[0]
                     )
                     obj = psi @ nu + phi @ mu
                     obj.backward()
@@ -259,8 +270,19 @@ def vqr_ot(
                     total_loss = obj.item()
                     constraint_loss = (phi @ mu).item()
                     print(f"{epoch_idx=}, {total_loss=:.6f} {constraint_loss=:.6f}")
-                phi = epsilon * torch.log(
-                    sum_th(exp((UY - bX - psi.reshape(1, -1)) / epsilon), dim=1)
+                max_arg = UY - bX - psi.reshape(1, -1)
+                phi = (
+                    epsilon
+                    * torch.log(
+                        sum_th(
+                            exp(
+                                (max_arg - torch.max(max_arg, dim=1)[0][:, None])
+                                / epsilon
+                            ),
+                            dim=1,
+                        )
+                    )
+                    + torch.max(max_arg, dim=1)[0]
                 )
                 A = phi.detach().numpy()[:, None]
                 if k == 0:
