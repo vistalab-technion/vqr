@@ -9,7 +9,7 @@ from matplotlib.figure import Figure
 from sklearn.utils.validation import check_array, check_is_fitted
 
 from vqr.vqr import (
-    DEFAULT_METRIC,
+    SIMILARITY_FN_INNER_PROD,
     vqr_ot,
     quantile_levels,
     decode_quantile_grid,
@@ -22,7 +22,7 @@ class VectorQuantileBase(BaseEstimator, ABC):
     def __init__(
         self,
         n_levels: int = 50,
-        metric: Union[str, Callable] = DEFAULT_METRIC,
+        metric: Union[str, Callable] = SIMILARITY_FN_INNER_PROD,
         solver_opts: Optional[Dict[str, Any]] = None,
     ):
         """
@@ -157,7 +157,7 @@ class VectorQuantileEstimator(VectorQuantileBase):
     def __init__(
         self,
         n_levels: int = 50,
-        metric: Union[str, Callable] = DEFAULT_METRIC,
+        metric: Union[str, Callable] = SIMILARITY_FN_INNER_PROD,
         solver_opts: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(n_levels, metric, solver_opts)
@@ -218,7 +218,7 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
     def __init__(
         self,
         n_levels: int = 50,
-        metric: Union[str, Callable] = DEFAULT_METRIC,
+        metric: Union[str, Callable] = SIMILARITY_FN_INNER_PROD,
         solver_opts: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(n_levels, metric, solver_opts)
