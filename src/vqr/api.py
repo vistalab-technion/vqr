@@ -9,12 +9,21 @@ from sklearn.utils import check_X_y
 from matplotlib.figure import Figure
 from sklearn.utils.validation import check_array, check_is_fitted
 
-from vqr.vqr import VQRSolver, CVXVQRSolver, VectorQuantiles, quantile_levels
+from vqr.vqr import (
+    VQRSolver,
+    CVXVQRSolver,
+    VectorQuantiles,
+    RVQRDualLSESolver,
+    quantile_levels,
+)
 from vqr.plot import plot_quantiles, plot_quantiles_3d
 
-SOLVER_TYPES: Dict[str, Type[VQRSolver]] = {"cvx": CVXVQRSolver}
+SOLVER_TYPES: Dict[str, Type[VQRSolver]] = {
+    "cvx": CVXVQRSolver,
+    "rvqr_dual_lse": RVQRDualLSESolver,
+}
 
-DEFAULT_SOLVER = "cvx"
+DEFAULT_SOLVER = "rvqr_dual_lse"
 
 
 class VectorQuantileBase(BaseEstimator, ABC):
