@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Union, Callable, Optional, Sequence
 
@@ -5,12 +7,13 @@ import cvxpy as cp
 import numpy as np
 from numpy import ndarray
 from numpy.typing import ArrayLike as Array
+from sklearn.utils import check_array
 from scipy.spatial.distance import cdist
 
 SIMILARITY_FN_INNER_PROD = lambda x, y: np.dot(x, y)
 
 
-class VQRSolution:
+class VectorQuantiles:
     """
     Encapsulates the solution to a VQR problem. Contains the vector quantiles and
     regression coefficients of the solution, and provides useful methods for
@@ -27,7 +30,7 @@ class VQRSolution:
     These surfaces can be visualized over the grid defined in U.
     """
 
-    def __init__(self, U: Array, A: Array, B: Optional[Array]):
+    def __init__(self, T: int, d: int, U: Array, A: Array, B: Optional[Array] = None):
         """
         :param U: Array of shape (T**d, d). Contains the d-dimensional grid on
         which the vector quantiles are defined. If can be decoded back into a
@@ -39,9 +42,92 @@ class VQRSolution:
         Will be None if the input was an estimation problem (X=None) instead of a
         regression problem.
         """
-        self.U = U
-        self.A = A
-        self.B = B
+        # Validate dimensions
+        assert all(x is not None for x in [T, d, U, A])
+        assert U.ndim == 2 and A.ndim == 2
+        assert U.shape[0] == A.shape[0] == T ** d
+        assert A.shape[1] == 1
+        assert B is None or (B.ndim == 2 and B.shape[0] == T ** d)
+
+        self._T = T
+        self._d = d
+        self._U = U
+        self._A = A
+        self._B = B
+        self._k = B.shape[1] if B is not None else 0
+
+    @property
+    def is_conditional(self) -> bool:
+        return self._B is not None
+
+    def vector_quantiles(self, X: Optional[Array] = None) -> Sequence[Sequence[Array]]:
+        """
+        :param X: Covariates, of shape (N, k). Should be None if the fitted solution
+            was for a VQE (un conditional quantiles).
+        :return: A sequence of sequence of arrays.
+        The outer sequence corresponds to the number of samples, and it's length is N.
+        The inner sequences contain the vector-quantile values.
+        Each inner sequence is of length d, where d is the dimension of the target
+        variable (Y). The j-th inner array is the d-dimensional vector-quantile of
+        the j-th variable in Y given the other variables of Y.
+        It is of shape (T, T, ... T).
+        """
+        if X is not None and not self.is_conditional:
+            raise ValueError(f"VQR not conditional but covariates were supplied")
+
+        if not self.is_conditional:
+            Y_hats = [self._A]
+        else:
+            if X is None:
+                X = np.zeros(shape=(1, self._k))
+
+            check_array(X, ensure_2d=True, allow_nd=False)
+            N, k = X.shape
+            if k != self._k:
+                raise ValueError(
+                    f"VQR model was fitted with k={self._k}, "
+                    f"but got data with {k=} features."
+                )
+
+            B = self._B  # (T**d, k)
+            A = self._A  # (T**d, 1) -> will be broadcast to (T**d, N)
+            Y_hat = B @ X.T + A  # result is (T**d, N)
+            Y_hats = Y_hat.T  # (N, T**d)
+
+        return tuple(
+            decode_quantile_values(self._T, self._d, Y_hat) for Y_hat in Y_hats
+        )
+
+    @property
+    def quantile_grid(self) -> Sequence[Array]:
+        """
+        :return: A sequence of quantile level grids as ndarrays. This is a
+            d-dimensional meshgrid (see np.meshgrid) where d is the dimension of the
+            target variable Y.
+        """
+        return decode_quantile_grid(self._T, self._d, self._U)
+
+    @property
+    def quantile_levels(self) -> Array:
+        """
+        :return: An ndarray containing the levels at which the vector quantiles were
+            estimated along each target dimension.
+        """
+        return quantile_levels(self._T)
+
+    @property
+    def dim_y(self) -> int:
+        """
+        :return: The dimension d, of the target variable (Y).
+        """
+        return self._d
+
+    @property
+    def dim_x(self) -> int:
+        """
+        :return: The dimension k, of the covariates (X).
+        """
+        return self._k
 
 
 class VQRSolver(ABC):
@@ -74,7 +160,7 @@ class VQRSolver(ABC):
         T: int,
         Y: Array,
         X: Optional[Array] = None,
-    ) -> VQRSolution:
+    ) -> VectorQuantiles:
         """
         Solves the provided VQR problem in an implementation-specific way.
 
@@ -106,7 +192,7 @@ class CVXVQRSolver(VQRSolver):
     def __init__(self, **cvx_solver_opts):
         super().__init__(similarity_fn=SIMILARITY_FN_INNER_PROD, **cvx_solver_opts)
 
-    def solve_vqr(self, T: int, Y: Array, X: Optional[Array] = None) -> VQRSolution:
+    def solve_vqr(self, T: int, Y: Array, X: Optional[Array] = None) -> VectorQuantiles:
         N = len(Y)
         Y = np.reshape(Y, (N, -1))
 
@@ -161,7 +247,7 @@ class CVXVQRSolver(VQRSolver):
         else:
             B = AB[:, 1:]  # B is (T**d, k)
 
-        return VQRSolution(U, A, B)
+        return VectorQuantiles(T, d, U, A, B)
 
 
 def vqr_ot(
@@ -173,7 +259,7 @@ def vqr_ot(
 ) -> tuple[ndarray, ndarray, Optional[ndarray]]:
     solver = CVXVQRSolver(**solver_opts)
     solution = solver.solve_vqr(T, Y, X)
-    return solution.U, solution.A, solution.B
+    return solution._U, solution._A, solution._B
 
 
 def quantile_levels(T: int) -> ndarray:
@@ -182,23 +268,22 @@ def quantile_levels(T: int) -> ndarray:
     :param T: Number of levels to create.
     :return: An ndarray of shape (T,).
     """
-    T = T
     return (np.arange(T) + 1) * (1 / T)
 
 
-def decode_quantile_values(T: int, d: int, Q: ndarray) -> Sequence[ndarray]:
+def decode_quantile_values(T: int, d: int, Y_hat: ndarray) -> Sequence[ndarray]:
     """
     Decodes the regression coefficients of a VQR solution into vector quantile values.
     :param T: The number of quantile levels that was used for solving the problem.
     :param d: The dimension of the target data (Y) that was used for solving the
         problem.
-    :param Q: The regression coefficients, of shape (T**d, 1).
+    :param Y_hat: The regression output, of shape (T**d, 1).
     :return: A sequence of length d of vector quantile values. Each element j in the
         sequence is a d-dimensional array of shape (T, T, ..., T) containing the
         vector quantiles values of j-th variable in Y, i.e., the quantiles of Y_j|Y_{-j}
         where Y_{-j} means all the variables in Y except the j-th.
     """
-    Q = np.reshape(Q, newshape=(T,) * d)
+    Q = np.reshape(Y_hat, newshape=(T,) * d)
 
     Q_functions: List[ndarray] = [np.array([np.nan])] * d
     for axis in reversed(range(d)):
