@@ -5,7 +5,9 @@ from typing import Any, Dict, List, Union, Callable, Optional, Sequence
 
 import cvxpy as cp
 import numpy as np
+import torch
 from numpy import ndarray
+from torch import tensor
 from numpy.typing import ArrayLike as Array
 from sklearn.utils import check_array
 from scipy.spatial.distance import cdist
@@ -178,6 +180,114 @@ class VQRSolver(ABC):
         pass
 
 
+class RVQRDualLSESolver(VQRSolver):
+    """
+    Solves the Regularized Dual formulation of Vector Quantile Regression using
+    torch with SGD as a solver backend.
+    """
+
+    def __init__(self, **solver_opts):
+        super().__init__(similarity_fn=SIMILARITY_FN_INNER_PROD, **solver_opts)
+
+    def solve_vqr(self, T: int, Y: Array, X: Optional[Array] = None) -> VectorQuantiles:
+        N = len(Y)
+        Y = np.reshape(Y, (N, -1))
+
+        ones = np.ones(shape=(N, 1))
+        if X is None:
+            X = ones
+        else:
+            X = np.reshape(X, (N, -1))
+            X = np.concatenate([ones, X], axis=1)
+
+        k: int = X.shape[1] - 1  # Number of features (can be zero)
+        d: int = Y.shape[1]  # number or target dimensions
+
+        X_bar = np.mean(X, axis=0, keepdims=True)  # (1, k+1)
+
+        # All quantile levels
+        Td: int = T ** d
+        u: Array = quantile_levels(T)
+
+        # Quantile levels grid: list of grid coordinate matrices, one per dimension
+        U_grids: Sequence[Array] = np.meshgrid(
+            *([u] * d)
+        )  # d arrays of shape (T,..., T)
+        # Stack all nd-grid coordinates into one long matrix, of shape (T**d, d)
+        U: Array = np.stack([U_grid.reshape(-1) for U_grid in U_grids], axis=1)
+        assert U.shape == (Td, d)
+
+        # Pairwise distances (similarity)
+        S: Array = cdist(U, Y, self._similarity_fn)  # (Td, d) and (N, d)
+
+        one_N = np.ones([N, 1])
+        one_T = np.ones([Td, 1])
+
+        #####
+        dtype = torch.float32
+        Y_th = tensor(Y, dtype=dtype)
+        U_th = tensor(U, dtype=dtype)
+        mu = tensor(one_T / Td, dtype=dtype)
+        nu = tensor(one_N / N, dtype=dtype)
+        X_th = tensor(X, dtype=dtype)
+        b = torch.zeros(*(Td, X.shape[-1] - 1), dtype=dtype, requires_grad=True)
+        psi_init = 0.1 * torch.ones(N, dtype=dtype)
+        psi = psi_init.clone().detach().requires_grad_(True)
+        epsilon = 0.001
+        num_epochs = 1000
+
+        optimizer = torch.optim.SGD(params=[b, psi], lr=0.9, momentum=0.9)
+        UY = U_th @ Y_th.T
+
+        def _forward():
+            pass
+
+        for epoch_idx in range(num_epochs):
+            optimizer.zero_grad()
+            bX = b @ X_th[:, 1:].T
+            max_arg = UY - bX - psi.reshape(1, -1)
+            phi = (
+                epsilon
+                * torch.log(
+                    torch.sum(
+                        torch.exp(
+                            (max_arg - torch.max(max_arg, dim=1)[0][:, None]) / epsilon
+                        ),
+                        dim=1,
+                    )
+                )
+                + torch.max(max_arg, dim=1)[0]
+            )
+            obj = psi @ nu + phi @ mu
+            obj.backward()
+            optimizer.step()
+            total_loss = obj.item()
+            constraint_loss = (phi @ mu).item()
+            # print(f"{epoch_idx=}, {total_loss=:.6f} {constraint_loss=:.6f}")
+
+        max_arg = UY - bX - psi.reshape(1, -1)
+        phi = (
+            epsilon
+            * torch.log(
+                torch.sum(
+                    torch.exp(
+                        (max_arg - torch.max(max_arg, dim=1)[0][:, None]) / epsilon
+                    ),
+                    dim=1,
+                )
+            )
+            + torch.max(max_arg, dim=1)[0]
+        )
+
+        A = phi.detach().numpy()[:, None]
+        if k == 0:
+            B = None
+        else:
+            B = b.detach().numpy()
+
+        return VectorQuantiles(T, d, U, A, B)
+
+
 class CVXVQRSolver(VQRSolver):
     """
     Solves the Optimal Transport formulation of Vector Quantile Regression using
@@ -248,18 +358,6 @@ class CVXVQRSolver(VQRSolver):
             B = AB[:, 1:]  # B is (T**d, k)
 
         return VectorQuantiles(T, d, U, A, B)
-
-
-def vqr_ot(
-    T: int,
-    Y: ndarray,
-    X: Optional[ndarray] = None,
-    metric: Union[str, Callable[[Array, Array], float]] = SIMILARITY_FN_INNER_PROD,
-    solver_opts: Optional[Dict[str, Any]] = None,
-) -> tuple[ndarray, ndarray, Optional[ndarray]]:
-    solver = CVXVQRSolver(**solver_opts)
-    solution = solver.solve_vqr(T, Y, X)
-    return solution._U, solution._A, solution._B
 
 
 def quantile_levels(T: int) -> ndarray:
