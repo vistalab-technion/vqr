@@ -10,13 +10,16 @@ from vqr.data import (
     generate_mvn_data,
     generate_linear_x_y_mvn_data,
 )
+from vqr.data_banana import get_syn_data
 
-T = 50
-N = 1000
+T = 100
+N = 20000
 d = 2
 
 # X, Y = generate_mvn_data(n=N, d=d, k=3)
-X, Y = generate_linear_x_y_mvn_data(n=N, d=d, k=3, seed=42)
+# X, Y = generate_linear_x_y_mvn_data(n=N, d=d, k=1, seed=21)
+X, Y = get_syn_data(dataset_name="cond_banana", is_nonlinear=False, n=N, k=2)
+
 # _, Y = generate_heart()
 # _, Y = generate_star()
 # vq = VectorQuantileEstimator(n_levels=T, solver_opts={"verbose": True})
@@ -39,12 +42,6 @@ fig = plt.figure(figsize=(10, 10))
 plt.scatter(Y[:, 0], Y[:, 1])
 plt.tight_layout()
 plt.savefig("./quantile_values.png", dpi=200)
-
-conditional_quantiles = decode_quantile_values(T, d, vq.predict(X=X[1, :][None, :]))
-conditional_quantiles = np.stack(
-    [conditional_quantiles[0].reshape(-1), conditional_quantiles[1].reshape(-1)], axis=1
-)
-
 
 fig = plt.figure(figsize=(10, 10))
 plt.scatter(quantile_grid[:, 0], quantile_grid[:, 1], c="r")
@@ -69,6 +66,15 @@ for i, (base_sample, generated_sample) in enumerate(
 plt.tight_layout()
 plt.savefig("./correspondence.png", dpi=200)
 plt.show()
+
+
+conditional_quantiles = decode_quantile_values(
+    T, d, vq.predict(X=np.array([[1.5, 1.5]]))
+)
+conditional_quantiles = np.stack(
+    [conditional_quantiles[0].reshape(-1), conditional_quantiles[1].reshape(-1)], axis=1
+)
+
 
 fig = plt.figure(figsize=(10, 10))
 plt.scatter(quantile_grid[:, 0], quantile_grid[:, 1], c="r")

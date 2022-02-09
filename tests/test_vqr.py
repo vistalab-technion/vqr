@@ -1,5 +1,6 @@
 import itertools as it
 
+import cvxpy as cp
 import numpy as np
 import pytest
 from sklearn.exceptions import NotFittedError
@@ -89,3 +90,13 @@ class TestVectorQuantileEstimator(object):
                     n_c += 1
         print(offending_points, offending_dists)
         assert len(offending_points) == 0, f"{n=}, {n_c=}, {n_c/n=:.2f}"
+
+    def test_fit(self):
+        T = 25
+        N = 100
+        d = 2
+        EPS = 0.06
+
+        _, Y = generate_mvn_data(n=N, d=d, k=1)
+        vq = VectorQuantileEstimator(n_levels=T, solver_opts={"verbose": True})
+        vq.fit(Y)

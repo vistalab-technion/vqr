@@ -10,6 +10,7 @@ from torch import Tensor, exp
 from torch import sum as sum_th
 from torch import ones as ones_th
 from torch import randn, zeros, tensor, float32, randn_like
+from torch.nn import ReLU, Tanh, Linear, Sigmoid, LeakyReLU, Sequential
 from torch.optim import SGD, Adam
 from numpy.random import permutation
 from scipy.spatial.distance import cdist
@@ -242,14 +243,37 @@ def vqr_ot(
                 b = zeros(*(Td, X.shape[-1] - 1), dtype=dtype, requires_grad=True)
                 psi_init = 0.1 * ones_th(N, dtype=dtype)
                 psi = tensor(psi_init, requires_grad=True)
-                epsilon = 0.001
+                epsilon = 0.1
                 num_epochs = 1000
-                # optimizer = Adam(params=[b, psi], lr=0.1)
-                optimizer = SGD(params=[b, psi], lr=0.9, momentum=0.9)
+                nonlinear = False
+                if nonlinear:
+                    net = Sequential(
+                        *[
+                            Linear(k, k, bias=False),
+                            # LeakyReLU(),
+                            # Linear(20, k, bias=False),
+                        ]
+                    )
+                    optimizer = SGD(params=[*net.parameters(), b, psi], lr=0.055)
+                    # optimizer = Adam(
+                    #     params=[*net.parameters(), b, psi],
+                    #     lr=0.01,  # weight_decay=0.01
+                    # )
+                else:
+                    # optimizer = Adam(params=[b, psi], lr=0.1)
+                    optimizer = SGD(params=[b, psi], lr=1.2, momentum=0.9)
                 UY = U_th @ Y_th.T
                 for epoch_idx in range(num_epochs):
                     optimizer.zero_grad()
-                    bX = b @ X_th[:, 1:].T
+                    if nonlinear:
+                        X_nonlinear = net(X_th[:, 1:])
+                        skip = True
+                        if skip:
+                            bX = b @ (X_th[:, 1:] + X_nonlinear).T
+                        else:
+                            bX = b @ X_nonlinear.T
+                    else:
+                        bX = b @ X_th[:, 1:].T
                     max_arg = UY - bX - psi.reshape(1, -1)
                     phi = (
                         epsilon
@@ -264,12 +288,21 @@ def vqr_ot(
                         )
                         + torch.max(max_arg, dim=1)[0]
                     )
+                    constraints = UY - bX - phi.reshape(-1, 1) - psi.reshape(1, -1) <= 0
+                    num_constraints_held = (
+                        constraints.sum() / (UY.shape[0] * UY.shape[1])
+                    ).item()
                     obj = psi @ nu + phi @ mu
                     obj.backward()
                     optimizer.step()
                     total_loss = obj.item()
                     constraint_loss = (phi @ mu).item()
-                    print(f"{epoch_idx=}, {total_loss=:.6f} {constraint_loss=:.6f}")
+                    if total_loss < -10.0:
+                        break
+                    print(
+                        f"{epoch_idx=}, {total_loss=:.6f} {constraint_loss=:.6f}, "
+                        f"{num_constraints_held=}"
+                    )
                 max_arg = UY - bX - psi.reshape(1, -1)
                 phi = (
                     epsilon
