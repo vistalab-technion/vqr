@@ -57,12 +57,21 @@ class VectorQuantileBase(BaseEstimator, ABC):
                 f"solver must be either a string or an instance of VQRSolver"
             )
 
+        self.solver_opts = solver_opts
+        self.solver = solver_instance
         self._n_levels = n_levels
-        self._solver = solver_instance
         self._fitted_solution: Optional[VectorQuantiles] = None
 
     def __sklearn_is_fitted__(self):
         return self._fitted_solution is not None
+
+    @property
+    def n_levels(self) -> int:
+        """
+        :return: Number of quantile levels which this estimator calculates (in every
+        dimension of the target variable).
+        """
+        return self._n_levels
 
     @property
     def quantile_grid(self) -> Sequence[Array]:
@@ -172,7 +181,7 @@ class VectorQuantileEstimator(VectorQuantileBase):
         N = len(X)
         Y: ndarray = np.reshape(X, (N, -1))
 
-        self._fitted_solution = self._solver.solve_vqr(T=self._n_levels, Y=Y, X=None)
+        self._fitted_solution = self.solver.solve_vqr(T=self.n_levels, Y=Y, X=None)
 
         return self
 
@@ -204,7 +213,7 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
         N = len(X)
         Y: ndarray = np.reshape(y, (N, -1))
 
-        self._fitted_solution = self._solver.solve_vqr(T=self._n_levels, Y=Y, X=X)
+        self._fitted_solution = self.solver.solve_vqr(T=self.n_levels, Y=Y, X=X)
 
         return self
 
@@ -253,7 +262,7 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
             axis=0,
         )
 
-        assert vqs.shape == (N, self.dim_y, *[self._n_levels] * self.dim_y)
+        assert vqs.shape == (N, self.dim_y, *[self.n_levels] * self.dim_y)
         return vqs
 
 
