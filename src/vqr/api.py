@@ -1,28 +1,41 @@
-from abc import ABC, abstractmethod
-from typing import Any, Dict, Tuple, Union, Callable, Optional, Sequence
+from abc import ABC
+from typing import Any, Dict, Type, Tuple, Union, Optional, Sequence
 
 import numpy as np
 from numpy import ndarray, quantile
+from numpy.typing import ArrayLike as Array
 from sklearn.base import BaseEstimator, RegressorMixin
 from sklearn.utils import check_X_y
 from matplotlib.figure import Figure
 from sklearn.utils.validation import check_array, check_is_fitted
 
 from vqr.vqr import (
-    DEFAULT_METRIC,
-    vqr_ot,
+    VQRSolver,
+    CVXVQRSolver,
+    VectorQuantiles,
+    RVQRDualLSESolver,
     quantile_levels,
-    decode_quantile_grid,
-    decode_quantile_values,
 )
 from vqr.plot import plot_quantiles, plot_quantiles_3d
 
+SOLVER_TYPES: Dict[str, Type[VQRSolver]] = {
+    "cvx": CVXVQRSolver,
+    "rvqr_dual_lse": RVQRDualLSESolver,
+}
+
+DEFAULT_SOLVER = "rvqr_dual_lse"
+
 
 class VectorQuantileBase(BaseEstimator, ABC):
+    """
+    Base class for vector quantile estimation (VQE) and regression (VQR).
+    Compatible with the sklearn API.
+    """
+
     def __init__(
         self,
         n_levels: int = 50,
-        metric: Union[str, Callable] = DEFAULT_METRIC,
+        solver: Union[str, VQRSolver] = DEFAULT_SOLVER,
         solver_opts: Optional[Dict[str, Any]] = None,
     ):
         """
@@ -30,91 +43,79 @@ class VectorQuantileBase(BaseEstimator, ABC):
             levels (between 0 and 1) will be divided into this number of levels.
             For example, if n_levels=4 then the quantiles [.25, .50, .75, 1.0] will be
             evaluation in each dimension.
-        :param metric: Distance metric for pairwise distance calculation between
-            points. Can be a metric name accepted by scipy.spatial.distance.cdist or
-            a custom callable which accepts two ndarrays and returns a scalar distance.
-            Default metric is an inner product.
-        :param solver_opts: Solver options for CVXPY's solve().
+        :param solver: Either a supported solver name (see keys of
+            :obj:`SOLVER_TYPES`) or an instance of a :class:`VQRSolver`.
+        :param solver_opts: If solver is a string, these kwargs will be passed to the
+            constructor of the corresponding solver type.
         """
         if n_levels < 2:
             raise ValueError("n_levels must be >= 2")
 
-        self.n_levels = n_levels
-        self.metric = metric
-        self.solver_opts = solver_opts or {}
+        solver_instance: VQRSolver
+        if isinstance(solver, str):
+            if solver not in SOLVER_TYPES:
+                raise ValueError(
+                    f"solver must be one of {[*SOLVER_TYPES.keys()]}, got {solver=}"
+                )
+            solver_opts = solver_opts or {}
+            solver_instance = SOLVER_TYPES[solver](**solver_opts)
+        elif isinstance(solver, VQRSolver):
+            solver_instance = solver
+        else:
+            raise ValueError(
+                f"solver must be either a string or an instance of VQRSolver"
+            )
 
-    def vector_quantiles(self, X: Optional[ndarray] = None) -> Sequence[ndarray]:
-        """
-        :param X: Covariates, not used by this implementation.
-        :return: A sequence of ndarrays containing the vector-quantile values.
-            The sequence is of length d, where d is the dimension of the target
-            variable (Y).
-            The j-th ndarray is the d-dimensional vector-quantile of
-            the j-th variable in Y.
-        """
-        if X is not None:
-            raise ValueError("VectorQuantileBase does not support covariates")
+        self.solver_opts = solver_opts
+        self.solver = solver_instance
+        self._n_levels = n_levels
+        self._fitted_solution: Optional[VectorQuantiles] = None
 
-        check_is_fitted(self)
-        return decode_quantile_values(
-            self.n_levels,
-            self.quantile_dimension,
-            self.vqr_A,
-        )
+    def __sklearn_is_fitted__(self):
+        return self._fitted_solution is not None
 
     @property
-    def quantile_grid(self) -> Sequence[ndarray]:
+    def n_levels(self) -> int:
         """
-        :return: A sequence of quantile level grids as ndarrays. This is a
+        :return: Number of quantile levels which this estimator calculates (in every
+        dimension of the target variable).
+        """
+        return self._n_levels
+
+    @property
+    def quantile_grid(self) -> Sequence[Array]:
+        """
+        :return: A sequence of quantile level grids as arrays. This is a
             d-dimensional meshgrid (see np.meshgrid) where d is the dimension of the
             target variable Y.
         """
         check_is_fitted(self)
-        return decode_quantile_grid(self.n_levels, self.quantile_dimension, self.vqr_U)
+        return self._fitted_solution.quantile_grid
 
     @property
-    def quantile_levels(self) -> ndarray:
+    def quantile_levels(self) -> Array:
         """
-        :return: An ndarray containing the levels at which the vector quantiles were
+        :return: An array containing the levels at which the vector quantiles were
             estimated along each target dimension.
         """
         check_is_fitted(self)
-        return quantile_levels(self.n_levels)
+        return self._fitted_solution.quantile_levels
 
     @property
-    @abstractmethod
-    def quantile_dimension(self) -> int:
+    def dim_y(self) -> int:
         """
-        :return: The dimension of the fitted vector quantiles.
+        :return: The dimension of the target variable (Y).
         """
-        pass
+        check_is_fitted(self)
+        return self._fitted_solution.dim_y
 
     @property
-    @abstractmethod
-    def vqr_U(self) -> ndarray:
+    def dim_x(self) -> int:
         """
-        :return: Encoded quantile function evaluation grid of shape (T**d, d),
-            for which the VQR problem was solved.
+        :return: The dimension k, of the covariates (X).
         """
-        pass
-
-    @property
-    @abstractmethod
-    def vqr_A(self) -> ndarray:
-        """
-        :return: VQR regression coefficient Alpha of shape (T**d, 1), obtained by
-            solving the VQR problem.
-        """
-        pass
-
-    @property
-    @abstractmethod
-    def vqr_B(self) -> Optional[ndarray]:
-        """
-        :return: VQR regression coefficient Beta of shape (T**d, k), obtained by
-            solving the VQR problem.
-        """
-        pass
+        check_is_fitted(self)
+        return self._fitted_solution.dim_x
 
     def plot_quantiles(
         self, surf_2d: bool = False, figsize: Optional[Tuple[int, int]] = None
@@ -133,15 +134,16 @@ class VectorQuantileBase(BaseEstimator, ABC):
         """
         check_is_fitted(self)
 
+        # TODO: Refactor plot to take the solution
         plot_kwargs = dict(
             T=self.n_levels,
-            d=self.quantile_dimension,
-            U=self.vqr_U,
-            A=self.vqr_A,
+            d=self._fitted_solution.dim_y,
+            U=self._fitted_solution._U,
+            A=self._fitted_solution._A,
             figsize=figsize,
         )
 
-        if self.quantile_dimension == 3 or self.quantile_dimension == 2 and surf_2d:
+        if self.dim_y == 3 or self.dim_y == 2 and surf_2d:
             plot_fn = plot_quantiles_3d
         else:
             plot_fn = plot_quantiles
@@ -157,12 +159,23 @@ class VectorQuantileEstimator(VectorQuantileBase):
     def __init__(
         self,
         n_levels: int = 50,
-        metric: Union[str, Callable] = DEFAULT_METRIC,
+        solver: Union[str, VQRSolver] = DEFAULT_SOLVER,
         solver_opts: Optional[Dict[str, Any]] = None,
     ):
-        super().__init__(n_levels, metric, solver_opts)
+        super().__init__(n_levels, solver, solver_opts)
 
-    def fit(self, X: ndarray):
+    def vector_quantiles(self) -> Sequence[Array]:
+        """
+        :return: A sequence of arrays containing the vector-quantile values.
+        The sequence is of length d, where d is the dimension of the target
+        variable (Y). The j-th array is the d-dimensional vector-quantile of
+        the j-th variable of Y given the other variables of Y.
+        It is of shape (T, T, ... T).
+        """
+        check_is_fitted(self)
+        return self._fitted_solution.vector_quantiles(X=None)[0]
+
+    def fit(self, X: Array):
         """
         Fits a quantile estimation model to the given data. In case the data
         is high-dimensional, a vector-quantile model will be fitted.
@@ -177,37 +190,9 @@ class VectorQuantileEstimator(VectorQuantileBase):
         N = len(X)
         Y: ndarray = np.reshape(X, (N, -1))
 
-        self.d_: int = Y.shape[1]  # number or target dimensions
-        self.U_, self.A_, B_ = vqr_ot(
-            T=self.n_levels,
-            Y=Y,
-            X=None,
-            metric=self.metric,
-            solver_opts=self.solver_opts,
-        )
-        assert self.U_ is not None and self.A_ is not None
-        assert B_ is None
+        self._fitted_solution = self.solver.solve_vqr(T=self.n_levels, Y=Y, X=None)
+
         return self
-
-    @property
-    def quantile_dimension(self) -> int:
-        check_is_fitted(self)
-        return self.d_
-
-    @property
-    def vqr_U(self) -> ndarray:
-        check_is_fitted(self)
-        return self.U_
-
-    @property
-    def vqr_A(self) -> ndarray:
-        check_is_fitted(self)
-        return self.A_
-
-    @property
-    def vqr_B(self) -> Optional[ndarray]:
-        check_is_fitted(self)
-        return None
 
 
 class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
@@ -218,12 +203,12 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
     def __init__(
         self,
         n_levels: int = 50,
-        metric: Union[str, Callable] = DEFAULT_METRIC,
+        solver: Union[str, VQRSolver] = DEFAULT_SOLVER,
         solver_opts: Optional[Dict[str, Any]] = None,
     ):
-        super().__init__(n_levels, metric, solver_opts)
+        super().__init__(n_levels, solver, solver_opts)
 
-    def fit(self, X: ndarray, y: ndarray):
+    def fit(self, X: Array, y: Array):
         """
         Fits a quantile regression model to the given data. In case the target data
         is high-dimensional, a vector-quantile model will be fitted.
@@ -237,95 +222,57 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
         N = len(X)
         Y: ndarray = np.reshape(y, (N, -1))
 
-        self.k_: int = X.shape[1]  # number of features
-        self.d_: int = Y.shape[1]  # number or target dimensions
-
-        vqr_solution = vqr_ot(
-            T=self.n_levels, Y=Y, X=X, metric=self.metric, solver_opts=self.solver_opts
-        )
-        assert all(x is not None for x in vqr_solution)
-        self.U_, self.A_, self.B_ = vqr_solution
+        self._fitted_solution = self.solver.solve_vqr(T=self.n_levels, Y=Y, X=X)
 
         return self
 
-    def predict(self, X: ndarray) -> ndarray:
+    def vector_quantiles(self, X: Optional[Array] = None) -> Sequence[Sequence[Array]]:
+        """
+        :param X: Covariates, of shape (N, k). Should be None if the fitted solution
+            was for a VQE (un conditional quantiles).
+        :return: A sequence of sequence of arrays.
+        The outer sequence corresponds to the number of samples, and it's length is N.
+        The inner sequences contain the vector-quantile values.
+        Each inner sequence is of length d, where d is the dimension of the target
+        variable (Y). The j-th inner array is the d-dimensional vector-quantile of
+        the j-th variable in Y given the other variables of Y.
+        It is of shape (T, T, ... T).
+        """
+        check_is_fitted(self)
+        return self._fitted_solution.vector_quantiles(X)
+
+    def predict(self, X: Array) -> Array:
         """
         Estimates conditional quantiles of Y|X=x.
         :param X: Samples at which to estimate. Should have shape (N, k).
-        :return: An array Y_hat of shape (N, T**d). Each row j contains the vector
-        quantile values of Y|X=x for x = X[j, :]. The vector quantiles for each
-        sample can be decoded with :obj:`decode_quantile_values`.
+        :return: An array containing the vector-quantile values.
+        Returns the same as vector_quantiles, but stacked into one array.
+        The result will be of shape [N, d, T, T, ..., T].
         """
-        check_is_fitted(self)
-        check_array(X, ensure_2d=True, allow_nd=False)
-        N, k = X.shape
-
-        if k != self.features_dimension:
-            raise ValueError(
-                f"VQR model was fitted with k={self.features_dimension}, "
-                f"but got data with {k=} features."
-            )
-
-        B = self.vqr_B  # (T**d, k)
-        A = self.vqr_A  # (T**d, 1) -> will be broadcast to (T**d, N)
-        Y_hat = B @ X.T + A  # result is (T**d, N)
-
-        return Y_hat.T
-
-    def vector_quantiles(self, X: Optional[ndarray] = None) -> Sequence[ndarray]:
-        """
-        :param X: Optional covariates. If provided, will return the conditional
-        vector quantiles of Y|X. If not provided, returns the vector quantiles of Y.
-        :return: A sequence of quantile value ndarrays. The sequence is of length d,
-            where d is the dimension of the target variable (Y). The j-th ndarray is
-            the d-dimensional vector quantile of the j-th variable in Y.
-        """
-
         check_is_fitted(self)
 
         if X is None:
-            return super().vector_quantiles()
+            N = 1
+        else:
+            check_array(X, ensure_2d=True, allow_nd=False)
+            N, k = X.shape
+            if k != self.dim_x:
+                raise ValueError(
+                    f"VQR model was fitted with k={self.dim_x}, "
+                    f"but got data with {k=} features."
+                )
 
-        # Calculate the quantiles of Y|X.
-        # If there are multiple samples in X, average them.
-        Y_hat = self.predict(X)  # X is (N, k) Y_hat is (N, T**d)
-        A = np.mean(Y_hat, axis=0).reshape(-1, 1)  # A is (T**d, 1)
+        vq_samples: Sequence[Sequence[Array]] = self.vector_quantiles(X)
 
-        return decode_quantile_values(
-            # For the regression case we need to get X and calculate B^T X + A
-            # In that case one should call predict and decode that
-            self.n_levels,
-            self.quantile_dimension,
-            A,
+        # Stack the vector quantiles for each sample into one tensor
+        vqs = np.stack(
+            # vq_sample is a Sequence[Array] of length d
+            [np.stack(vq_sample, axis=0) for vq_sample in vq_samples],
+            axis=0,
         )
 
-    @property
-    def features_dimension(self) -> int:
-        """
-        :return: The dimension of the feature vector for regression.
-        """
-        check_is_fitted(self)
-        return self.k_
-
-    @property
-    def quantile_dimension(self) -> int:
-        check_is_fitted(self)
-        return self.d_
-
-    @property
-    def vqr_U(self) -> ndarray:
-        check_is_fitted(self)
-        return self.U_
-
-    @property
-    def vqr_A(self) -> ndarray:
-        check_is_fitted(self)
-        return self.A_
-
-    @property
-    def vqr_B(self) -> Optional[ndarray]:
-        check_is_fitted(self)
-        return self.B_
+        assert vqs.shape == (N, self.dim_y, *[self.n_levels] * self.dim_y)
+        return vqs
 
 
 class ScalarQuantileEstimator:

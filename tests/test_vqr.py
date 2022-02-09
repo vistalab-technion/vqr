@@ -33,14 +33,15 @@ class TestVectorQuantileEstimator(object):
         N, d = Y.shape[0], Y.shape[1]
         T = 10
 
-        vq = VectorQuantileEstimator(n_levels=T, solver_opts={"verbose": True})
-        vq.fit(Y)
+        vqe = VectorQuantileEstimator(n_levels=T, solver_opts={"verbose": True})
+        vqe.fit(Y)
 
-        assert vq.quantile_dimension == d
-        assert len(vq.vector_quantiles()) == d
-        assert all(q.shape == (T,) * d for q in vq.vector_quantiles())
-        assert len(vq.quantile_grid) == d
-        assert all(q.shape == (T,) * d for q in vq.quantile_grid)
+        assert vqe.dim_y == d
+        assert len(vqe.quantile_grid) == d
+        assert len(vqe.vector_quantiles()) == d
+
+        assert all(q.shape == (T,) * d for q in vqe.vector_quantiles())
+        assert all(q.shape == (T,) * d for q in vqe.quantile_grid)
 
     def test_not_fitted(self):
         vq = VectorQuantileEstimator(n_levels=100)
@@ -57,10 +58,10 @@ class TestVectorQuantileEstimator(object):
         EPS = 0.06
 
         _, Y = generate_mvn_data(n=N, d=d, k=1)
-        vq = VectorQuantileEstimator(n_levels=T, solver_opts={"verbose": True})
-        vq.fit(Y)
-        U1, U2 = vq.quantile_grid
-        Q1, Q2 = vq.vector_quantiles()
+        vqe = VectorQuantileEstimator(n_levels=T, solver_opts={"verbose": True})
+        vqe.fit(Y)
+        U1, U2 = vqe.quantile_grid
+        Q1, Q2 = vqe.vector_quantiles()
 
         ii = jj = tuple(range(1, T))
 
@@ -117,16 +118,23 @@ class TestVectorQuantileRegressor(object):
         N, k = X.shape
         T = 10
 
-        vq = VectorQuantileRegressor(n_levels=T, solver_opts={"verbose": True})
-        vq.fit(X, Y)
+        vqr = VectorQuantileRegressor(n_levels=T, solver_opts={"verbose": True})
+        vqr.fit(X, Y)
 
-        assert vq.quantile_dimension == d
-        assert len(vq.vector_quantiles()) == d
-        assert all(q.shape == (T,) * d for q in vq.vector_quantiles())
-        assert len(vq.quantile_grid) == d
-        assert all(q.shape == (T,) * d for q in vq.quantile_grid)
+        assert vqr.dim_y == d
+        assert vqr.dim_x == k
+        assert len(vqr.quantile_grid) == d
+        assert all(q.shape == (T,) * d for q in vqr.quantile_grid)
 
-        assert vq.features_dimension == k
+        for X_ in [None, X]:
+            N_ = N if X_ is not None else 1
 
-        Y_hat = vq.predict(X)
-        assert Y_hat.shape == (N, T ** d)
+            vq_samples = vqr.vector_quantiles(X=X_)
+
+            assert len(vq_samples) == N_
+
+            for vq_sample in vq_samples:
+                assert all(vq.shape == (T,) * d for vq in vq_sample)
+
+            Y_hat = vqr.predict(X_)
+            assert Y_hat.shape == (N_, d, *[T] * d)
