@@ -1,5 +1,6 @@
 import itertools as it
 from math import ceil
+from random import randint
 from typing import Any, Dict, List, Union, Callable, Optional, Sequence
 
 import ot
@@ -10,7 +11,7 @@ from numpy import ndarray
 from torch import Tensor, cat, exp
 from torch import sum as sum_th
 from torch import ones as ones_th
-from torch import randn, stack, zeros, tensor, float32, randn_like
+from torch import randn, stack, zeros, arange, tensor, float32, randn_like
 from torch.nn import ReLU, Tanh, Linear, Sigmoid, LeakyReLU, Sequential
 from torch.optim import SGD, Adam
 from numpy.random import permutation
@@ -22,13 +23,7 @@ DEFAULT_METRIC = lambda x, y: np.dot(x, y)
 EPS = 1e-2
 
 
-def measure_monotonicity_2d(A, B, U, T, d):
-    if B is not None:
-        X = np.ones(B.shape[1])[:, None]
-        Y_hat = (B @ X.T + A).T  # result is (T**d, N)
-    else:
-        Y_hat = A
-
+def measure_monotonicity_2d(Y_hat, U, T, d):
     Q1, Q2 = decode_quantile_values(T=T, Q=Y_hat, d=d)
     U1, U2 = decode_quantile_grid(T=T, d=d, U=U)
 
@@ -286,30 +281,18 @@ def vqr_ot(
                 psi = tensor(psi_init, requires_grad=True)
                 epsilon = 0.1
                 num_epochs = 1000
-                nonlinear = True
+                nonlinear = False
                 if nonlinear:
-                    separable_per_quantile = False
-                    if not separable_per_quantile:
-                        net = Sequential(
-                            *[
-                                Linear(k, k, bias=False),
-                                LeakyReLU(),
-                                Linear(k, k, bias=False),
-                                LeakyReLU(),
-                                Linear(k, k, bias=False),
-                            ]
-                        )
-                        optimizer = SGD(params=[*net.parameters(), b, psi], lr=0.9)
-                    else:
-                        nets = [Linear(k, d, bias=False) for _ in range(U.shape[0])]
-                        optimizer = SGD(
-                            params=[
-                                *[list(net.parameters())[0] for net in nets],
-                                b,
-                                psi,
-                            ],
-                            lr=0.055,
-                        )
+                    net = Sequential(
+                        *[
+                            Linear(k, k, bias=False),
+                            LeakyReLU(),
+                            Linear(k, k, bias=False),
+                            LeakyReLU(),
+                            Linear(k, k, bias=False),
+                        ]
+                    )
+                    optimizer = SGD(params=[*net.parameters(), b, psi], lr=0.9)
                     # optimizer = Adam(
                     #     params=[*net.parameters(), b, psi],
                     #     lr=0.01,  # weight_decay=0.01
@@ -321,29 +304,14 @@ def vqr_ot(
                 for epoch_idx in range(num_epochs):
                     optimizer.zero_grad()
                     if nonlinear:
-                        if not separable_per_quantile:
-                            X_nonlinear = net(X_th[:, 1:])
-                            skip = True
-                            if skip:
-                                bX = b @ (X_th[:, 1:] + 0.1 * X_nonlinear).T
-                                print(
-                                    (b @ X_th[:, 1:].T).sum().detach().item(),
-                                    (b @ X_nonlinear.T).sum().detach().item(),
-                                )
-                            else:
-                                bX = b @ X_nonlinear.T
-                        else:
-                            bX = cat(
-                                [
-                                    net(X_th[:, 1:]).sum(dim=1, keepdims=True)
-                                    for net in nets
-                                ],
-                                dim=1,
-                            )
-                            bX = 0.03 * bX.T + b @ X_th[:, 1:].T
+                        X_nonlinear = net(X_th[:, 1:])
+                        # f_X = stack([X_nonlinear] * Td, dim=1)
+                        # h_U = ((arange(0, Td) / Td) ** 2)[None, :, None]
+                        # bX = (h_U + f_X).mean(dim=-1)
+                        bX = (b @ (X_th[:, 1:] + 0.01 * X_nonlinear).T).T
                     else:
-                        bX = b @ X_th[:, 1:].T
-                    max_arg = UY - bX - psi.reshape(1, -1)
+                        bX = (b @ X_th[:, 1:].T).T
+                    max_arg = UY - bX.T - psi.reshape(1, -1)
                     phi = (
                         epsilon
                         * torch.log(
@@ -357,7 +325,9 @@ def vqr_ot(
                         )
                         + torch.max(max_arg, dim=1)[0]
                     )
-                    constraints = UY - bX - phi.reshape(-1, 1) - psi.reshape(1, -1) <= 0
+                    constraints = (
+                        UY - bX.T - phi.reshape(-1, 1) - psi.reshape(1, -1) <= 0
+                    )
                     num_constraints_held = (
                         constraints.sum() / (UY.shape[0] * UY.shape[1])
                     ).item()
@@ -368,19 +338,22 @@ def vqr_ot(
                     constraint_loss = (phi @ mu).item()
                     if total_loss < -40.0:
                         break
-                    if epoch_idx % 5 == 0:
-                        # n_c = measure_monotonicity_2d(
-                        #     A=phi.detach().numpy()[:, None],
-                        #     B=b.detach().numpy() if k != 0 else None,
-                        #     U=U,
-                        #     T=T,
-                        #     d=d,
-                        # )
+                    if epoch_idx % 1 == 0:
+                        idx = randint(0, N - 1)
+                        n_c = measure_monotonicity_2d(
+                            Y_hat=(bX[idx, :] + phi).detach(),
+                            U=U,
+                            T=T,
+                            d=d,
+                        )
+                        if n_c > 100:
+                            print("blah")
                         print(
                             f"{epoch_idx=}, {total_loss=:.6f} {constraint_loss=:.6f}, "
-                            f"{num_constraints_held=},"  # num_monotonicity_violated={n_c}"
+                            f"{num_constraints_held=},"
+                            f"num_monotonicity_violated={n_c}, X={X[idx, 1:]}"
                         )
-                max_arg = UY - bX - psi.reshape(1, -1)
+                max_arg = UY - bX.T - psi.reshape(1, -1)
                 phi = (
                     epsilon
                     * torch.log(

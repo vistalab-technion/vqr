@@ -20,9 +20,9 @@ d = 2
 
 # X, Y = generate_mvn_data(n=N, d=d, k=3)
 # X, Y = generate_linear_x_y_mvn_data(n=N, d=d, k=1, seed=21)
-k = 1
+k = 2
 nonlinear = True
-X, Y = get_syn_data(dataset_name="sin_banana", is_nonlinear=nonlinear, n=N, k=k)
+X, Y = get_syn_data(dataset_name="cond_banana", is_nonlinear=nonlinear, n=N, k=k)
 
 # _, Y = generate_heart()
 # _, Y = generate_star()
