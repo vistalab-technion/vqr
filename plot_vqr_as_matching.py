@@ -1,3 +1,5 @@
+from itertools import product
+
 import numpy as np
 import matplotlib.pyplot as plt
 from numpy import ones, array
@@ -12,13 +14,15 @@ from vqr.data import (
 )
 from vqr.data_banana import get_syn_data
 
-T = 100
+T = 20
 N = 20000
 d = 2
 
 # X, Y = generate_mvn_data(n=N, d=d, k=3)
 # X, Y = generate_linear_x_y_mvn_data(n=N, d=d, k=1, seed=21)
-X, Y = get_syn_data(dataset_name="cond_banana", is_nonlinear=False, n=N, k=2)
+k = 1
+nonlinear = True
+X, Y = get_syn_data(dataset_name="sin_banana", is_nonlinear=nonlinear, n=N, k=k)
 
 # _, Y = generate_heart()
 # _, Y = generate_star()
@@ -67,35 +71,52 @@ plt.tight_layout()
 plt.savefig("./correspondence.png", dpi=200)
 plt.show()
 
+X_ins = [
+    0.0,
+    0.25,
+    0.5,
+    1.0,
+    1.25,
+    1.3,
+    1.5,
+    1.6,
+    1.8,
+    2.0,
+    2.2,
+    2.5,
+    2.7,
+    3.0,
+]
+for X_in in X_ins:
+    conditional_quantiles = decode_quantile_values(
+        T, d, vq.predict(X=np.array([(X_in,) * k]))
+    )
+    conditional_quantiles = np.stack(
+        [conditional_quantiles[0].reshape(-1), conditional_quantiles[1].reshape(-1)],
+        axis=1,
+    )
 
-conditional_quantiles = decode_quantile_values(
-    T, d, vq.predict(X=np.array([[1.5, 1.5]]))
-)
-conditional_quantiles = np.stack(
-    [conditional_quantiles[0].reshape(-1), conditional_quantiles[1].reshape(-1)], axis=1
-)
-
-
-fig = plt.figure(figsize=(10, 10))
-plt.scatter(quantile_grid[:, 0], quantile_grid[:, 1], c="r")
-plt.scatter(Y[:, 0], Y[:, 1], c="c")
-for i, (base_sample, conditional_quantile) in enumerate(
-    zip(quantile_grid, conditional_quantiles)
-):
-    if (
-        ((i // T == 1) and 1 < i % T < T - 1)
-        or ((i // T == T - 2) and 1 < i % T < T - 1)
-        or ((1 < i // T < T - 1) and i % T == 1)
-        or ((1 < i // T < T - 1) and i % T == T - 2)
+    fig = plt.figure(figsize=(10, 10))
+    plt.scatter(quantile_grid[:, 0], quantile_grid[:, 1], c="r")
+    plt.scatter(Y[:, 0], Y[:, 1], c="c")
+    for i, (base_sample, conditional_quantile) in enumerate(
+        zip(quantile_grid, conditional_quantiles)
     ):
-        plt.plot(
-            [base_sample[0], conditional_quantile[0]],
-            [base_sample[1], conditional_quantile[1]],
-            linestyle="--",
-            color="blue",
-            linewidth=1,
-        )
-        plt.scatter(conditional_quantile[0], conditional_quantile[1], c="b")
-plt.tight_layout()
-plt.savefig("./conditional_correspondence.png", dpi=200)
-plt.show()
+        if (
+            ((i // T == 1) and 1 < i % T < T - 1)
+            or ((i // T == T - 2) and 1 < i % T < T - 1)
+            or ((1 < i // T < T - 1) and i % T == 1)
+            or ((1 < i // T < T - 1) and i % T == T - 2)
+        ):
+            plt.plot(
+                [base_sample[0], conditional_quantile[0]],
+                [base_sample[1], conditional_quantile[1]],
+                linestyle="--",
+                color="blue",
+                linewidth=1,
+            )
+            plt.scatter(conditional_quantile[0], conditional_quantile[1], c="b")
+    plt.title(f"Q(Y|X={(X_in,)}*{k})")
+    plt.tight_layout()
+    plt.savefig(f"./conditional_correspondence_{X_in}_{nonlinear=}.png", dpi=200)
+    plt.show()
