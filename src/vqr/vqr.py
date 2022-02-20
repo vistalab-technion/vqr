@@ -145,6 +145,7 @@ class VQRSolver(ABC):
     def __init__(
         self,
         similarity_fn: Union[str, Callable] = SIMILARITY_FN_INNER_PROD,
+        verbose: bool = False,
         **solver_opts,
     ):
         """
@@ -155,6 +156,7 @@ class VQRSolver(ABC):
         """
         self._similarity_fn = similarity_fn
         self._solver_opts = solver_opts
+        self._verbose = verbose
 
     @abstractmethod
     def solve_vqr(
@@ -186,8 +188,20 @@ class RVQRDualLSESolver(VQRSolver):
     torch with SGD as a solver backend.
     """
 
-    def __init__(self, **solver_opts):
-        super().__init__(similarity_fn=SIMILARITY_FN_INNER_PROD, **solver_opts)
+    def __init__(
+        self,
+        epsilon: float = 0.01,
+        num_epochs: int = 1000,
+        learning_rate: float = 0.9,
+        verbose: bool = False,
+        **solver_opts,
+    ):
+        super().__init__(
+            similarity_fn=SIMILARITY_FN_INNER_PROD, verbose=verbose, **solver_opts
+        )
+        self._epsilon = epsilon
+        self._num_epochs = num_epochs
+        self._lr = learning_rate
 
     def solve_vqr(self, T: int, Y: Array, X: Optional[Array] = None) -> VectorQuantiles:
         N = len(Y)
@@ -233,10 +247,10 @@ class RVQRDualLSESolver(VQRSolver):
         b = torch.zeros(*(Td, X.shape[-1] - 1), dtype=dtype, requires_grad=True)
         psi_init = 0.1 * torch.ones(N, dtype=dtype)
         psi = psi_init.clone().detach().requires_grad_(True)
-        epsilon = 0.001
-        num_epochs = 1000
+        epsilon = self._epsilon
+        num_epochs = self._num_epochs
 
-        optimizer = torch.optim.SGD(params=[b, psi], lr=0.9, momentum=0.9)
+        optimizer = torch.optim.SGD(params=[b, psi], lr=self._lr, momentum=0.9)
         UY = U_th @ Y_th.T
 
         def _forward():
@@ -263,7 +277,9 @@ class RVQRDualLSESolver(VQRSolver):
             optimizer.step()
             total_loss = obj.item()
             constraint_loss = (phi @ mu).item()
-            # print(f"{epoch_idx=}, {total_loss=:.6f} {constraint_loss=:.6f}")
+
+            if self._verbose and epoch_idx % 100 == 0:
+                print(f"{epoch_idx=}, {total_loss=:.6f} {constraint_loss=:.6f}")
 
         max_arg = UY - bX - psi.reshape(1, -1)
         phi = (
