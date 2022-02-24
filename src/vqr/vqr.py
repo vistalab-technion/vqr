@@ -416,6 +416,26 @@ def decode_quantile_values(T: int, d: int, Y_hat: ndarray) -> Sequence[ndarray]:
     return tuple(Q_functions)
 
 
+def encode_quantile_functions(T: int, d: int, Q_functions: Sequence[Array]):
+    """
+    TODO
+    :param T:
+    :param d:
+    :param Q_functions:
+    :return:
+    """
+    assert len(Q_functions) == d
+    assert all(Q.shape == tuple([T] * d) for Q in Q_functions)
+
+    Q = np.zeros_like(Q_functions[0])
+    for axis in reversed(range(d)):
+
+        dQdu = Q_functions[axis] / T
+        Q += np.cumsum(dQdu, axis=d - 1 - axis)
+
+    return np.reshape(Q, (T ** d, 1))
+
+
 def decode_quantile_grid(T: int, d: int, U: ndarray) -> Sequence[ndarray]:
     """
     Decodes the U variable of a VQR solution into the grid of the

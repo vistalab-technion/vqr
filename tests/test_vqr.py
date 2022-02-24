@@ -5,6 +5,7 @@ import pytest
 from sklearn.exceptions import NotFittedError
 
 from vqr import VectorQuantileEstimator, VectorQuantileRegressor
+from vqr.vqr import decode_quantile_values, encode_quantile_functions
 from vqr.data import generate_mvn_data
 
 
@@ -138,3 +139,22 @@ class TestVectorQuantileRegressor(object):
 
             Y_hat = vqr.predict(X_)
             assert Y_hat.shape == (N_, d, *[T] * d)
+
+
+class TestEncodeDecode:
+    @pytest.mark.parametrize(
+        ["T", "d"],
+        [
+            (4, 2),
+        ],
+    )
+    def test_encode_decode(self, T, d):
+        # a = np.random.randn(T ** d, 1)
+        a = np.arange(T ** d)
+
+        dadus = decode_quantile_values(T, d, a)
+        a_ = encode_quantile_functions(T, d, dadus)
+        dadus_ = decode_quantile_values(T, d, a_)
+
+        for dadu, dadu_ in zip(dadus, dadus_):
+            assert np.allclose(dadu, dadu_)
