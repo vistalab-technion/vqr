@@ -3,7 +3,9 @@ from typing import Tuple, Optional, Sequence
 import numpy as np
 from numpy import ndarray
 from matplotlib import pyplot as plt
+from numpy.typing import ArrayLike as Array
 from matplotlib.cm import ScalarMappable
+from scipy.spatial import ConvexHull
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from mpl_toolkits.mplot3d import Axes3D
@@ -162,3 +164,126 @@ def plot_quantiles_3d(T, d, U, A, figsize: Optional[Tuple[int, int]] = None) -> 
         ax.locator_params(axis="both", tight=True, nbins=10)
 
     return fig
+
+
+def plot_coverage_2d(
+    Q1: Array,
+    Q2: Array,
+    Y_valid: Array = None,
+    Y_train: Array = None,
+    alpha: float = 0.1,
+    ax: Axes = None,
+    title: str = None,
+    xylim: str = None,
+    xlabel: str = None,
+    ylabel: str = None,
+    contour_color: str = "k",
+    contour_label: str = None,
+):
+    """
+    Plots two-dimensional coverage plots.
+    Can show both training and validation data, and calculate coverage.
+
+    :param Q1: The first 2d quantile surface.
+    :param Q2: The second 2d quantile surface.
+    :param Y_valid: Validation data points (N, 2).
+    :param Y_train: Training data points (N', 2)
+    :param alpha: Quantile level for coverage calculation. Should be <0.5.
+    E.g., 0.05 means the contour will correspond to 0.95 of the data in each dimension.
+    :param ax: Optional axes object to plot to. If not provided, will create a new
+    figure.
+    :param title: Title to give the axes.
+    :param xylim: Limits for x and y axes.
+    :param xlabel: Label for x axis.
+    :param ylabel: Label for y axis.
+    :param contour_color: Color for contour line.
+    :param contour_label: Legend label for contour line.
+    :return: A tuple with the (Figure, Axis, validation coverage).
+    """
+    T = Q1.shape[0]
+    assert Q1.shape == Q2.shape == (T, T)
+    assert 0.0 < alpha < 0.5
+
+    if ax is None:
+        fig, ax = plt.subplots(1, 1, figsize=(8, 8))
+    else:
+        fig, ax = None, ax
+
+    i_lo = int(np.floor(T * alpha))
+    i_hi = int(np.ceil(T * (1 - alpha)))
+
+    Q_surface = np.array(  # (N, 2)
+        [
+            [
+                *Q1[i_lo:i_hi, i_hi],
+                *Q1[i_lo, i_lo:i_hi],
+                *Q1[i_lo:i_hi, i_lo],
+                *Q1[i_hi, i_lo:i_hi],
+            ],
+            [
+                *Q2[i_lo:i_hi, i_hi],
+                *Q2[i_lo, i_lo:i_hi],
+                *Q2[i_lo:i_hi, i_lo],
+                *Q2[i_hi, i_lo:i_hi],
+            ],
+        ]
+    ).T
+
+    surf_kws = dict(alpha=0.5, color=contour_color, s=200, marker="v")
+    ax.scatter(*Q_surface.T, **surf_kws)
+
+    # Plot convex hull
+    hull = ConvexHull(Q_surface)
+    for i, simplex in enumerate(hull.simplices):
+        label = None
+        if i == len(hull.simplices) - 1:
+            label = contour_label or rf"Quantile Contour ($\alpha$={alpha})"
+        ax.plot(
+            Q_surface[simplex, 0],
+            Q_surface[simplex, 1],
+            color=contour_color,
+            label=label,
+        )
+
+    def point_in_hull(point, hull, tolerance=1e-12):
+        return all(
+            (np.dot(eq[:-1], point) + eq[-1] <= tolerance) for eq in hull.equations
+        )
+
+    # Plot training data
+    train_coverage = None
+    if Y_train is not None:
+        is_in_hull = np.array([point_in_hull(p, hull) for p in Y_train])
+        train_coverage = np.mean(is_in_hull).item()
+        ax.scatter(
+            *Y_train.T,
+            color="k",
+            alpha=0.3,
+            label=f"training data (cov={train_coverage * 100:.2f})",
+        )
+
+    val_coverage = None
+    # Plot validation data
+    if Y_valid is not None:
+        is_in_hull = np.array([point_in_hull(p, hull) for p in Y_valid])
+        val_coverage = np.mean(is_in_hull).item()
+        ax.scatter(
+            *Y_valid[is_in_hull, :].T,
+            marker="x",
+            color="g",
+            label=f"validation (cov={val_coverage * 100:.2f})",
+        )
+        ax.scatter(
+            *Y_valid[~is_in_hull, :].T,
+            marker="x",
+            color="m",
+            label="validation outliers",
+        )
+
+    ax.set_xlim(xylim)
+    ax.set_ylim(xylim)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.set_title(title)
+    ax.legend()
+    return fig, ax, val_coverage
