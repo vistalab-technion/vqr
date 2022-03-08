@@ -305,10 +305,10 @@ def vqr_ot(
                     optimizer.zero_grad()
                     if nonlinear:
                         X_nonlinear = net(X_th[:, 1:])
-                        # f_X = stack([X_nonlinear] * Td, dim=1)
-                        # h_U = ((arange(0, Td) / Td) ** 2)[None, :, None]
-                        # bX = (h_U + f_X).mean(dim=-1)
-                        bX = (b @ (X_th[:, 1:] + 0.01 * X_nonlinear).T).T
+                        f_X = stack([X_nonlinear] * Td, dim=1)
+                        h_U = ((arange(0, Td) / Td) ** 2)[None, :, None]
+                        bX = (h_U + f_X).mean(dim=-1)
+                        # bX = (b @ (X_th[:, 1:] + 0.01 * X_nonlinear).T).T
                     else:
                         bX = (b @ X_th[:, 1:].T).T
                     max_arg = UY - bX.T - psi.reshape(1, -1)
