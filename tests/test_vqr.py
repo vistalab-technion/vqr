@@ -11,10 +11,11 @@ from vqr.data import generate_mvn_data, generate_linear_x_y_mvn_data
 
 class TestVectorQuantileEstimator(object):
     @pytest.fixture(
+        scope="class",
         params=[
-            {"d": 1},
-            {"d": 2},
-            {"d": 3},
+            {"d": 1, "N": 100, "T": 10},
+            {"d": 2, "N": 100, "T": 10},
+            {"d": 3, "N": 100, "T": 10},
         ],
         ids=[
             "d=1",
@@ -22,20 +23,18 @@ class TestVectorQuantileEstimator(object):
             "d=3",
         ],
     )
-    def dataset(self, request):
+    def vqe_fitted(self, request):
         params = request.param
-        d = params["d"]
-        N = 100
+        d, N, T = params["d"], params["N"], params["T"]
         X, Y = generate_mvn_data(N, d, k=1)
-        return Y
-
-    def test_shapes(self, dataset):
-        Y = dataset
-        N, d = Y.shape[0], Y.shape[1]
-        T = 10
-
         vqe = VectorQuantileEstimator(n_levels=T, solver_opts={"verbose": True})
         vqe.fit(Y)
+        return Y, vqe
+
+    def test_shapes(self, vqe_fitted):
+        Y, vqe = vqe_fitted
+        N, d = Y.shape[0], Y.shape[1]
+        T = vqe.n_levels
 
         assert vqe.dim_y == d
         assert len(vqe.quantile_grid) == d
@@ -44,13 +43,10 @@ class TestVectorQuantileEstimator(object):
         assert all(q.shape == (T,) * d for q in vqe.vector_quantiles())
         assert all(q.shape == (T,) * d for q in vqe.quantile_grid)
 
-    def test_sample(self, dataset, test_out_dir):
-        Y = dataset
+    def test_sample(self, vqe_fitted, test_out_dir):
+        Y, vqe = vqe_fitted
         N, d = Y.shape[0], Y.shape[1]
-        T = 20
-
-        vqe = VectorQuantileEstimator(n_levels=T, solver_opts={"verbose": True})
-        vqe.fit(Y)
+        T = vqe.n_levels
 
         n = 1000
         Y_samp = vqe.sample(n)
@@ -114,32 +110,33 @@ class TestVectorQuantileEstimator(object):
 
 class TestVectorQuantileRegressor(object):
     @pytest.fixture(
+        scope="class",
         params=[
-            {"d": 1, "k": 5},
-            {"d": 2, "k": 7},
-            {"d": 3, "k": 3},
+            {"d": 1, "k": 5, "N": 500, "T": 20},
+            {"d": 2, "k": 7, "N": 500, "T": 20},
+            {"d": 3, "k": 3, "N": 500, "T": 10},
         ],
         ids=[
-            "d=1, k=5",
-            "d=2, k=7",
-            "d=3, k=3",
+            "d=1,k=5",
+            "d=2,k=7",
+            "d=3,k=3",
         ],
     )
-    def dataset(self, request):
+    def vqr_fitted(self, request):
         params = request.param
-        d, k = params["d"], params["k"]
-        N = 500
+        N, d, k, T = params["N"], params["d"], params["k"], params["T"]
         X, Y = generate_linear_x_y_mvn_data(N, d=d, k=k)
-        return X, Y
-
-    def test_shapes(self, dataset):
-        X, Y = dataset
-        N, d = Y.shape
-        N, k = X.shape
-        T = 10
 
         vqr = VectorQuantileRegressor(n_levels=T, solver_opts={"verbose": True})
         vqr.fit(X, Y)
+
+        return X, Y, vqr
+
+    def test_shapes(self, vqr_fitted):
+        X, Y, vqr = vqr_fitted
+        N, d = Y.shape
+        N, k = X.shape
+        T = vqr.n_levels
 
         assert vqr.dim_y == d
         assert vqr.dim_x == k
@@ -159,14 +156,11 @@ class TestVectorQuantileRegressor(object):
             Y_hat = vqr.predict(X_)
             assert Y_hat.shape == (N_, d, *[T] * d)
 
-    def test_sample(self, dataset, test_out_dir):
-        X, Y = dataset
+    def test_sample(self, vqr_fitted, test_out_dir):
+        X, Y, vqr = vqr_fitted
         N, d = Y.shape
         N, k = X.shape
-        T = 20 if d < 3 else 8
-
-        vqr = VectorQuantileRegressor(n_levels=T, solver_opts={"verbose": True})
-        vqr.fit(X, Y)
+        T = vqr.n_levels
 
         n = 1000
 
