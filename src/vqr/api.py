@@ -244,17 +244,6 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
         It is of shape (T, T, ... T).
         """
         check_is_fitted(self)
-        return self._fitted_solution.vector_quantiles(X)
-
-    def predict(self, X: Array) -> Array:
-        """
-        Estimates conditional quantiles of Y|X=x.
-        :param X: Samples at which to estimate. Should have shape (N, k).
-        :return: An array containing the vector-quantile values.
-        Returns the same as vector_quantiles, but stacked into one array.
-        The result will be of shape [N, d, T, T, ..., T].
-        """
-        check_is_fitted(self)
 
         if X is None:
             N = 1
@@ -270,6 +259,18 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
             # Scale X with the fitted transformation before predicting
             X = self._scaler.transform(X)
 
+        return self._fitted_solution.vector_quantiles(X)
+
+    def predict(self, X: Array) -> Array:
+        """
+        Estimates conditional quantiles of Y|X=x.
+        :param X: Samples at which to estimate. Should have shape (N, k).
+        :return: An array containing the vector-quantile values.
+        Returns the same as vector_quantiles, but stacked into one array.
+        The result will be of shape [N, d, T, T, ..., T].
+        """
+        check_is_fitted(self)
+
         vq_samples: Sequence[Sequence[Array]] = self.vector_quantiles(X)
 
         # Stack the vector quantiles for each sample into one tensor
@@ -279,6 +280,7 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
             axis=0,
         )
 
+        N = X.shape[0] if X is not None else 1
         assert vqs.shape == (N, self.dim_y, *[self.n_levels] * self.dim_y)
         return vqs
 
