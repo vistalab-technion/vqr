@@ -151,6 +151,27 @@ class VectorQuantileBase(BaseEstimator, ABC):
 
         return plot_fn(**plot_kwargs)
 
+    def _inversion_sampling(self, n: int, Qs: Sequence[Array]):
+        """
+        Generates samples from the variable Y based on it's fitted
+        quantile function, using inversion-transform sampling.
+        :param n: Number of samples to generate.
+        :param Qs: Quantile functions per dimension of Y. A sequence of length d,
+        where each element is of shape (T, T, ..., T).
+        :return: Samples obtained from this quantile function, of shape (n, d).
+        """
+
+        # Samples of points on the quantile-level grid
+        Us = np.random.randint(0, self._n_levels, size=(n, self.dim_y))
+
+        # Sample from Y|X=x
+        Y_samp = np.empty(shape=(n, self.dim_y))  # (n, d)
+        for i, U_i in enumerate(Us):
+            # U_i is a vector-quantile level, of shape (d,)
+            Y_samp[i, :] = np.array([Q_d[tuple(U_i)] for Q_d in Qs])
+
+        return Y_samp
+
 
 class VectorQuantileEstimator(VectorQuantileBase):
     """
@@ -194,6 +215,24 @@ class VectorQuantileEstimator(VectorQuantileBase):
         self._fitted_solution = self.solver.solve_vqr(T=self.n_levels, Y=Y, X=None)
 
         return self
+
+    def sample(self, n: int) -> Array:
+        """
+        Sample from Y based on the fitted vector quantile function Q(u).
+        Uses the approach of Inverse transform sampling.
+        https://en.wikipedia.org/wiki/Inverse_transform_sampling
+
+        :param n: Number of samples to draw from Y|X=x.
+        :return: An array containing the Sampled Y values, of shape (n, d).
+        """
+        check_is_fitted(self)
+
+        # Calculate vector quantiles
+        # d x (T, T, ..., T) where each is d-dimensional
+        Qs = self.vector_quantiles()
+
+        # Sample from the quantile function
+        return self._inversion_sampling(n, Qs)
 
 
 class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
@@ -283,6 +322,34 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
         N = X.shape[0] if X is not None else 1
         assert vqs.shape == (N, self.dim_y, *[self.n_levels] * self.dim_y)
         return vqs
+
+    def sample(self, n: int, x: Optional[Array] = None) -> Array:
+        """
+        Sample from Y|X=x based on the fitted vector quantile function Q(u;x).
+        Uses the approach of Inverse transform sampling.
+        https://en.wikipedia.org/wiki/Inverse_transform_sampling
+
+        :param n: Number of samples to draw from Y|X=x.
+        :param x: One sample of covariates on which to condition Y.
+        Should have shape  (k,) or (1, k).
+        If None, then samples will be drawn from the unconditional Y.
+        :return: An array containing the Sampled Y values, of shape (n, d).
+        """
+        check_is_fitted(self)
+
+        if x is not None:
+            if np.ndim(x) == 1:
+                # reshape to (1,k)
+                x = np.reshape(x, (1, -1))
+            elif np.ndim(x) != 2 or x.shape[0] != 1:
+                raise ValueError(f"x must be (k,) or (1,k), got {x.shape=}")
+
+        # Calculate vector quantiles given sample X=x
+        # 1 x d x (T, T, ..., T) where each is d-dimensional
+        Qs = self.vector_quantiles(X=x)[0]
+
+        # Sample from the quantile function
+        return self._inversion_sampling(n, Qs)
 
 
 class ScalarQuantileEstimator:
