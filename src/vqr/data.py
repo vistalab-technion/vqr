@@ -74,6 +74,7 @@ def generate_linear_x_y_mvn_data(
     rng = np.random.default_rng(seed)
 
     X = rng.uniform(size=(n, k))
+    X -= np.mean(X, axis=0)
     A = rng.random(size=(k, d))
     N = _gen_random_mvn_data(n, d, rng)
 
