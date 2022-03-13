@@ -266,7 +266,9 @@ class RVQRDualLSESolver(VQRSolver):
         epsilon = self._epsilon
         num_epochs = self._num_epochs
 
-        optimizer = torch.optim.SGD(params=[b, psi], lr=self._lr, momentum=0.9)
+        optimizer = torch.optim.SGD(
+            params=[b, psi], lr=self._lr, momentum=0.9, nesterov=True
+        )
         UY = U_th @ Y_th.T
 
         def _forward():
