@@ -2,10 +2,11 @@ import itertools as it
 
 import numpy as np
 import pytest
+import matplotlib.pyplot as plt
 from sklearn.exceptions import NotFittedError
 
 from vqr import VectorQuantileEstimator, VectorQuantileRegressor
-from vqr.data import generate_mvn_data
+from vqr.data import generate_mvn_data, generate_linear_x_y_mvn_data
 
 
 class TestVectorQuantileEstimator(object):
@@ -42,6 +43,25 @@ class TestVectorQuantileEstimator(object):
 
         assert all(q.shape == (T,) * d for q in vqe.vector_quantiles())
         assert all(q.shape == (T,) * d for q in vqe.quantile_grid)
+
+    def test_sample(self, dataset, test_out_dir):
+        Y = dataset
+        N, d = Y.shape[0], Y.shape[1]
+        T = 20
+
+        vqe = VectorQuantileEstimator(n_levels=T, solver_opts={"verbose": True})
+        vqe.fit(Y)
+
+        n = 1000
+        Y_samp = vqe.sample(n)
+        assert Y_samp.shape == (n, d)
+
+        if d == 2:
+            fig, ax = plt.subplots(1, 1, figsize=(10, 10))
+            ax.scatter(Y[:, 0], Y[:, 1], c="k", label="Y (GT)")
+            ax.scatter(Y_samp[:, 0], Y_samp[:, 1], c="C0", label="Y")
+            ax.legend()
+            fig.savefig(test_out_dir.joinpath("vqe_sample.pdf"), bbox_inches="tight")
 
     def test_not_fitted(self):
         vq = VectorQuantileEstimator(n_levels=100)
@@ -108,8 +128,8 @@ class TestVectorQuantileRegressor(object):
     def dataset(self, request):
         params = request.param
         d, k = params["d"], params["k"]
-        N = 100
-        X, Y = generate_mvn_data(N, d=d, k=k)
+        N = 500
+        X, Y = generate_linear_x_y_mvn_data(N, d=d, k=k)
         return X, Y
 
     def test_shapes(self, dataset):
@@ -138,3 +158,41 @@ class TestVectorQuantileRegressor(object):
 
             Y_hat = vqr.predict(X_)
             assert Y_hat.shape == (N_, d, *[T] * d)
+
+    def test_sample(self, dataset, test_out_dir):
+        X, Y = dataset
+        N, d = Y.shape
+        N, k = X.shape
+        T = 20 if d < 3 else 8
+
+        vqr = VectorQuantileRegressor(n_levels=T, solver_opts={"verbose": True})
+        vqr.fit(X, Y)
+
+        n = 1000
+
+        Y_samp = vqr.sample(n, x=None)
+        assert Y_samp.shape == (n, d)
+
+        xs = []
+        YXs = []
+        for i in range(5):
+            x = X[i]
+            YX_samp = vqr.sample(n, x=x)
+            assert YX_samp.shape == (n, d)
+            xs.append(x)
+            YXs.append(YX_samp)
+
+        if d == 2:
+            fig, ax = plt.subplots(1, 1, figsize=(10, 10))
+            ax.scatter(Y[:, 0], Y[:, 1], c="k", label="Y (GT)")
+            ax.scatter(Y_samp[:, 0], Y_samp[:, 1], c="C0", label="Y")
+            for i, (x, YX_samp) in enumerate(zip(xs, YXs)):
+                ax.scatter(
+                    YX_samp[:, 0],
+                    YX_samp[:, 1],
+                    c=f"C{i+1}",
+                    label=f"$Y|X=x_{i}$",
+                    alpha=0.2,
+                )
+            ax.legend()
+            fig.savefig(test_out_dir.joinpath("vqr_sample.pdf"), bbox_inches="tight")
