@@ -326,7 +326,7 @@ class Network(nn.Module):
 
 
 class DeepNet(nn.Module):
-    def __init__(self, hidden_width=10, depth=4, k=2):
+    def __init__(self, hidden_width=100, depth=1, k=2):
         super().__init__()
         self.nl = nn.Tanh()
         self.fc_first = nn.Linear(k, hidden_width)
@@ -388,8 +388,8 @@ class NonlinearRVQRDualLSESolver(VQRSolver):
         #         nn.BatchNorm1d(num_features=2, affine=False, track_running_stats=True),
         #     ]
         # )
-        # self._net = DeepNet()
-        self._net = Network(k=2)
+        self._net = DeepNet()
+        # self._net = Network(k=2)
 
     def solve_vqr(self, T: int, Y: Array, X: Optional[Array] = None) -> VectorQuantiles:
         N = len(Y)
