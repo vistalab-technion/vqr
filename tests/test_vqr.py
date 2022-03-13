@@ -1,4 +1,5 @@
 import itertools as it
+from typing import Sequence
 
 import numpy as np
 import pytest
@@ -10,6 +11,8 @@ from vqr.data import generate_mvn_data, generate_linear_x_y_mvn_data
 
 
 class TestVectorQuantileEstimator(object):
+    SOLVER_OPTS = {"verbose": True, "learning_rate": 0.05}
+
     @pytest.fixture(
         scope="class",
         params=[
@@ -27,7 +30,7 @@ class TestVectorQuantileEstimator(object):
         params = request.param
         d, N, T = params["d"], params["N"], params["T"]
         X, Y = generate_mvn_data(N, d, k=1)
-        vqe = VectorQuantileEstimator(n_levels=T, solver_opts={"verbose": True})
+        vqe = VectorQuantileEstimator(n_levels=T, solver_opts=self.SOLVER_OPTS)
         vqe.fit(Y)
         return Y, vqe
 
@@ -71,44 +74,22 @@ class TestVectorQuantileEstimator(object):
         T = 25
         N = 100
         d = 2
-        EPS = 0.06
 
         _, Y = generate_mvn_data(n=N, d=d, k=1)
-        vqe = VectorQuantileEstimator(n_levels=T, solver_opts={"verbose": True})
+        vqe = VectorQuantileEstimator(n_levels=T, solver_opts=self.SOLVER_OPTS)
         vqe.fit(Y)
-        U1, U2 = vqe.quantile_grid
-        Q1, Q2 = vqe.vector_quantiles()
 
-        ii = jj = tuple(range(1, T))
-
-        n, n_c = 0, 0
-        offending_points = []
-        offending_dists = []
-        for i0, j0 in it.product(ii, jj):
-            u0 = np.array([U1[i0, j0], U2[i0, j0]])
-            q0 = np.array([Q1[i0, j0], Q2[i0, j0]])
-
-            for i1, j1 in it.product(ii, jj):
-                n += 1
-
-                u1 = np.array([U1[i1, j1], U2[i1, j1]])
-                q1 = np.array([Q1[i1, j1], Q2[i1, j1]])
-
-                if np.dot(q1 - q0, u1 - u0) < -EPS:
-                    offending = (
-                        f"{(i0, j0)=}, {(i1, j1)=}, "
-                        f"{q1-q0=}, "
-                        f"{u1-u0=}, "
-                        f"{np.dot(q1-q0, u1-u0)=}"
-                    )
-                    offending_points.append(offending)
-                    offending_dists.append(np.dot(q1 - q0, u1 - u0).item())
-                    n_c += 1
-        print(offending_points, offending_dists)
-        assert len(offending_points) == 0, f"{n=}, {n_c=}, {n_c/n=:.2f}"
+        _test_monotonicity(
+            Us=vqe.quantile_grid,
+            Qs=vqe.vector_quantiles(),
+            T=vqe.n_levels,
+            eps=0.06,
+        )
 
 
 class TestVectorQuantileRegressor(object):
+    SOLVER_OPTS = {"verbose": True, "learning_rate": 0.05}
+
     @pytest.fixture(
         scope="class",
         params=[
@@ -127,7 +108,7 @@ class TestVectorQuantileRegressor(object):
         N, d, k, T = params["N"], params["d"], params["k"], params["T"]
         X, Y = generate_linear_x_y_mvn_data(N, d=d, k=k)
 
-        vqr = VectorQuantileRegressor(n_levels=T, solver_opts={"verbose": True})
+        vqr = VectorQuantileRegressor(n_levels=T, solver_opts=self.SOLVER_OPTS)
         vqr.fit(X, Y)
 
         return X, Y, vqr
@@ -190,3 +171,61 @@ class TestVectorQuantileRegressor(object):
                 )
             ax.legend()
             fig.savefig(test_out_dir.joinpath("vqr_sample.pdf"), bbox_inches="tight")
+
+    @pytest.mark.parametrize("i", range(5))
+    def test_monotonicity(self, i):
+        N = 500
+        d = 2
+        k = 3
+        T = 15
+        X, Y = generate_linear_x_y_mvn_data(n=N, d=d, k=k)
+
+        vqr = VectorQuantileRegressor(n_levels=T, solver_opts=self.SOLVER_OPTS)
+        vqr.fit(X, Y)
+
+        _test_monotonicity(
+            Us=vqr.quantile_grid,
+            Qs=vqr.vector_quantiles(X=X[[i]])[0],
+            T=vqr.n_levels,
+            eps=0.08,
+        )
+
+
+def _test_monotonicity(
+    Us: Sequence[np.ndarray], Qs: Sequence[np.ndarray], T: int, eps: float
+):
+    # Only supports 2d for now.
+    U1, U2 = Us
+    Q1, Q2 = Qs
+
+    ii = jj = tuple(range(1, T))
+
+    n, n_c = 0, 0
+    offending_points = []
+    offending_dists = []
+    for i0, j0 in it.product(ii, jj):
+        u0 = np.array([U1[i0, j0], U2[i0, j0]])
+        q0 = np.array([Q1[i0, j0], Q2[i0, j0]])
+
+        for i1, j1 in it.product(ii, jj):
+            n += 1
+
+            u1 = np.array([U1[i1, j1], U2[i1, j1]])
+            q1 = np.array([Q1[i1, j1], Q2[i1, j1]])
+
+            if np.dot(q1 - q0, u1 - u0) < -eps:
+                offending = (
+                    f"{(i0, j0)=}, {(i1, j1)=}, "
+                    f"{q1-q0=}, "
+                    f"{u1-u0=}, "
+                    f"{np.dot(q1-q0, u1-u0)=}"
+                )
+                offending_points.append(offending)
+                offending_dists.append(np.dot(q1 - q0, u1 - u0).item())
+                n_c += 1
+
+    if offending_dists:
+        print(offending_points, offending_dists)
+        print(f"max dist: {np.max(np.abs(offending_dists))}")
+
+    assert len(offending_points) == 0, f"{n=}, {n_c=}, {n_c/n=:.2f}"
