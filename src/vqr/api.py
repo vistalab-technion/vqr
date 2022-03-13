@@ -7,6 +7,7 @@ from numpy.typing import ArrayLike as Array
 from sklearn.base import BaseEstimator, RegressorMixin
 from sklearn.utils import check_X_y
 from matplotlib.figure import Figure
+from sklearn.preprocessing import StandardScaler
 from sklearn.utils.validation import check_array, check_is_fitted
 
 from vqr.vqr import (
@@ -207,6 +208,7 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
         solver_opts: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(n_levels, solver, solver_opts)
+        self._scaler = StandardScaler(with_mean=True, with_std=True)
 
     def fit(self, X: Array, y: Array):
         """
@@ -222,7 +224,10 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
         N = len(X)
         Y: ndarray = np.reshape(y, (N, -1))
 
-        self._fitted_solution = self.solver.solve_vqr(T=self.n_levels, Y=Y, X=X)
+        # Scale features to zero-mean
+        X_scaled = self._scaler.fit_transform(X)
+
+        self._fitted_solution = self.solver.solve_vqr(T=self.n_levels, Y=Y, X=X_scaled)
 
         return self
 
@@ -261,6 +266,9 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
                     f"VQR model was fitted with k={self.dim_x}, "
                     f"but got data with {k=} features."
                 )
+
+            # Scale X with the fitted transformation before predicting
+            X = self._scaler.transform(X)
 
         vq_samples: Sequence[Sequence[Array]] = self.vector_quantiles(X)
 
