@@ -33,7 +33,15 @@ class VectorQuantiles:
     These surfaces can be visualized over the grid defined in U.
     """
 
-    def __init__(self, T: int, d: int, U: Array, A: Array, B: Optional[Array] = None):
+    def __init__(
+        self,
+        T: int,
+        d: int,
+        U: Array,
+        A: Array,
+        B: Optional[Array] = None,
+        X_transform: Optional[Callable[[Array], Array]] = None,
+    ):
         """
         :param U: Array of shape (T**d, d). Contains the d-dimensional grid on
         which the vector quantiles are defined. If can be decoded back into a
@@ -44,6 +52,8 @@ class VectorQuantiles:
         :param B: Array of shape (T**d, k). Contains the  regression coefficients.
         Will be None if the input was an estimation problem (X=None) instead of a
         regression problem.
+        :param X_transform: Transformation to apply to covariates (X) for non-linear
+        VQR.
         """
         # Validate dimensions
         assert all(x is not None for x in [T, d, U, A])
@@ -58,6 +68,7 @@ class VectorQuantiles:
         self._A = A
         self._B = B
         self._k = B.shape[1] if B is not None else 0
+        self._X_transform = X_transform
 
     @property
     def is_conditional(self) -> bool:
@@ -85,6 +96,10 @@ class VectorQuantiles:
                 X = np.zeros(shape=(1, self._k))
 
             check_array(X, ensure_2d=True, allow_nd=False)
+
+            if self._X_transform is not None:
+                X = self._X_transform(X)
+
             N, k = X.shape
             if k != self._k:
                 raise ValueError(
