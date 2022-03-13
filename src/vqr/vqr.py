@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from time import time
 from typing import Any, Dict, List, Union, Callable, Optional, Sequence
 
 import cvxpy as cp
@@ -256,7 +257,10 @@ class RVQRDualLSESolver(VQRSolver):
         def _forward():
             pass
 
+        total_time, last_print_time = 0, time()
         for epoch_idx in range(num_epochs):
+            epoch_start_time = time()
+
             optimizer.zero_grad()
             bX = b @ X_th[:, 1:].T
             max_arg = UY - bX - psi.reshape(1, -1)
@@ -278,8 +282,15 @@ class RVQRDualLSESolver(VQRSolver):
             total_loss = obj.item()
             constraint_loss = (phi @ mu).item()
 
+            epoch_elapsed_time = time() - epoch_start_time
+            total_time += epoch_elapsed_time
             if self._verbose and epoch_idx % 100 == 0:
-                print(f"{epoch_idx=}, {total_loss=:.6f} {constraint_loss=:.6f}")
+                elapsed = time() - last_print_time
+                print(
+                    f"{epoch_idx=}, {total_loss=:.6f} {constraint_loss=:.6f}, "
+                    f"{elapsed=:.2f}s"
+                )
+                last_print_time = time()
 
         max_arg = UY - bX - psi.reshape(1, -1)
         phi = (
@@ -301,6 +312,8 @@ class RVQRDualLSESolver(VQRSolver):
         else:
             B = b.detach().numpy()
 
+        if self._verbose:
+            print(f"{total_time=:.2f}s")
         return VectorQuantiles(T, d, U, A, B)
 
 
