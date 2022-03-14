@@ -328,7 +328,7 @@ class Network(nn.Module):
 class DeepNet(nn.Module):
     def __init__(self, hidden_width=100, depth=1, k=2):
         super().__init__()
-        self.nl = nn.Tanh()
+        self.nl = nn.ReLU()
         self.fc_first = nn.Linear(k, hidden_width)
         self.fc_last = nn.Linear(hidden_width, k)
         self.fc_hidden = nn.ModuleList(

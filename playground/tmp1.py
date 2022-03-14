@@ -29,7 +29,7 @@ k = 2
 T = 50
 nonlinear_vqr_est = VectorQuantileRegressor(
     solver=NonlinearRVQRDualLSESolver(
-        verbose=True, num_epochs=2000, epsilon=0.001, learning_rate=0.9
+        verbose=True, num_epochs=1000, epsilon=0.001, learning_rate=0.9
     )
 )
 nonlinear_vqr_est = nonlinear_vqr_est.fit(X, Y)
