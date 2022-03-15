@@ -502,3 +502,41 @@ def inversion_sampling(T: int, d: int, n: int, Qs: Sequence[Array]):
         Y_samp[i, :] = np.array([Q_d[tuple(U_i)] for Q_d in Qs])
 
     return Y_samp
+
+
+def quantile_contour(T: int, d: int, Qs: Sequence[Array], alpha: float = 0.05) -> Array:
+    """
+    Creates a contour of points in d-dimensional space which surround the region in
+    which 1-2*alpha of the distribution (that was corresponds to a given quantile
+    function) is contained.
+
+    :param T: The number of quantile levels that was used for solving the problem.
+    :param d: The dimension of the target data (Y) that was used for solving the
+        problem.
+    :param Qs: Quantile functions per dimension of Y. A sequence of length d,
+    where each element is of shape (T, T, ..., T).
+    :param alpha: Confidence level for the contour.
+    :return: An array of shape (n, d) containing points along the d-dimensional contour.
+    """
+
+    if not 0 < alpha < 0.5:
+        raise ValueError(f"Got {alpha=}, but must be in (0, 0.5)")
+
+    lo = int(np.round(T * alpha))
+    hi = int(min(np.round(T * (1 - alpha)), T - 1))
+
+    # Will contain d lists of points, each element will be (d,)
+    contour_points_list = [[] for _ in range(d)]
+
+    for i, Q in enumerate(Qs):
+        for j in range(d):
+            for lo_hi, _ in zip([lo, hi], range(d)):
+                # The zip here is just to prevent a loop when d==1.
+                # This keeps all dims fixed on either lo or hi, while the j-th
+                # dimension is sweeped from lo to hi.
+                idx: List[Union[int, slice]] = [lo_hi] * d
+                idx[j] = slice(lo, hi)
+                contour_points_list[i].extend(Q[tuple(idx)])
+
+    contour_points = np.array(contour_points_list).T  # (N, d)
+    return contour_points
