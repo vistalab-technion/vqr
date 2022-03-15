@@ -1,5 +1,4 @@
 import numpy as np
-from numpy import dot
 from numpy.typing import ArrayLike as Array
 from scipy.spatial import ConvexHull
 
@@ -19,9 +18,6 @@ def measure_coverage(quantile_contour: Array, data: Array) -> float:
         raise ValueError("Both input arrays must be 2d")
 
     N, d = data.shape
-
-    def point_in_hull(point, hull, tolerance=1e-12):
-        return all((dot(eq[:-1], point) + eq[-1] <= tolerance) for eq in hull.equations)
 
     if d == 1:
         coverage_ = (data >= quantile_contour[0]) & (data <= quantile_contour[-1])
@@ -50,3 +46,17 @@ def measure_width(quantile_contour: Array) -> float:
     cvx_hull = ConvexHull(quantile_contour)
     volume: float = cvx_hull.volume  # type: ignore
     return volume
+
+
+def point_in_hull(point: Array, hull: ConvexHull, tolerance=1e-12) -> bool:
+    """
+    Returns whether a point is contained inside a convex hull.
+    :param point: A point in n-d.
+    :param hull: A ConvexHull object.
+    :param tolerance: Tolerance for comparison.
+    :return: True if the point is contained.
+    """
+    return all(
+        (np.dot(eq[:-1], point) + eq[-1] <= tolerance)
+        for eq in hull.equations  # type:ignore
+    )

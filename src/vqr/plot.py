@@ -10,7 +10,13 @@ from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from mpl_toolkits.mplot3d import Axes3D
 
-from vqr.vqr import quantile_levels, decode_quantile_grid, decode_quantile_values
+from vqr.vqr import (
+    quantile_levels,
+    quantile_contour,
+    decode_quantile_grid,
+    decode_quantile_values,
+)
+from vqr.coverage import point_in_hull
 
 
 def _level_label(t: float) -> str:
@@ -209,25 +215,7 @@ def plot_coverage_2d(
     else:
         fig, ax = None, ax
 
-    i_lo = int(np.floor(T * alpha))
-    i_hi = int(np.ceil(T * (1 - alpha)))
-
-    Q_surface = np.array(  # (N, 2)
-        [
-            [
-                *Q1[i_lo:i_hi, i_hi],
-                *Q1[i_lo, i_lo:i_hi],
-                *Q1[i_lo:i_hi, i_lo],
-                *Q1[i_hi, i_lo:i_hi],
-            ],
-            [
-                *Q2[i_lo:i_hi, i_hi],
-                *Q2[i_lo, i_lo:i_hi],
-                *Q2[i_lo:i_hi, i_lo],
-                *Q2[i_hi, i_lo:i_hi],
-            ],
-        ]
-    ).T
+    Q_surface = quantile_contour(T, d=2, Qs=[Q1, Q2], alpha=alpha)
 
     surf_kws = dict(alpha=0.5, color=contour_color, s=200, marker="v")
     ax.scatter(*Q_surface.T, **surf_kws)
@@ -243,11 +231,6 @@ def plot_coverage_2d(
             Q_surface[simplex, 1],
             color=contour_color,
             label=label,
-        )
-
-    def point_in_hull(point, hull, tolerance=1e-12):
-        return all(
-            (np.dot(eq[:-1], point) + eq[-1] <= tolerance) for eq in hull.equations
         )
 
     # Plot training data
