@@ -12,6 +12,7 @@ from torch import tensor
 from numpy.typing import ArrayLike as Array
 from sklearn.utils import check_array
 from scipy.spatial.distance import cdist
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 SIMILARITY_FN_INNER_PROD = lambda x, y: np.dot(x, y)
 
@@ -267,7 +268,22 @@ class RVQRDualLSESolver(VQRSolver):
         num_epochs = self._num_epochs
 
         optimizer = torch.optim.SGD(
-            params=[b, psi], lr=self._lr, momentum=0.9, nesterov=True
+            params=[b, psi],
+            lr=self._lr,
+            momentum=0.9,
+            nesterov=True,
+            weight_decay=0.0,
+        )
+
+        scheduler = ReduceLROnPlateau(
+            optimizer=optimizer,
+            mode="min",
+            factor=0.5,
+            patience=100,
+            threshold=5 * 0.01,  # loss needs to decrease by x% every patience epochs
+            threshold_mode="rel",
+            min_lr=self._lr * 0.5 ** 10,
+            verbose=self._verbose,
         )
         UY = U_th @ Y_th.T
 
@@ -299,9 +315,11 @@ class RVQRDualLSESolver(VQRSolver):
             total_loss = obj.item()
             constraint_loss = (phi @ mu).item()
 
+            scheduler.step(total_loss)
+
             epoch_elapsed_time = time() - epoch_start_time
             total_time += epoch_elapsed_time
-            if self._verbose and epoch_idx % 100 == 0:
+            if self._verbose and (epoch_idx % 100 == 0 or epoch_idx == num_epochs - 1):
                 elapsed = time() - last_print_time
                 print(
                     f"{epoch_idx=}, {total_loss=:.6f} {constraint_loss=:.6f}, "
