@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from abc import ABC, abstractmethod
 from time import time
 from typing import Any, Dict, List, Union, Callable, Optional, Sequence
@@ -15,6 +16,8 @@ from scipy.spatial.distance import cdist
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 SIMILARITY_FN_INNER_PROD = lambda x, y: np.dot(x, y)
+
+_LOG = logging.getLogger(__name__)
 
 
 class VectorQuantiles:
@@ -321,7 +324,7 @@ class RVQRDualLSESolver(VQRSolver):
             total_time += epoch_elapsed_time
             if self._verbose and (epoch_idx % 100 == 0 or epoch_idx == num_epochs - 1):
                 elapsed = time() - last_print_time
-                print(
+                _LOG.info(
                     f"{epoch_idx=}, {total_loss=:.6f} {constraint_loss=:.6f}, "
                     f"{elapsed=:.2f}s"
                 )
@@ -348,7 +351,7 @@ class RVQRDualLSESolver(VQRSolver):
             B = b.detach().numpy()
 
         if self._verbose:
-            print(f"{total_time=:.2f}s")
+            _LOG.info(f"{total_time=:.2f}s")
         return VectorQuantiles(T, d, U, A, B)
 
 
