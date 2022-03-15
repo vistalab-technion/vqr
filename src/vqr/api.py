@@ -1,5 +1,5 @@
 from abc import ABC
-from typing import Any, Dict, Type, Tuple, Union, Optional, Sequence
+from typing import Any, Dict, List, Type, Tuple, Union, Optional, Sequence
 
 import numpy as np
 from numpy import ndarray, quantile
@@ -16,9 +16,11 @@ from vqr.vqr import (
     VectorQuantiles,
     RVQRDualLSESolver,
     quantile_levels,
+    quantile_contour,
     inversion_sampling,
 )
 from vqr.plot import plot_quantiles, plot_quantiles_3d
+from vqr.coverage import measure_coverage
 
 SOLVER_TYPES: Dict[str, Type[VQRSolver]] = {
     "cvx": CVXVQRSolver,
@@ -214,6 +216,33 @@ class VectorQuantileEstimator(VectorQuantileBase):
         # Sample from the quantile function
         return inversion_sampling(T=self.n_levels, d=self.dim_y, n=n, Qs=Qs)
 
+    def coverage(self, Y: Array, alpha: float = 0.05) -> float:
+        """
+        Calculates the coverage of given data points using the quantiles fitted by
+        this model.
+
+        First, it creates a contour of points in d-dimensional space which surround
+        the region in which 1-2*alpha of the distribution (that was corresponds to a
+        given quantile function) is contained. Then, the proportion of points
+        contained within this contour is calculated.
+
+        :param Y: Points to measure coverage for. Shape should be (N, d).
+        :param alpha: Confidence level for the contour.
+        :return: The coverage level, between zero and one.
+        """
+        check_is_fitted(self)
+
+        # Calculate vector quantiles
+        # d x (T, T, ..., T) where each is d-dimensional
+        Qs = self.vector_quantiles()
+
+        return measure_coverage(
+            quantile_contour=quantile_contour(
+                T=self.n_levels, d=self.dim_y, Qs=Qs, alpha=alpha
+            ),
+            data=Y,
+        )
+
 
 class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
     """
@@ -315,6 +344,38 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
 
         # Sample from the quantile function
         return inversion_sampling(T=self.n_levels, d=self.dim_y, n=n, Qs=Qs)
+
+    def coverage(
+        self, Y: Array, alpha: float = 0.05, x: Optional[Array] = None
+    ) -> float:
+        """
+        Calculates the conditional coverage of given data points using the quantiles
+        fitted by this model, conditioned on X=x.
+
+        First, it creates a contour of points in d-dimensional space which surround
+        the region in which 1-2*alpha of the distribution (that was corresponds to a
+        given quantile function) is contained. Then, the proportion of points
+        contained within this contour is calculated.
+
+        :param Y: Points to measure coverage for. Shape should be (N, d).
+        :param alpha: Confidence level for the contour.
+        :param x: One sample of covariates on which to condition Y.
+        Should have shape  (k,) or (1, k).
+        :return: The coverage level, between zero and one.
+        """
+        check_is_fitted(self)
+        x = self._validate_X_(X=x, single=True)
+
+        # Calculate vector quantiles given sample X=x
+        # 1 x d x (T, T, ..., T) where each is d-dimensional
+        Qs = self.vector_quantiles(X=x)[0]
+
+        return measure_coverage(
+            quantile_contour=quantile_contour(
+                T=self.n_levels, d=self.dim_y, Qs=Qs, alpha=alpha
+            ),
+            data=Y,
+        )
 
     def _validate_X_(self, X: Optional[Array], single: bool = False) -> Optional[Array]:
         """
