@@ -3,10 +3,15 @@ from __future__ import division
 import os
 import re
 import sys
+import multiprocessing as mp
+import concurrent.futures
 from math import ceil
-from typing import Any, Dict, Tuple, Union, Iterator, Optional, Sequence
+from time import time
+from typing import Any, Dict, Tuple, Union, TypeVar, Iterator, Optional, Sequence, cast
 from pathlib import Path
+from itertools import product
 from dataclasses import dataclass
+from concurrent.futures import Future, TimeoutError, CancelledError, ProcessPoolExecutor
 
 import numpy as np
 import pyhrv
@@ -262,9 +267,97 @@ def split_wfdb(
         return X, Y, None, None
 
 
+_T = TypeVar("_T")
+
+
+def yield_future_results(
+    futures: Union[Dict[_T, Future], Sequence[Future]],
+    wait_time_sec=0.1,
+    max_retries=None,
+    re_raise=True,
+    raise_on_max_retries=True,
+) -> Iterator[Tuple[_T, Any]]:
+    """
+    Waits for futures to be ready, and yields their results. This function waits for
+    each result for a fixed time, and moves to the next result if it's not ready.
+    Therefore, the order of yielded results is not guaranteed to be the same as the
+    order of the Future objects.
+
+    :param futures: Either a dict mapping from some name to an
+        Future to wait for, or a list of Future (in which case a name
+        will be generated for each one based on it's index).
+    :param wait_time_sec: Time to wait for each Future before moving to
+        the next one if the current one is not ready.
+    :param max_retries: Maximal number of times to wait for the same
+        Future, before giving up on it. None means never give up. If
+        max_retries is exceeded, an error will be logged.
+    :param re_raise: Whether to re-raise an exception thrown in on of the
+        tasks and stop handling. If False, exception will be logged instead and
+        handling will continue.
+    :param raise_on_max_retries:  Whether to raise an exception or only log an error
+        in case max_retries is reached for a specific result. The type of exception
+        raised will be :class:`concurrent.futures.TimeoutError`.
+    :return: A generator, where each element is a tuple. The first element
+        in the tuple is the name of the result, and the second element is the
+        actual result. In case the task raised an exception, the second element
+        will be None.
+    """
+
+    futures_d: Dict[_T, Future]
+    if isinstance(futures, (list, tuple)):
+        # If it's a sequence, map from index to future
+        futures_d = {cast(_T, i): r for i, r in enumerate(futures)}
+    elif isinstance(futures, dict):
+        futures_d = futures
+    else:
+        raise ValueError("Expected sequence or dict of futures")
+
+    if len(futures_d) == 0:
+        raise ValueError("No futures to wait for")
+
+    # Map result to number of retries
+    retry_counts = {res_name: 0 for res_name in futures_d.keys()}
+
+    while len(retry_counts) > 0:
+        retry_counts_next = {}
+
+        for res_name, retry_count in retry_counts.items():
+            future: Future = futures_d[res_name]
+            result = None
+
+            try:
+                result = future.result(timeout=wait_time_sec)
+
+            except concurrent.futures.CancelledError:
+                _LOG.warning(f"Result {res_name} was cancelled")
+
+            except concurrent.futures.TimeoutError:
+                retries = retry_counts[res_name] + 1
+                if max_retries is not None and retries > max_retries:
+                    msg = f"Result {res_name} timed out with {max_retries=}"
+                    if raise_on_max_retries:
+                        raise concurrent.futures.TimeoutError(msg)
+                    _LOG.error(msg)
+                else:
+                    retry_counts_next[res_name] = retries
+
+                continue
+
+            except Exception as e:
+                if re_raise:
+                    raise e
+                _LOG.error(f"Result {res_name} raised {type(e)}: " f"{e}", exc_info=e)
+
+            yield res_name, result
+
+        retry_counts = retry_counts_next
+
+
 def _single_record_exp(
     rec: WFDBRecord,
     T: int = 25,
+    alpha: float = 0.05,
+    plot: bool = False,
     split_opts: Dict[str, Any] = {},
     vqr_solver_opts: Dict[str, Any] = {},
 ):
@@ -283,49 +376,127 @@ def _single_record_exp(
     vqr.fit(X_train, Y_train)
     vqr_samples = vqr.vector_quantiles(X_valid)
 
-    fig, ax = plt.subplots(1, 1, figsize=(10, 10))
-    for t in range(0, 5):
-        Q1, Q2 = vqr_samples[t]
-        plot_coverage_2d(
-            Q1,
-            Q2,
-            Y_train=Y_train,
-            Y_valid=Y_valid[[t], :],
-            alpha=0.05,
-            title=rec.name,
-            ax=ax,
-            xylim=[0.4, 1.1],
-            xlabel="$R_i$",
-            ylabel="$R_{i+1}$",
-            contour_color=f"C{t}",
-            contour_label=f"VQR {t=}",
+    def coverage(X_, Y_) -> float:
+        return 100 * (
+            np.mean(
+                [
+                    vqr.coverage(Y=y.reshape(1, -1), x=x, alpha=alpha)
+                    for x, y in zip(X_, Y_)
+                ]
+            )
         )
 
-    plt.show()
+    train_cond_coverage = coverage(X_train, Y_train)
+    valid_cond_coverage = coverage(X_valid, Y_valid)
+    _LOG.info(
+        f"{rec.path!s}: Conditional Coverage ({alpha=:.2f}): "
+        f"train={train_cond_coverage:.2f}, valid={valid_cond_coverage:.2f}"
+    )
+
+    if plot:
+        fig, ax = plt.subplots(1, 1, figsize=(10, 10))
+        for t in range(0, len(Y_valid), len(Y_valid) // 10):
+            Q1, Q2 = vqr_samples[t]
+            plot_coverage_2d(
+                Q1,
+                Q2,
+                # Y_train=Y_train,
+                Y_valid=Y_valid[[t], :],
+                alpha=alpha,
+                title=rec.name,
+                ax=ax,
+                xylim=[0.4, 1.1],
+                xlabel="$R_i$",
+                ylabel="$R_{i+1}$",
+                contour_color=f"C{t}",
+                contour_label=f"VQR {t=}",
+            )
+        ax.get_legend().remove()
+        plt.show()
+
+    return {
+        "dataset": rec.dataset_name,
+        "rec_name": rec.name,
+        "alpha": alpha,
+        "T": T,
+        "split_opts": split_opts,
+        "solver_opts": vqr_solver_opts,
+        "valid_cond_coverage": valid_cond_coverage,
+        "train_cond_coverage": train_cond_coverage,
+    }
 
 
 def run_exp():
-    exp_args = dict(
-        T=25,
-        split_opts=dict(
-            d=2,
-            k=20.0,
-            window_overlap=0.90,
-            gap_delta=1.0,
-            dilation_x=1,
-            dilation_y=1,
-            validation_proportion=0.5,
-        ),
-        vqr_solver_opts={
-            "verbose": True,
-            "epsilon": 1e-5,
-            "num_epochs": 500,
-            "learning_rate": 0.5,
-        },
-    )
-    _single_record_exp(NSRDB.records[-1], **exp_args)
-    # _single_record_exp(CHFDB.records[-1],**exp_args)
-    # _single_record_exp(AFDB.records[0], **exp_args)
+    recs = [
+        *NSRDB.records,  # [0:2],
+        *CHFDB.records,  # [0:2],
+        *AFDB.records,  # [0:2],
+    ]
+    Ts = [25]
+    alphas = [0.08]
+    ks = [10.0]
+    deltas = [10.0]
+    dxs = [1]
+    dys = [1]
+
+    exp_configs = [
+        dict(
+            rec=rec,
+            T=T,
+            alpha=alpha,
+            split_opts=dict(
+                d=2,
+                k=k,
+                window_overlap=0.90,
+                gap_delta=gap_delta,
+                dilation_x=dx,
+                dilation_y=dy,
+                validation_proportion=0.5,
+            ),
+            vqr_solver_opts={
+                "verbose": True,
+                "epsilon": 1e-5,
+                "num_epochs": 1000,
+                "learning_rate": 0.5,
+            },
+        )
+        for rec, k, T, alpha, gap_delta, dx, dy in product(
+            recs, ks, Ts, alphas, deltas, dxs, dys
+        )
+    ]
+
+    n_exps = len(exp_configs)
+
+    _LOG.info(f"Starting experiment with {len(exp_configs)} configurations...")
+    start_time = time()
+
+    with ProcessPoolExecutor(
+        max_workers=4, mp_context=mp.get_context("spawn")
+    ) as executor:
+
+        futures = [
+            executor.submit(_single_record_exp, **exp_config)
+            for exp_config in exp_configs
+        ]
+
+        results = []
+        for i, (_, result) in enumerate(
+            yield_future_results(
+                futures,
+                wait_time_sec=1.0,
+                re_raise=False,
+            )
+        ):
+            _LOG.info(f"Collected result {i+1}/{n_exps} ({100*(i+1)/n_exps:.0f}%)")
+            results.append(result)
+
+    elapsed_time = sec_to_time(time() - start_time)
+    _LOG.info(f"Completed {len(results)}/{n_exps}, elapsed={elapsed_time}")
+
+    df = pd.json_normalize(results)
+    out_file_path = Path("rr_exp1.csv")
+    df.to_csv(out_file_path, index=False)
+    _LOG.info(f"Wrote output file: {out_file_path.absolute()!s}")
 
 
 if __name__ == "__main__":
