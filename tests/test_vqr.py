@@ -11,14 +11,14 @@ from vqr.data import generate_mvn_data, generate_linear_x_y_mvn_data
 
 
 class TestVectorQuantileEstimator(object):
-    SOLVER_OPTS = {"verbose": True, "learning_rate": 0.05}
+    SOLVER_OPTS = {"verbose": True, "learning_rate": 0.1, "epsilon": 1e-6}
 
     @pytest.fixture(
         scope="class",
         params=[
-            {"d": 1, "N": 100, "T": 10},
-            {"d": 2, "N": 100, "T": 10},
-            {"d": 3, "N": 100, "T": 10},
+            {"d": 1, "N": 200, "T": 20},
+            {"d": 2, "N": 200, "T": 20},
+            {"d": 3, "N": 200, "T": 10},
         ],
         ids=[
             "d=1",
@@ -62,6 +62,15 @@ class TestVectorQuantileEstimator(object):
             ax.legend()
             fig.savefig(test_out_dir.joinpath("vqe_sample.pdf"), bbox_inches="tight")
 
+    def test_coverage(self, vqe_fitted, test_out_dir):
+        Y, vqe = vqe_fitted
+        N, d = Y.shape
+        T = vqe.n_levels
+
+        cov = vqe.coverage(Y, alpha=0.05)
+        print(f"{cov=}")
+        assert cov > (0.7 if d < 3 else 0.25)
+
     def test_not_fitted(self):
         vq = VectorQuantileEstimator(n_levels=100)
         with pytest.raises(NotFittedError):
@@ -71,8 +80,8 @@ class TestVectorQuantileEstimator(object):
 
     @pytest.mark.repeat(5)
     def test_monotonicity(self):
-        T = 25
-        N = 100
+        T = 15
+        N = 1000
         d = 2
 
         _, Y = generate_mvn_data(n=N, d=d, k=1)
@@ -88,7 +97,7 @@ class TestVectorQuantileEstimator(object):
 
 
 class TestVectorQuantileRegressor(object):
-    SOLVER_OPTS = {"verbose": True, "learning_rate": 0.05}
+    SOLVER_OPTS = {"verbose": True, "learning_rate": 0.5, "epsilon": 1e-6}
 
     @pytest.fixture(
         scope="class",
@@ -172,9 +181,19 @@ class TestVectorQuantileRegressor(object):
             ax.legend()
             fig.savefig(test_out_dir.joinpath("vqr_sample.pdf"), bbox_inches="tight")
 
+    def test_coverage(self, vqr_fitted, test_out_dir):
+        X, Y, vqr = vqr_fitted
+        N, d = Y.shape
+        N, k = X.shape
+        T = vqr.n_levels
+
+        cov = vqr.coverage(Y, alpha=0.05, x=np.median(X, axis=0))
+        print(f"{cov=}")
+        assert cov > (0.6 if d < 3 else 0.2)
+
     @pytest.mark.parametrize("i", range(5))
     def test_monotonicity(self, i):
-        N = 500
+        N = 1000
         d = 2
         k = 3
         T = 15
@@ -187,7 +206,7 @@ class TestVectorQuantileRegressor(object):
             Us=vqr.quantile_grid,
             Qs=vqr.vector_quantiles(X=X[[i]])[0],
             T=vqr.n_levels,
-            eps=0.08,
+            eps=0.06,
         )
 
 
