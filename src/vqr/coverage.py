@@ -1,33 +1,52 @@
-from numpy import dot, array
+import numpy as np
+from numpy import dot
+from numpy.typing import ArrayLike as Array
 from scipy.spatial import ConvexHull
 
 
-def measure_coverage(quantile_surface: array, data: array) -> float:
+def measure_coverage(quantile_contour: Array, data: Array) -> float:
     """
-    Measures the % of given points that lie in side a given surface.
+    Measures the proportion of given points that lie in side a given surface.
     The surface is approximated by its convex hull, all points are checked
     if they lie within the surface or not.
 
-    :param quantile_surface: points representing the boundary of the surface
-    :param data: the points that need to be checked if they are in-liers.
-    :return: % of points that lie within the given surface.
+    :param quantile_contour: points representing a quantile contour, of shape (M, d)
+    :param data: the points that need to be checked if they are inliers, of shape (N, d)
+    :return: Proportion of points that lie within the given contour.
     """
+
+    if np.ndim(quantile_contour) != 2 or np.ndim(data) != 2:
+        raise ValueError("Both input arrays must be 2d")
+
+    N, d = data.shape
 
     def point_in_hull(point, hull, tolerance=1e-12):
         return all((dot(eq[:-1], point) + eq[-1] <= tolerance) for eq in hull.equations)
 
-    cvx_hull = ConvexHull(quantile_surface)
-    coverage_ = [point_in_hull(d, cvx_hull) for d in data]  # type: ignore
-    return (sum(coverage_) / len(coverage_)) * 100
+    if d == 1:
+        coverage_ = (data >= quantile_contour[0]) & (data <= quantile_contour[-1])
+    else:
+        cvx_hull = ConvexHull(quantile_contour)
+        coverage_ = np.array([point_in_hull(d, cvx_hull) for d in data])  # type: ignore
+
+    return sum(coverage_).item() / len(coverage_)
 
 
-def measure_width(quantile_surface: array) -> float:
+def measure_width(quantile_contour: Array) -> float:
     """
     Measures the volume of the convex hull of the given array of points.
-    :param quantile_surface: Points constituting the boundary of the surface over
-    which the convex hull needs to be constructed.
+    :param quantile_contour: Points constituting the boundary of the contour over
+    which the convex hull needs to be constructed, of shape (M, d).
     :return: The area (in 2D) / volume (in 3D) of the convex hull of the given points.
     """
-    cvx_hull = ConvexHull(quantile_surface)
+    if np.ndim(quantile_contour) != 2:
+        raise ValueError("Input must be 2d")
+
+    _, d = quantile_contour.shape
+
+    if d == 1:
+        return quantile_contour[-1] - quantile_contour[0]
+
+    cvx_hull = ConvexHull(quantile_contour)
     volume: float = cvx_hull.volume  # type: ignore
     return volume
