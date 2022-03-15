@@ -16,6 +16,7 @@ from vqr.vqr import (
     VectorQuantiles,
     RVQRDualLSESolver,
     quantile_levels,
+    inversion_sampling,
 )
 from vqr.plot import plot_quantiles, plot_quantiles_3d
 
@@ -151,27 +152,6 @@ class VectorQuantileBase(BaseEstimator, ABC):
 
         return plot_fn(**plot_kwargs)
 
-    def _inversion_sampling(self, n: int, Qs: Sequence[Array]):
-        """
-        Generates samples from the variable Y based on it's fitted
-        quantile function, using inversion-transform sampling.
-        :param n: Number of samples to generate.
-        :param Qs: Quantile functions per dimension of Y. A sequence of length d,
-        where each element is of shape (T, T, ..., T).
-        :return: Samples obtained from this quantile function, of shape (n, d).
-        """
-
-        # Samples of points on the quantile-level grid
-        Us = np.random.randint(0, self._n_levels, size=(n, self.dim_y))
-
-        # Sample from Y|X=x
-        Y_samp = np.empty(shape=(n, self.dim_y))  # (n, d)
-        for i, U_i in enumerate(Us):
-            # U_i is a vector-quantile level, of shape (d,)
-            Y_samp[i, :] = np.array([Q_d[tuple(U_i)] for Q_d in Qs])
-
-        return Y_samp
-
 
 class VectorQuantileEstimator(VectorQuantileBase):
     """
@@ -232,7 +212,7 @@ class VectorQuantileEstimator(VectorQuantileBase):
         Qs = self.vector_quantiles()
 
         # Sample from the quantile function
-        return self._inversion_sampling(n, Qs)
+        return inversion_sampling(T=self.n_levels, d=self.dim_y, n=n, Qs=Qs)
 
 
 class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
@@ -283,18 +263,9 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
         It is of shape (T, T, ... T).
         """
         check_is_fitted(self)
+        X = self._validate_X_(X, single=False)
 
-        if X is None:
-            N = 1
-        else:
-            check_array(X, ensure_2d=True, allow_nd=False)
-            N, k = X.shape
-            if k != self.dim_x:
-                raise ValueError(
-                    f"VQR model was fitted with k={self.dim_x}, "
-                    f"but got data with {k=} features."
-                )
-
+        if X is not None:
             # Scale X with the fitted transformation before predicting
             X = self._scaler.transform(X)
 
@@ -336,20 +307,42 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
         :return: An array containing the Sampled Y values, of shape (n, d).
         """
         check_is_fitted(self)
-
-        if x is not None:
-            if np.ndim(x) == 1:
-                # reshape to (1,k)
-                x = np.reshape(x, (1, -1))
-            elif np.ndim(x) != 2 or x.shape[0] != 1:
-                raise ValueError(f"x must be (k,) or (1,k), got {x.shape=}")
+        x = self._validate_X_(X=x, single=True)
 
         # Calculate vector quantiles given sample X=x
         # 1 x d x (T, T, ..., T) where each is d-dimensional
         Qs = self.vector_quantiles(X=x)[0]
 
         # Sample from the quantile function
-        return self._inversion_sampling(n, Qs)
+        return inversion_sampling(T=self.n_levels, d=self.dim_y, n=n, Qs=Qs)
+
+    def _validate_X_(self, X: Optional[Array], single: bool = False) -> Optional[Array]:
+        """
+        Validates the shape of a covariates array X.
+        :param X: A covariates array, either (n, k) or just (k,). Can be None,
+        in which case no validation happens.
+        :param single: Whether to validate that n=1.
+        :return: X after reshaping to (n,k).
+        """
+        if X is not None:
+            error_msg = (
+                f"X must be (k,) or ({'1' if single else 'n'}, k), got {X.shape=}"
+            )
+            if np.ndim(X) == 1 and len(X) == self.dim_x:
+                # reshape to (1 ,k)
+                X = np.reshape(X, (1, -1))
+
+            elif np.ndim(X) != 2:
+                raise ValueError(error_msg)
+
+            if X.shape[1] != self.dim_x:
+                raise ValueError(error_msg)
+
+            if single and X.shape[0] != 1:
+                # Only a single x is supported by this method
+                raise ValueError(error_msg)
+
+        return X
 
 
 class ScalarQuantileEstimator:

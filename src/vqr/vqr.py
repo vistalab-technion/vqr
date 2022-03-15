@@ -470,10 +470,35 @@ def decode_quantile_grid(T: int, d: int, U: ndarray) -> Sequence[ndarray]:
     evaluation points for the vector quantile functions.
     :param T: The number of quantile levels that was used for solving the problem.
     :param d: The dimension of the target data (Y) that was used for solving the
-        problem.
+    problem.
     :param U: The encoded grid U, of shape (T**d, d).
     :return: A sequence length d. Each ndarray in the sequence is a d-dimensional
-        array of shape (T, T, ..., T), which together represent the d-dimentional grid
-        on which the vector quantiles were evaluated.
+    array of shape (T, T, ..., T), which together represent the d-dimentional grid
+    on which the vector quantiles were evaluated.
     """
     return tuple(np.reshape(U[:, dim], newshape=(T,) * d) for dim in range(d))
+
+
+def inversion_sampling(T: int, d: int, n: int, Qs: Sequence[Array]):
+    """
+    Generates samples from the variable Y based on it's fitted
+    quantile function, using inversion-transform sampling.
+    :param T: The number of quantile levels that was used for solving the problem.
+    :param d: The dimension of the target data (Y) that was used for solving the
+        problem.
+    :param n: Number of samples to generate.
+    :param Qs: Quantile functions per dimension of Y. A sequence of length d,
+    where each element is of shape (T, T, ..., T).
+    :return: Samples obtained from this quantile function, of shape (n, d).
+    """
+
+    # Samples of points on the quantile-level grid
+    Us = np.random.randint(0, T, size=(n, d))
+
+    # Sample from Y|X=x
+    Y_samp = np.empty(shape=(n, d))
+    for i, U_i in enumerate(Us):
+        # U_i is a vector-quantile level, of shape (d,)
+        Y_samp[i, :] = np.array([Q_d[tuple(U_i)] for Q_d in Qs])
+
+    return Y_samp
