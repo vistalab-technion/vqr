@@ -7,7 +7,9 @@ from typing import Any, Dict, List, Union, Callable, Optional, Sequence
 import cvxpy as cp
 import numpy as np
 import torch
-from numpy import ndarray
+from numpy import array, ndarray
+from torch import Tensor, nn, eye, diag
+from torch import ones as ones_th
 from torch import tensor
 from numpy.typing import ArrayLike as Array
 from sklearn.utils import check_array
@@ -349,6 +351,191 @@ class RVQRDualLSESolver(VQRSolver):
 
         if self._verbose:
             print(f"{total_time=:.2f}s")
+        return VectorQuantiles(T, d, U, A, B)
+
+
+class Network(nn.Module):
+    def __init__(self, k=2):
+        super().__init__()
+        self.C1 = nn.Parameter(eye(k, k, dtype=torch.float32, requires_grad=True))
+        self.C2 = nn.Parameter(
+            ones_th(k, dtype=torch.float32, requires_grad=True),
+        )
+        self.C3 = nn.Parameter(
+            torch.tensor(array([0.0]), dtype=torch.float32, requires_grad=True)
+        )
+        self.batch_norm = nn.BatchNorm1d(
+            num_features=k, affine=False, track_running_stats=True
+        )
+
+    def forward(self, X: Tensor):
+        return self.batch_norm(diag(X @ self.C1 @ X.T)[:, None] + self.C2 * X + self.C3)
+
+
+class DeepNet(nn.Module):
+    def __init__(self, hidden_width=100, depth=1, k=2):
+        super().__init__()
+        self.nl = nn.ReLU()
+        self.fc_first = nn.Linear(k, hidden_width)
+        self.fc_last = nn.Linear(hidden_width, k)
+        self.fc_hidden = nn.ModuleList(
+            [nn.Linear(hidden_width, hidden_width) for _ in range(depth)]
+        )
+        self.bn_last = nn.BatchNorm1d(
+            num_features=k, affine=False, track_running_stats=True
+        )
+        self.bn_hidden = nn.BatchNorm1d(
+            num_features=hidden_width, affine=False, track_running_stats=True
+        )
+
+    def forward(self, X_in):
+        X = self.nl(self.fc_first(X_in))
+        for hidden in self.fc_hidden:
+            X_hidden = self.nl(hidden(X))
+            X = self.bn_hidden(diag(X_hidden @ X_hidden.T)[:, None] + X_hidden + X)
+        X = self.bn_last(self.fc_last(X) + X_in)
+        return X
+
+
+class NonlinearRVQRDualLSESolver(VQRSolver):
+    """
+    Solves the Regularized Dual formulation of Vector Quantile Regression using
+    torch with SGD as a solver backend.
+    """
+
+    def __init__(
+        self,
+        epsilon: float = 0.01,
+        num_epochs: int = 1000,
+        learning_rate: float = 0.9,
+        verbose: bool = False,
+        **solver_opts,
+    ):
+        super().__init__(
+            similarity_fn=SIMILARITY_FN_INNER_PROD, verbose=verbose, **solver_opts
+        )
+        self._epsilon = epsilon
+        self._num_epochs = num_epochs
+        self._lr = learning_rate
+
+        # def g(x_):
+        #     # Q = array([[2.0, 1.0], [1.0, 2.0]])
+        #     # Q = tensor(Q, dtype=torch.float32)
+        #     return diag(x_ @ self._Q @ x_.T)[:, None] + x_
+
+        # self._net = g   # Oracle
+        self._net = DeepNet()  # DeepNet approx
+        # self._net = Network(k=2)   # Parametric approx
+
+    def solve_vqr(self, T: int, Y: Array, X: Optional[Array] = None) -> VectorQuantiles:
+        N = len(Y)
+        Y = np.reshape(Y, (N, -1))
+
+        ones = np.ones(shape=(N, 1))
+        if X is None:
+            X = ones
+        else:
+            X = np.reshape(X, (N, -1))
+            X = np.concatenate([ones, X], axis=1)
+
+        k: int = X.shape[1] - 1  # Number of features (can be zero)
+        d: int = Y.shape[1]  # number or target dimensions
+
+        # All quantile levels
+        Td: int = T ** d
+        u: Array = quantile_levels(T)
+
+        # Quantile levels grid: list of grid coordinate matrices, one per dimension
+        U_grids: Sequence[Array] = np.meshgrid(
+            *([u] * d)
+        )  # d arrays of shape (T,..., T)
+        # Stack all nd-grid coordinates into one long matrix, of shape (T**d, d)
+        U: Array = np.stack([U_grid.reshape(-1) for U_grid in U_grids], axis=1)
+        assert U.shape == (Td, d)
+
+        # Pairwise distances (similarity)
+        S: Array = cdist(U, Y, self._similarity_fn)  # (Td, d) and (N, d)
+
+        one_N = np.ones([N, 1])
+        one_T = np.ones([Td, 1])
+
+        #####
+        dtype = torch.float32
+        Y_th = tensor(Y, dtype=dtype)
+        U_th = tensor(U, dtype=dtype)
+        mu = tensor(one_T / Td, dtype=dtype)
+        nu = tensor(one_N / N, dtype=dtype)
+        X_th = tensor(X, dtype=dtype)
+        b = torch.zeros(*(Td, X.shape[-1] - 1), dtype=dtype, requires_grad=True)
+        psi_init = 0.1 * torch.ones(N, dtype=dtype)
+        psi = psi_init.clone().detach().requires_grad_(True)
+        epsilon = self._epsilon
+        num_epochs = self._num_epochs
+        optimizer = torch.optim.SGD(
+            [
+                dict(params=[*self._net.parameters()]),
+                dict(
+                    params=[b, psi],
+                ),
+            ],
+            lr=self._lr,
+            momentum=0.9,
+            nesterov=True,
+        )
+        scheduler = ReduceLROnPlateau(
+            optimizer, "min", factor=0.9, patience=50, verbose=True, threshold=1e-2
+        )
+        UY = U_th @ Y_th.T
+
+        for epoch_idx in range(num_epochs):
+            optimizer.zero_grad()
+            bX = b @ self._net(X_th[:, 1:]).T
+            max_arg = UY - bX - psi.reshape(1, -1)
+            phi = (
+                epsilon
+                * torch.log(
+                    torch.sum(
+                        torch.exp(
+                            (max_arg - torch.max(max_arg, dim=1)[0][:, None]) / epsilon
+                        ),
+                        dim=1,
+                    )
+                )
+                + torch.max(max_arg, dim=1)[0]
+            )
+            obj = psi @ nu + phi @ mu
+            obj.backward()
+            optimizer.step()
+            scheduler.step(obj)
+            total_loss = obj.item()
+            constraint_loss = (phi @ mu).item()
+
+            if self._verbose and epoch_idx % 1 == 0:
+                print(f"{epoch_idx=}, {total_loss=:.6f} {constraint_loss=:.6f}")
+                if total_loss < -10:
+                    break
+
+        max_arg = UY - bX - psi.reshape(1, -1)
+        phi = (
+            epsilon
+            * torch.log(
+                torch.sum(
+                    torch.exp(
+                        (max_arg - torch.max(max_arg, dim=1)[0][:, None]) / epsilon
+                    ),
+                    dim=1,
+                )
+            )
+            + torch.max(max_arg, dim=1)[0]
+        )
+        self._net.eval()
+
+        A = phi.detach().numpy()[:, None]
+        if k == 0:
+            B = None
+        else:
+            B = b.detach().numpy()
+
         return VectorQuantiles(T, d, U, A, B)
 
 
