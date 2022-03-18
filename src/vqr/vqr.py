@@ -373,7 +373,7 @@ class Network(nn.Module):
 
 
 class DeepNet(nn.Module):
-    def __init__(self, hidden_width=100, depth=1, k=2):
+    def __init__(self, hidden_width=500, depth=1, k=2):
         super().__init__()
         self.nl = nn.ReLU()
         self.fc_first = nn.Linear(k, hidden_width)
@@ -409,6 +409,7 @@ class NonlinearRVQRDualLSESolver(VQRSolver):
         num_epochs: int = 1000,
         learning_rate: float = 0.9,
         verbose: bool = False,
+        k: int = 2,
         **solver_opts,
     ):
         super().__init__(
@@ -424,7 +425,7 @@ class NonlinearRVQRDualLSESolver(VQRSolver):
         #     return diag(x_ @ self._Q @ x_.T)[:, None] + x_
 
         # self._net = g   # Oracle
-        self._net = DeepNet()  # DeepNet approx
+        self._net = DeepNet(depth=1, k=k)  # DeepNet approx
         # self._net = Network(k=2)   # Parametric approx
 
     def solve_vqr(self, T: int, Y: Array, X: Optional[Array] = None) -> VectorQuantiles:

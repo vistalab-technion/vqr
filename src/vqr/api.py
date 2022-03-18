@@ -272,8 +272,9 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
         N = len(X)
         Y: ndarray = np.reshape(y, (N, -1))
 
-        # Scale features to zero-mean
-        X_scaled = self._scaler.fit_transform(X)
+        # # Scale features to zero-mean
+        # X_scaled = self._scaler.fit_transform(X)
+        X_scaled = X
 
         self._fitted_solution = self.solver.solve_vqr(T=self.n_levels, Y=Y, X=X_scaled)
 
@@ -294,9 +295,9 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
         check_is_fitted(self)
         X = self._validate_X_(X, single=False)
 
-        if X is not None:
-            # Scale X with the fitted transformation before predicting
-            X = self._scaler.transform(X)
+        # if X is not None:
+        #     # Scale X with the fitted transformation before predicting
+        #     X = self._scaler.transform(X)
 
         return self._fitted_solution.vector_quantiles(X)
 
