@@ -373,7 +373,7 @@ class Network(nn.Module):
 
 
 class DeepNet(nn.Module):
-    def __init__(self, hidden_width=500, depth=1, k=2):
+    def __init__(self, hidden_width=2000, depth=1, k=2):
         super().__init__()
         self.nl = nn.ReLU()
         self.fc_first = nn.Linear(k, hidden_width)
@@ -392,7 +392,8 @@ class DeepNet(nn.Module):
         X = self.nl(self.fc_first(X_in))
         for hidden in self.fc_hidden:
             X_hidden = self.nl(hidden(X))
-            X = self.bn_hidden(diag(X_hidden @ X_hidden.T)[:, None] + X_hidden + X)
+            X = self.bn_hidden(X_hidden + X)
+            # X = self.bn_hidden(diag(X_hidden @ X_hidden.T)[:, None] + X_hidden + X)
         X = self.bn_last(self.fc_last(X) + X_in)
         return X
 
