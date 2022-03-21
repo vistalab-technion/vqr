@@ -2,19 +2,19 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from time import time
-from typing import Any, Dict, List, Union, Callable, Optional, Sequence
+from typing import List, Union, Callable, Optional, Sequence
 
 import cvxpy as cp
 import numpy as np
 import torch
-from numpy import array, ndarray
-from torch import Tensor, nn, eye, diag
-from torch import ones as ones_th
-from torch import tensor
+from numpy import ndarray
+from torch import nn, tensor
 from numpy.typing import ArrayLike as Array
 from sklearn.utils import check_array
 from scipy.spatial.distance import cdist
 from torch.optim.lr_scheduler import ReduceLROnPlateau
+
+from vqr.models import DeepNet
 
 SIMILARITY_FN_INNER_PROD = lambda x, y: np.dot(x, y)
 
@@ -101,7 +101,14 @@ class VectorQuantiles:
             check_array(X, ensure_2d=True, allow_nd=False)
 
             if self._X_transform is not None:
-                X = self._X_transform(X)
+                if isinstance(self._X_transform, nn.Module):
+                    X = (
+                        self._X_transform(tensor(X, dtype=torch.float32))
+                        .detach()
+                        .numpy()
+                    )
+                else:
+                    X = self._X_transform(X)
 
             N, k = X.shape
             if k != self._k:
@@ -354,50 +361,6 @@ class RVQRDualLSESolver(VQRSolver):
         return VectorQuantiles(T, d, U, A, B)
 
 
-class Network(nn.Module):
-    def __init__(self, k=2):
-        super().__init__()
-        self.C1 = nn.Parameter(eye(k, k, dtype=torch.float32, requires_grad=True))
-        self.C2 = nn.Parameter(
-            ones_th(k, dtype=torch.float32, requires_grad=True),
-        )
-        self.C3 = nn.Parameter(
-            torch.tensor(array([0.0]), dtype=torch.float32, requires_grad=True)
-        )
-        self.batch_norm = nn.BatchNorm1d(
-            num_features=k, affine=False, track_running_stats=True
-        )
-
-    def forward(self, X: Tensor):
-        return self.batch_norm(diag(X @ self.C1 @ X.T)[:, None] + self.C2 * X + self.C3)
-
-
-class DeepNet(nn.Module):
-    def __init__(self, hidden_width=2000, depth=1, k=2):
-        super().__init__()
-        self.nl = nn.ReLU()
-        self.fc_first = nn.Linear(k, hidden_width)
-        self.fc_last = nn.Linear(hidden_width, k)
-        self.fc_hidden = nn.ModuleList(
-            [nn.Linear(hidden_width, hidden_width) for _ in range(depth)]
-        )
-        self.bn_last = nn.BatchNorm1d(
-            num_features=k, affine=False, track_running_stats=True
-        )
-        self.bn_hidden = nn.BatchNorm1d(
-            num_features=hidden_width, affine=False, track_running_stats=True
-        )
-
-    def forward(self, X_in):
-        X = self.nl(self.fc_first(X_in))
-        for hidden in self.fc_hidden:
-            X_hidden = self.nl(hidden(X))
-            X = self.bn_hidden(X_hidden + X)
-            # X = self.bn_hidden(diag(X_hidden @ X_hidden.T)[:, None] + X_hidden + X)
-        X = self.bn_last(self.fc_last(X) + X_in)
-        return X
-
-
 class NonlinearRVQRDualLSESolver(VQRSolver):
     """
     Solves the Regularized Dual formulation of Vector Quantile Regression using
@@ -411,6 +374,7 @@ class NonlinearRVQRDualLSESolver(VQRSolver):
         learning_rate: float = 0.9,
         verbose: bool = False,
         k: int = 2,
+        hidden_width: int = 2000,
         **solver_opts,
     ):
         super().__init__(
@@ -426,8 +390,8 @@ class NonlinearRVQRDualLSESolver(VQRSolver):
         #     return diag(x_ @ self._Q @ x_.T)[:, None] + x_
 
         # self._net = g   # Oracle
-        self._net = DeepNet(depth=1, k=k)  # DeepNet approx
-        # self._net = Network(k=2)   # Parametric approx
+        self._net = DeepNet(depth=1, k=k, hidden_width=hidden_width)  # DeepNet approx
+        # self._net = QuadraticModel(k=k)  # Parametric approx
 
     def solve_vqr(self, T: int, Y: Array, X: Optional[Array] = None) -> VectorQuantiles:
         N = len(Y)
@@ -538,7 +502,7 @@ class NonlinearRVQRDualLSESolver(VQRSolver):
         else:
             B = b.detach().numpy()
 
-        return VectorQuantiles(T, d, U, A, B)
+        return VectorQuantiles(T, d, U, A, B, X_transform=self._net)
 
 
 class CVXVQRSolver(VQRSolver):

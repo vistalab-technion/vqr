@@ -9,7 +9,7 @@ from numpy.random import randint
 from vqr.api import VectorQuantileRegressor
 from vqr.vqr import NonlinearRVQRDualLSESolver, decode_quantile_values
 
-with open("../nonlin-y.pkl", "rb") as f:
+with open("../notebooks/nonlin-y.pkl", "rb") as f:
     XY = pickle.load(f)
     f.close()
 
@@ -22,6 +22,8 @@ def w2(Y_gt_, Y_est_):
 
 X = XY["X"]
 Y = XY["Y"]
+U_samples = XY["U_samples"]
+colors = XY["colors"]
 
 n = 5000
 d = 2
@@ -29,7 +31,7 @@ k = 2
 T = 50
 nonlinear_vqr_est = VectorQuantileRegressor(
     solver=NonlinearRVQRDualLSESolver(
-        verbose=True, num_epochs=1000, epsilon=0.001, learning_rate=0.9
+        verbose=True, num_epochs=1500, epsilon=0.00001, learning_rate=0.9
     )
 )
 nonlinear_vqr_est = nonlinear_vqr_est.fit(X, Y)
@@ -46,16 +48,18 @@ for i in range(n):
         + A_nl_est
     )
     Q1, Q2 = decode_quantile_values(T, d=2, Y_hat=Y_hat)
-    u1, u2 = randint(0, 50), randint(0, 50)
+    u1, u2 = U_samples[i]
     Y_nl_est[i, :] = array((Q1[u1, u2], Q2[u1, u2]))
 
 fig, ax = plt.subplots(1, 2, figsize=(10, 5))
-ax[1].scatter(Y_nl_est[:, 0], Y_nl_est[:, 1])
+
+ax[0].scatter(Y[:, 0], Y[:, 1], c=colors)
+ax[0].set_xlim(-5, 5)
+ax[0].set_ylim(-5, 5)
+
+ax[1].scatter(Y_nl_est[:, 0], Y_nl_est[:, 1], c=colors)
 ax[1].set_xlim(-5, 5)
 ax[1].set_ylim(-5, 5)
 ax[1].set_title(f"{w2(Y, Y_nl_est)}")
 
-ax[0].scatter(Y[:, 0], Y[:, 1])
-ax[0].set_xlim(-5, 5)
-ax[0].set_ylim(-5, 5)
 plt.show()
