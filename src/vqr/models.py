@@ -24,33 +24,6 @@ class QuadraticModel(nn.Module):
         return self.batch_norm(diag(X @ self.C1 @ X.T)[:, None] + self.C2 * X + self.C3)
 
 
-class DeepNet(nn.Module):
-    def __init__(self, hidden_width=2000, depth=1, k=2):
-        super().__init__()
-        self.nl = nn.ReLU()
-        self.fc_first = nn.Linear(k, hidden_width)
-        self.fc_last = nn.Linear(hidden_width, k)
-        self.fc_hidden = nn.ModuleList(
-            [nn.Linear(hidden_width, hidden_width) for _ in range(depth)]
-        )
-        self.bn_last = nn.BatchNorm1d(
-            num_features=k, affine=False, track_running_stats=True
-        )
-        self.bn_hidden = nn.BatchNorm1d(
-            num_features=hidden_width, affine=False, track_running_stats=True
-        )
-
-    def forward(self, X_in):
-        X = self.nl(self.fc_first(X_in))
-
-        for hidden in self.fc_hidden:
-            X_hidden = self.nl(hidden(X))
-            X = self.bn_hidden(X_hidden + X)
-
-        X = self.bn_last(self.fc_last(X) + X_in)
-        return X
-
-
 NLS = {
     "relu": torch.nn.ReLU,
     "tanh": nn.Tanh,
@@ -63,6 +36,11 @@ NLS = {
 class MLP(nn.Module):
     """
     A Simple MLP.
+
+    Structure is:
+    FC -> [BN] -> ACT -> [DROPOUT] -> ... FC -> [BN] -> ACT -> [DROPOUT] -> FC
+
+    Note that BatchNorm and Dropout are optional and the MLP always ends with an FC.
     """
 
     def __init__(
@@ -71,43 +49,56 @@ class MLP(nn.Module):
         hidden_dims: Sequence[int],
         nl: Union[str, nn.Module] = "relu",
         skip: bool = False,
-        bn: bool = False,
+        batchnorm: bool = False,
+        dropout: float = 0,
     ):
         """
         :param in_dim: Input feature dimension.
-        :param hidden_dims: Hidden dimensions. Will be converted to FC layers.
-        :param nl: Nonlinearity to use between FC layers.
-        :param skip: Whether to use a skip-connection (over all layers).
-        :param bn: Whether to use batchnorm (single one at the end, after the skip
-        connection).
+        :param hidden_dims: Hidden dimensions. Will be converted to FC layers. Last
+        entry is the output dimension.
+        :param nl: Non-linearity to use between FC layers.
+        :param skip: Whether to use a skip-connection (over all layers). This
+        requires that in_dim==out_dim, thus if skip==True and hidden_dims[-1]!=in_dim
+        then the last hidden layer will be changed to produce an output of size in_dim.
+        :param batchnorm: Whether to use Batch Normalization
+        (before each non-linearity).
+        :param dropout: Whether to use dropout (after each non-linearity).
+        Zero means no dropout, otherwise means dropout probability.
         """
         super().__init__()
 
-        if skip and hidden_dims[-1] != in_dim:
-            hidden_dims = [*hidden_dims, in_dim]
-
-        all_dims = [in_dim, *hidden_dims]
+        if not hidden_dims:
+            raise ValueError(f"got {hidden_dims=} but must have at least one")
 
         if isinstance(nl, nn.Module):
             non_linearity = nl
         else:
+            if nl not in NLS:
+                raise ValueError(f"got {nl=} but must be one of {[*NLS.keys()]}")
             non_linearity = NLS[nl]
 
+        if not 0 <= dropout < 1:
+            raise ValueError(f"got {dropout=} but must be in [0, 1)")
+
+        # Split output dimension from the hidden dimensions
+        *hidden_dims, out_dim = hidden_dims
+        if skip and out_dim != in_dim:
+            out_dim = in_dim
+
         layers = []
-        for d1, d2 in zip(all_dims[:-1], all_dims[1:]):
-            layers += [
-                nn.Linear(d1, d2, bias=True),
-                non_linearity(),
-            ]
+        fc_dims = [in_dim, *hidden_dims]
+        for d1, d2 in zip(fc_dims[:-1], fc_dims[1:]):
+            layers.append(nn.Linear(d1, d2, bias=True))
+            if batchnorm:
+                layers.append(nn.BatchNorm1d(num_features=d2))
+            layers.append(non_linearity())
+            if dropout > 0:
+                layers.append(nn.Dropout(p=dropout))
 
-        self.fc_layers = nn.Sequential(*layers[:-1])
+        # Always end with FC
+        layers.append(nn.Linear(fc_dims[-1], out_dim, bias=True))
 
-        self.bn = None
-        if bn:
-            self.bn = nn.BatchNorm1d(
-                num_features=all_dims[-1], affine=False, track_running_stats=True
-            )
-
+        self.fc_layers = nn.Sequential(*layers)
         self.skip = skip
 
     def forward(self, x):
@@ -116,8 +107,5 @@ class MLP(nn.Module):
 
         if self.skip:
             z += x
-
-        if self.bn is not None:
-            z = self.bn(z)
 
         return z
