@@ -151,17 +151,6 @@ class VQRSolver(ABC):
         Empirical Econometrics, 2020.
     """
 
-    def __init__(
-        self,
-        verbose: bool = False,
-        **solver_opts,
-    ):
-        """
-        :param solver_opts: Kwargs for underlying solver. Implementation specific.
-        """
-        self._solver_opts = solver_opts
-        self._verbose = verbose
-
     @abstractmethod
     def solve_vqr(
         self,

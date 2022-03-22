@@ -24,8 +24,11 @@ class CVXVQRSolver(VQRSolver):
         Annals of Statistics, 2016
     """
 
-    def __init__(self, **solver_opts):
-        super().__init__(**solver_opts)
+    def __init__(self, verbose: bool = False, **cvx_solver_opts):
+        super().__init__()
+        self._verbose = verbose
+        cvx_solver_opts["verbose"] = verbose
+        self._solver_opts = cvx_solver_opts
 
     def solve_vqr(self, T: int, Y: Array, X: Optional[Array] = None) -> VectorQuantiles:
         N = len(Y)

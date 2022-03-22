@@ -33,7 +33,6 @@ class RegularizedDualVQRSolver(VQRSolver):
         nn_init: Optional[Callable[[int], torch.nn.Module]] = None,
         full_precision: bool = False,
         gpu: bool = False,
-        **solver_opts,
     ):
         """
         :param epsilon: Regularization. The lower, the more exact the solution.
@@ -49,10 +48,10 @@ class RegularizedDualVQRSolver(VQRSolver):
         double precision (float32).
         :param gpu: Whether to perform optimization on GPU. Outputs will in any case
         be numpy arrays on CPU.
-        :param solver_opts: Other opts for the base class.
         """
-        super().__init__(verbose=verbose, **solver_opts)
+        super().__init__()
 
+        self._verbose = verbose
         self._epsilon = epsilon
         self._num_epochs = num_epochs
         self._lr = learning_rate
@@ -212,3 +211,37 @@ class RegularizedDualVQRSolver(VQRSolver):
         # Assumes net is on cpu and in eval mode.
         X_th = torch.from_numpy(X).to(dtype=dtype)
         return net(X_th).detach().numpy()
+
+
+class MLPRegularizedDualVQRSolver(RegularizedDualVQRSolver):
+    """
+    Same as RegularizedDualVQRSolver, but with a general-purpose MLP as a
+    learnable non-linear feature transformation.
+    """
+
+    def __init__(
+        self,
+        hidden_layers: Sequence[int] = (32,),
+        activation: Union[str, torch.nn.Module] = "relu",
+        skip: bool = True,
+        batchnorm: bool = False,
+        dropout: float = 0,
+        **solver_opts,
+    ):
+        """
+        Supports init args of both :class:`MLP` and :class:`RegularizedDualVQRSolver`.
+        """
+        if "nn_init" in solver_opts:
+            raise ValueError("Can't provide nn_init to this solver")
+
+        super().__init__(
+            nn_init=partial(
+                MLP,
+                hidden_dims=hidden_layers,
+                nl=activation,
+                skip=skip,
+                batchnorm=batchnorm,
+                dropout=dropout,
+            ),
+            **solver_opts,
+        )
