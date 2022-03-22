@@ -11,6 +11,7 @@ from vqr.data import generate_mvn_data, generate_linear_x_y_mvn_data
 
 
 class TestVectorQuantileEstimator(object):
+    SOLVER = "regularized_dual"
     SOLVER_OPTS = {"verbose": True, "learning_rate": 0.1, "epsilon": 1e-6}
 
     @pytest.fixture(
@@ -30,7 +31,11 @@ class TestVectorQuantileEstimator(object):
         params = request.param
         d, N, T = params["d"], params["N"], params["T"]
         X, Y = generate_mvn_data(N, d, k=1)
-        vqe = VectorQuantileEstimator(n_levels=T, solver_opts=self.SOLVER_OPTS)
+        vqe = VectorQuantileEstimator(
+            n_levels=T,
+            solver=self.SOLVER,
+            solver_opts=self.SOLVER_OPTS,
+        )
         vqe.fit(Y)
         return Y, vqe
 
@@ -85,7 +90,9 @@ class TestVectorQuantileEstimator(object):
         d = 2
 
         _, Y = generate_mvn_data(n=N, d=d, k=1)
-        vqe = VectorQuantileEstimator(n_levels=T, solver_opts=self.SOLVER_OPTS)
+        vqe = VectorQuantileEstimator(
+            n_levels=T, solver=self.SOLVER, solver_opts=self.SOLVER_OPTS
+        )
         vqe.fit(Y)
 
         _test_monotonicity(
@@ -97,7 +104,15 @@ class TestVectorQuantileEstimator(object):
 
 
 class TestVectorQuantileRegressor(object):
-    SOLVER_OPTS = {"verbose": True, "learning_rate": 0.5, "epsilon": 1e-6}
+    SOLVER = "regularized_dual"
+    SOLVER_OPTS = {
+        "verbose": True,
+        "learning_rate": 0.5,
+        "epsilon": 1e-6,
+        # "nn_hidden_layers": [
+        #     10,
+        # ],
+    }
 
     @pytest.fixture(
         scope="class",
@@ -117,7 +132,11 @@ class TestVectorQuantileRegressor(object):
         N, d, k, T = params["N"], params["d"], params["k"], params["T"]
         X, Y = generate_linear_x_y_mvn_data(N, d=d, k=k)
 
-        vqr = VectorQuantileRegressor(n_levels=T, solver_opts=self.SOLVER_OPTS)
+        vqr = VectorQuantileRegressor(
+            n_levels=T,
+            solver_opts=self.SOLVER_OPTS,
+            solver=self.SOLVER,
+        )
         vqr.fit(X, Y)
 
         return X, Y, vqr
@@ -199,7 +218,9 @@ class TestVectorQuantileRegressor(object):
         T = 15
         X, Y = generate_linear_x_y_mvn_data(n=N, d=d, k=k)
 
-        vqr = VectorQuantileRegressor(n_levels=T, solver_opts=self.SOLVER_OPTS)
+        vqr = VectorQuantileRegressor(
+            n_levels=T, solver=self.SOLVER, solver_opts=self.SOLVER_OPTS
+        )
         vqr.fit(X, Y)
 
         _test_monotonicity(

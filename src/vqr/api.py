@@ -1,5 +1,5 @@
 from abc import ABC
-from typing import Any, Dict, List, Type, Tuple, Union, Optional, Sequence
+from typing import Any, Dict, Type, Tuple, Union, Optional, Sequence
 
 import numpy as np
 from numpy import ndarray, quantile
@@ -8,26 +8,26 @@ from sklearn.base import BaseEstimator, RegressorMixin
 from sklearn.utils import check_X_y
 from matplotlib.figure import Figure
 from sklearn.preprocessing import StandardScaler
-from sklearn.utils.validation import check_array, check_is_fitted
+from sklearn.utils.validation import check_is_fitted
 
 from vqr.vqr import (
     VQRSolver,
-    CVXVQRSolver,
     VectorQuantiles,
-    RVQRDualLSESolver,
     quantile_levels,
     quantile_contour,
     inversion_sampling,
 )
 from vqr.plot import plot_quantiles, plot_quantiles_3d
 from vqr.coverage import measure_coverage
+from vqr.solvers.primal.cvx import CVXVQRSolver
+from vqr.solvers.dual.regularized_lse import RegularizedDualVQRSolver
 
 SOLVER_TYPES: Dict[str, Type[VQRSolver]] = {
-    "cvx": CVXVQRSolver,
-    "rvqr_dual_lse": RVQRDualLSESolver,
+    "cvx_primal": CVXVQRSolver,
+    "regularized_dual": RegularizedDualVQRSolver,
 }
 
-DEFAULT_SOLVER = "rvqr_dual_lse"
+DEFAULT_SOLVER = "regularized_dual"
 
 
 class VectorQuantileBase(BaseEstimator, ABC):
