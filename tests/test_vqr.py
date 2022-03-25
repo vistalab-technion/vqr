@@ -8,6 +8,10 @@ from sklearn.exceptions import NotFittedError
 
 from vqr import VectorQuantileEstimator, VectorQuantileRegressor
 from vqr.data import generate_mvn_data, generate_linear_x_y_mvn_data
+from vqr.solvers.dual.regularized_lse import (
+    RegularizedDualVQRSolver,
+    MLPRegularizedDualVQRSolver,
+)
 
 
 class TestVectorQuantileEstimator(object):
@@ -104,22 +108,23 @@ class TestVectorQuantileEstimator(object):
 
 
 class TestVectorQuantileRegressor(object):
-    SOLVER = "regularized_dual"
-    SOLVER_OPTS = {
-        "verbose": True,
-        "learning_rate": 0.5,
-        "epsilon": 1e-6,
-        # "nn_hidden_layers": [
-        #     10,
-        # ],
-    }
+    @pytest.fixture(
+        scope="class",
+        params=[
+            RegularizedDualVQRSolver(verbose=True, learning_rate=0.5, epsilon=1e-6),
+            MLPRegularizedDualVQRSolver(verbose=True, learning_rate=0.5, epsilon=1e-6),
+        ],
+        ids=["rvqr_linear", "rvqr_mlp"],
+    )
+    def vqr_solver(self, request):
+        return request.param
 
     @pytest.fixture(
         scope="class",
         params=[
-            {"d": 1, "k": 5, "N": 500, "T": 20},
-            {"d": 2, "k": 7, "N": 500, "T": 20},
-            {"d": 3, "k": 3, "N": 500, "T": 10},
+            {"d": 1, "k": 5, "N": 1000, "T": 20},
+            {"d": 2, "k": 7, "N": 1000, "T": 20},
+            {"d": 3, "k": 3, "N": 1000, "T": 10},
         ],
         ids=[
             "d=1,k=5",
@@ -127,16 +132,12 @@ class TestVectorQuantileRegressor(object):
             "d=3,k=3",
         ],
     )
-    def vqr_fitted(self, request):
+    def vqr_fitted(self, request, vqr_solver):
         params = request.param
         N, d, k, T = params["N"], params["d"], params["k"], params["T"]
         X, Y = generate_linear_x_y_mvn_data(N, d=d, k=k)
 
-        vqr = VectorQuantileRegressor(
-            n_levels=T,
-            solver_opts=self.SOLVER_OPTS,
-            solver=self.SOLVER,
-        )
+        vqr = VectorQuantileRegressor(n_levels=T, solver=vqr_solver)
         vqr.fit(X, Y)
 
         return X, Y, vqr
@@ -210,17 +211,15 @@ class TestVectorQuantileRegressor(object):
         print(f"{cov=}")
         assert cov > (0.6 if d < 3 else 0.2)
 
-    @pytest.mark.parametrize("i", range(5))
-    def test_monotonicity(self, i):
+    @pytest.mark.parametrize("i", range(3))
+    def test_monotonicity(self, i, vqr_solver):
         N = 1000
         d = 2
         k = 3
         T = 15
         X, Y = generate_linear_x_y_mvn_data(n=N, d=d, k=k)
 
-        vqr = VectorQuantileRegressor(
-            n_levels=T, solver=self.SOLVER, solver_opts=self.SOLVER_OPTS
-        )
+        vqr = VectorQuantileRegressor(n_levels=T, solver=vqr_solver)
         vqr.fit(X, Y)
 
         _test_monotonicity(
