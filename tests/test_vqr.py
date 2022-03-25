@@ -4,6 +4,7 @@ from typing import Sequence
 import numpy as np
 import pytest
 import matplotlib.pyplot as plt
+from numpy.linalg import norm
 from sklearn.exceptions import NotFittedError
 
 from vqr import VectorQuantileEstimator, VectorQuantileRegressor
@@ -103,7 +104,6 @@ class TestVectorQuantileEstimator(object):
             Us=vqe.quantile_grid,
             Qs=vqe.vector_quantiles(),
             T=vqe.n_levels,
-            eps=0.06,
         )
 
 
@@ -111,8 +111,8 @@ class TestVectorQuantileRegressor(object):
     @pytest.fixture(
         scope="class",
         params=[
-            RegularizedDualVQRSolver(verbose=True, learning_rate=0.5, epsilon=1e-6),
-            MLPRegularizedDualVQRSolver(verbose=True, learning_rate=0.5, epsilon=1e-6),
+            RegularizedDualVQRSolver(verbose=True, learning_rate=0.5, epsilon=1e-5),
+            MLPRegularizedDualVQRSolver(verbose=True, learning_rate=0.5, epsilon=1e-5),
         ],
         ids=["rvqr_linear", "rvqr_mlp"],
     )
@@ -211,7 +211,7 @@ class TestVectorQuantileRegressor(object):
         print(f"{cov=}")
         assert cov > (0.6 if d < 3 else 0.2)
 
-    @pytest.mark.parametrize("i", range(3))
+    @pytest.mark.parametrize("i", range(5))
     def test_monotonicity(self, i, vqr_solver):
         N = 1000
         d = 2
@@ -226,12 +226,15 @@ class TestVectorQuantileRegressor(object):
             Us=vqr.quantile_grid,
             Qs=vqr.vector_quantiles(X=X[[i]])[0],
             T=vqr.n_levels,
-            eps=0.06,
         )
 
 
 def _test_monotonicity(
-    Us: Sequence[np.ndarray], Qs: Sequence[np.ndarray], T: int, eps: float
+    Us: Sequence[np.ndarray],
+    Qs: Sequence[np.ndarray],
+    T: int,
+    projection_tolerance: float = 0.0,
+    offending_proportion_limit: float = 0.005,
 ):
     # Only supports 2d for now.
     U1, U2 = Us
@@ -240,8 +243,8 @@ def _test_monotonicity(
     ii = jj = tuple(range(1, T))
 
     n, n_c = 0, 0
-    offending_points = []
-    offending_dists = []
+    projections = []
+    offending_projections = []
     for i0, j0 in it.product(ii, jj):
         u0 = np.array([U1[i0, j0], U2[i0, j0]])
         q0 = np.array([Q1[i0, j0], Q2[i0, j0]])
@@ -251,20 +254,27 @@ def _test_monotonicity(
 
             u1 = np.array([U1[i1, j1], U2[i1, j1]])
             q1 = np.array([Q1[i1, j1], Q2[i1, j1]])
+            du = u1 - u0
+            dq = q1 - q0
+            projection = np.dot(dq, du)
 
-            if np.dot(q1 - q0, u1 - u0) < -eps:
-                offending = (
-                    f"{(i0, j0)=}, {(i1, j1)=}, "
-                    f"{q1-q0=}, "
-                    f"{u1-u0=}, "
-                    f"{np.dot(q1-q0, u1-u0)=}"
-                )
-                offending_points.append(offending)
-                offending_dists.append(np.dot(q1 - q0, u1 - u0).item())
+            # normalize projection to [-1, 1]
+            # but only if it has any length (to prevent 0/0 -> NaN)
+            if np.abs(projection) > 0:
+                projection = projection / norm(dq) / norm(du)
+
+            assert not np.isnan(projection)
+            if projection < -projection_tolerance:
+                offending_projections.append(projection.item())
                 n_c += 1
 
-    if offending_dists:
-        print(offending_points, offending_dists)
-        print(f"max dist: {np.max(np.abs(offending_dists))}")
+            projections.append(projection)
 
-    assert len(offending_points) == 0, f"{n=}, {n_c=}, {n_c/n=:.2f}"
+    offending_proportion = n_c / n
+    if offending_projections:
+        q = [0.01, 0.1, 0.25, 0.5, 0.75, 0.9, 0.99]
+        print(f"err quantiles: {np.quantile(offending_projections, q=q)}")
+        print(f"all quantiles: {np.quantile(projections, q=q)}")
+        print(f"{n=}, {n_c=}, {n_c/n=}")
+
+    assert offending_proportion < offending_proportion_limit
