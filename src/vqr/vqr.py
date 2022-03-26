@@ -18,8 +18,8 @@ class VectorQuantiles:
     Should only be constructed by :class:`VQRSolver`s, not manually.
 
     Given a sample x of shape (1, k), the conditional d-dimensional vector quantiles
-    Y|X=x are given by
-    Y_hat = B @ x.T  + A.
+    Y|X=x are given by d/du [ B @ x.T  + A ].
+    We first calculate the regression targets Y_hat = B @ x.T  + A.
     This is an array of shape (T**d, 1).
     In order to obtain the d vector quantile surfaces (one for each dimension of Y),
     use the :obj:`decode_quantile_values` function on Y_hat.
@@ -34,6 +34,7 @@ class VectorQuantiles:
         A: Array,
         B: Optional[Array] = None,
         X_transform: Optional[Callable[[Array], Array]] = None,
+        k_in: Optional[int] = None,
     ):
         """
         :param U: Array of shape (T**d, d). Contains the d-dimensional grid on
@@ -44,9 +45,14 @@ class VectorQuantiles:
         :obj:`decode_quantile_values` function.
         :param B: Array of shape (T**d, k). Contains the  regression coefficients.
         Will be None if the input was an estimation problem (X=None) instead of a
-        regression problem.
+        regression problem. The k is the dimension of the covariates (X). If an
+        X_transform is provided, k corresponds to the dimension AFTER the
+        transformation.
         :param X_transform: Transformation to apply to covariates (X) for non-linear
-        VQR.
+        VQR. Must be provided together with k_in. The transformation is assumed to
+        take input of shape (N, k_in) and return output of shape (N, k).
+        :param k_in: Covariates input dimension of the X_transform.
+        If X_transform is None, must be None or zero.
         """
         # Validate dimensions
         assert all(x is not None for x in [T, d, U, A])
@@ -54,6 +60,7 @@ class VectorQuantiles:
         assert U.shape[0] == A.shape[0] == T ** d
         assert A.shape[1] == 1
         assert B is None or (B.ndim == 2 and B.shape[0] == T ** d)
+        assert (X_transform is not None and k_in) or (X_transform is None and not k_in)
 
         self._T = T
         self._d = d
@@ -62,6 +69,7 @@ class VectorQuantiles:
         self._B = B
         self._k = B.shape[1] if B is not None else 0
         self._X_transform = X_transform
+        self._k_in = k_in
 
     @property
     def is_conditional(self) -> bool:
@@ -82,15 +90,19 @@ class VectorQuantiles:
         if X is not None and not self.is_conditional:
             raise ValueError(f"VQR not conditional but covariates were supplied")
 
-        if not self.is_conditional:
+        if not self.is_conditional or X is None:
             Y_hats = [self._A]
         else:
-            if X is None:
-                X = np.zeros(shape=(1, self._k))
-
             check_array(X, ensure_2d=True, allow_nd=False)
 
             if self._X_transform is not None:
+                N, k_in = X.shape
+                if k_in != self._k_in:
+                    raise ValueError(
+                        f"VQR model was trianed with X_transform expecting k_in"
+                        f"={self._k_in}, but got covariates with {k_in=} features."
+                    )
+
                 X = self._X_transform(X)
 
             N, k = X.shape
@@ -136,9 +148,12 @@ class VectorQuantiles:
     @property
     def dim_x(self) -> int:
         """
-        :return: The dimension k, of the covariates (X).
+        :return: The dimension k, of the covariates (X) which are expected to be
+        passed in to obtain conditional quantiles.
         """
-        return self._k
+        # If there was an X_transform, the input dimension of that is what we expect to
+        # receive.
+        return self._k_in or self._k
 
 
 class VQRSolver(ABC):

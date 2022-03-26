@@ -99,6 +99,7 @@ class RegularizedDualVQRSolver(VQRSolver):
         X_th = None
         b = None
         net = None
+        k_out = k
         if k > 0:
             X_th = tensor(X, **dtd)
 
@@ -204,7 +205,7 @@ class RegularizedDualVQRSolver(VQRSolver):
         if self._verbose:
             print(f"{total_time=:.2f}s")
 
-        return VectorQuantiles(T, d, U, A, B, X_transform=x_transform_fn)
+        return VectorQuantiles(T, d, U, A, B, X_transform=x_transform_fn, k_in=k)
 
     @staticmethod
     def _features_transform(X: Array, net: torch.nn.Module, dtype: torch.dtype):
