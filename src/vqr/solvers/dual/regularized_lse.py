@@ -215,7 +215,8 @@ class RegularizedDualVQRSolver(VQRSolver):
     def _features_transform(X: Array, net: torch.nn.Module, dtype: torch.dtype):
         # Assumes net is on cpu and in eval mode.
         X_th = torch.from_numpy(X).to(dtype=dtype)
-        return net(X_th).detach().numpy()
+        with torch.no_grad():
+            return net(X_th).numpy()
 
 
 class MLPRegularizedDualVQRSolver(RegularizedDualVQRSolver):
