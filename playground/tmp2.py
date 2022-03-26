@@ -1,5 +1,3 @@
-import pickle
-
 import ot
 import torch
 from numpy import array, zeros

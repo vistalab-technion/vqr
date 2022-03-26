@@ -34,20 +34,12 @@ nonlinear_vqr_est = VectorQuantileRegressor(
         verbose=True, num_epochs=1500, epsilon=0.00001, learning_rate=0.9
     )
 )
-nonlinear_vqr_est = nonlinear_vqr_est.fit(X, Y)
-B_nl_est = nonlinear_vqr_est._fitted_solution._B
-A_nl_est = nonlinear_vqr_est._fitted_solution._A
+nonlinear_vqr_est.fit(X, Y)
 Y_nl_est = zeros([n, k])
 for i in range(n):
-    Y_hat = (
-        B_nl_est
-        @ nonlinear_vqr_est.solver._net(tensor(X[i, :][:, None], dtype=float32).T)
-        .detach()
-        .numpy()
-        .T
-        + A_nl_est
+    Q1, Q2 = nonlinear_vqr_est.vector_quantiles(
+        tensor(X[i, :][:, None], dtype=float32).T
     )
-    Q1, Q2 = decode_quantile_values(T, d=2, Y_hat=Y_hat)
     u1, u2 = U_samples[i]
     Y_nl_est[i, :] = array((Q1[u1, u2], Q2[u1, u2]))
 

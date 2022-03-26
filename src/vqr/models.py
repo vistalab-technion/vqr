@@ -5,7 +5,7 @@ from torch import ones as ones_th
 
 
 class QuadraticModel(nn.Module):
-    def __init__(self, k=2):
+    def __init__(self, k: int = 2):
         super().__init__()
         self.C1 = nn.Parameter(eye(k, k, dtype=torch.float32, requires_grad=True))
         self.C2 = nn.Parameter(
@@ -23,7 +23,13 @@ class QuadraticModel(nn.Module):
 
 
 class DeepNet(nn.Module):
-    def __init__(self, hidden_width=2000, depth=1, k=2):
+    def __init__(
+        self,
+        hidden_width: int = 2000,
+        depth: int = 1,
+        k: int = 2,
+        inner_prod_layer: bool = False,
+    ):
         super().__init__()
         self.nl = nn.ReLU()
         self.fc_first = nn.Linear(k, hidden_width)
@@ -37,12 +43,15 @@ class DeepNet(nn.Module):
         self.bn_hidden = nn.BatchNorm1d(
             num_features=hidden_width, affine=False, track_running_stats=True
         )
+        self.inner_prod_layer = inner_prod_layer
 
     def forward(self, X_in):
         X = self.nl(self.fc_first(X_in))
         for hidden in self.fc_hidden:
             X_hidden = self.nl(hidden(X))
-            X = self.bn_hidden(X_hidden + X)
-            # X = self.bn_hidden(diag(X_hidden @ X_hidden.T)[:, None] + X_hidden + X)
+            if self.inner_prod_layer:
+                X = self.bn_hidden(diag(X_hidden @ X_hidden.T)[:, None] + X_hidden + X)
+            else:
+                X = self.bn_hidden(X_hidden + X)
         X = self.bn_last(self.fc_last(X) + X_in)
         return X

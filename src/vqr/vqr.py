@@ -243,7 +243,7 @@ class RVQRDualLSESolver(VQRSolver):
         k: int = X.shape[1] - 1  # Number of features (can be zero)
         d: int = Y.shape[1]  # number or target dimensions
 
-        X_bar = np.mean(X, axis=0, keepdims=True)  # (1, k+1)
+        # X_bar = np.mean(X, axis=0, keepdims=True)  # (1, k+1)
 
         # All quantile levels
         Td: int = T ** d
@@ -258,7 +258,7 @@ class RVQRDualLSESolver(VQRSolver):
         assert U.shape == (Td, d)
 
         # Pairwise distances (similarity)
-        S: Array = cdist(U, Y, self._similarity_fn)  # (Td, d) and (N, d)
+        # S: Array = cdist(U, Y, self._similarity_fn)  # (Td, d) and (N, d)
 
         one_N = np.ones([N, 1])
         one_T = np.ones([Td, 1])
@@ -420,7 +420,7 @@ class NonlinearRVQRDualLSESolver(VQRSolver):
         assert U.shape == (Td, d)
 
         # Pairwise distances (similarity)
-        S: Array = cdist(U, Y, self._similarity_fn)  # (Td, d) and (N, d)
+        # S: Array = cdist(U, Y, self._similarity_fn)  # (Td, d) and (N, d)
 
         one_N = np.ones([N, 1])
         one_T = np.ones([Td, 1])
