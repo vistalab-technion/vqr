@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import sys
+import logging
 from time import time
 from typing import Union, Callable, Optional, Sequence
 from functools import partial
@@ -7,12 +9,15 @@ from functools import partial
 import numpy as np
 import torch
 from torch import tensor
+from tqdm.auto import tqdm
 from numpy.typing import ArrayLike as Array
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 from vqr import VQRSolver, VectorQuantiles
 from vqr.vqr import quantile_levels
 from vqr.models import MLP
+
+_LOG = logging.getLogger(__name__)
 
 
 class RegularizedDualVQRSolver(VQRSolver):
@@ -67,6 +72,9 @@ class RegularizedDualVQRSolver(VQRSolver):
             self._nn_init = nn_init
 
     def solve_vqr(self, T: int, Y: Array, X: Optional[Array] = None) -> VectorQuantiles:
+        start_time = time()
+        log_level = logging.INFO if self._verbose else logging.NOTSET
+
         N = len(Y)
         Y = np.reshape(Y, (N, -1))
 
@@ -91,8 +99,8 @@ class RegularizedDualVQRSolver(VQRSolver):
         epsilon = self._epsilon
         num_epochs = self._num_epochs
 
-        one_N = torch.ones(N, 1)
-        one_T = torch.ones(Td, 1)
+        one_N = np.ones((N, 1))
+        one_T = np.ones((Td, 1))
         Y_th = tensor(Y, **dtd)
         U_th = tensor(U, **dtd)
         mu = tensor(one_T / Td, **dtd)
@@ -153,7 +161,7 @@ class RegularizedDualVQRSolver(VQRSolver):
             threshold=5 * 0.01,  # loss needs to decrease by x% every patience epochs
             threshold_mode="rel",
             min_lr=self._lr * 0.5 ** 10,
-            verbose=self._verbose,
+            verbose=False,
         )
 
         def _evaluate_phi():
@@ -167,29 +175,34 @@ class RegularizedDualVQRSolver(VQRSolver):
             )
             return phi_.reshape(-1, 1)  # (T^d, 1)
 
-        total_time, last_print_time = 0, time()
-        for epoch_idx in range(num_epochs):
-            epoch_start_time = time()
+        _LOG.log(log_level, f"{self}: Solving with {N=}, {T=}, {d=}, {k=}, {k_out=}")
+        with tqdm(
+            total=num_epochs,
+            file=sys.stdout,
+            unit="epochs",
+            disable=not self._verbose,
+            mininterval=0.2,
+            position=0,
+            leave=True,
+        ) as pbar:
+            for epoch_idx in range(num_epochs):
+                # Optimize
+                optimizer.zero_grad()
+                phi = _evaluate_phi()
+                constraint_loss = phi.T @ mu
+                objective = psi.T @ nu + constraint_loss
+                objective.backward()
+                optimizer.step()
+                scheduler.step(objective)
 
-            optimizer.zero_grad()
-            phi = _evaluate_phi()
-            constraint_loss = phi.T @ mu
-            objective = psi.T @ nu + constraint_loss
-            objective.backward()
-            optimizer.step()
-            scheduler.step(objective)
-            total_loss = objective.item()
-            constraint_loss = constraint_loss.item()
-
-            epoch_elapsed_time = time() - epoch_start_time
-            total_time += epoch_elapsed_time
-            if self._verbose and (epoch_idx % 100 == 0 or epoch_idx == num_epochs - 1):
-                elapsed = time() - last_print_time
-                print(
-                    f"{epoch_idx=}, {total_loss=:.6f} {constraint_loss=:.6f}, "
-                    f"{elapsed=:.2f}s"
+                # Update progress and stats
+                pbar.update(1)
+                pbar.set_postfix(
+                    total_loss=objective.item(),
+                    constraint_loss=constraint_loss.item(),
+                    lr=optimizer.param_groups[0]["lr"],
+                    refresh=False,
                 )
-                last_print_time = time()
 
         # Finalize phi and calculate VQR coefficients A and B
         phi = _evaluate_phi()
@@ -206,9 +219,7 @@ class RegularizedDualVQRSolver(VQRSolver):
                 self._features_transform, net=net, dtype=self._dtype
             )
 
-        if self._verbose:
-            print(f"{total_time=:.2f}s")
-
+        _LOG.log(log_level, f"{self}: total_time={time()-start_time:.2f}s")
         return VectorQuantiles(T, d, U, A, B, X_transform=x_transform_fn, k_in=k)
 
     @staticmethod
@@ -217,6 +228,9 @@ class RegularizedDualVQRSolver(VQRSolver):
         X_th = torch.from_numpy(X).to(dtype=dtype)
         with torch.no_grad():
             return net(X_th).numpy()
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}(eps={self._epsilon:.0e})"
 
 
 class MLPRegularizedDualVQRSolver(RegularizedDualVQRSolver):
