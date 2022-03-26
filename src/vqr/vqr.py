@@ -99,7 +99,7 @@ class VectorQuantiles:
                 N, k_in = X.shape
                 if k_in != self._k_in:
                     raise ValueError(
-                        f"VQR model was trianed with X_transform expecting k_in"
+                        f"VQR model was trained with X_transform expecting k_in"
                         f"={self._k_in}, but got covariates with {k_in=} features."
                     )
 

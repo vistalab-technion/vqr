@@ -49,7 +49,7 @@ class RegularizedDualVQRSolver(VQRSolver):
         double precision (float32).
         :param gpu: Whether to perform optimization on GPU. Outputs will in any case
         be numpy arrays on CPU.
-        :param device_num: the GPU number on which to run. Default 0.
+        :param device_num: the GPU number on which to run, used if gpu=True.
         """
         super().__init__()
 
