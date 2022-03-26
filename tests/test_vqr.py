@@ -219,7 +219,14 @@ class TestVectorQuantileRegressor(object):
         N, k = X.shape
         T = vqr.n_levels
 
-        cov = vqr.coverage(Y, alpha=0.05, x=np.median(X, axis=0))
+        cov = np.mean(
+            [
+                # Coverage for each single data point is just 0 or 1
+                vqr.coverage(y.reshape(1, d), alpha=0.05, x=x)
+                for (x, y) in zip(X, Y)
+            ]
+        )
+
         print(f"{cov=}")
         assert cov > (0.6 if d < 3 else 0.2)
 
