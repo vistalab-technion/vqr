@@ -113,8 +113,20 @@ class TestVectorQuantileRegressor(object):
         params=[
             RegularizedDualVQRSolver(verbose=True, learning_rate=0.5, epsilon=1e-5),
             MLPRegularizedDualVQRSolver(verbose=True, learning_rate=0.5, epsilon=1e-5),
+            MLPRegularizedDualVQRSolver(
+                verbose=True,
+                learning_rate=0.5,
+                epsilon=1e-5,
+                hidden_layers=[2, 4],
+                skip=False,  # No skip, so output will have different k
+                num_epochs=1500,
+            ),
         ],
-        ids=["rvqr_linear", "rvqr_mlp"],
+        ids=[
+            "rvqr_linear",
+            "rvqr_mlp",
+            "rvqr_mlp_change_k",
+        ],
     )
     def vqr_solver(self, request):
         return request.param
