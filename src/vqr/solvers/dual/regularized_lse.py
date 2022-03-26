@@ -33,6 +33,7 @@ class RegularizedDualVQRSolver(VQRSolver):
         nn_init: Optional[Callable[[int], torch.nn.Module]] = None,
         full_precision: bool = False,
         gpu: bool = False,
+        device_num: int = 1,
     ):
         """
         :param epsilon: Regularization. The lower, the more exact the solution.
@@ -48,6 +49,7 @@ class RegularizedDualVQRSolver(VQRSolver):
         double precision (float32).
         :param gpu: Whether to perform optimization on GPU. Outputs will in any case
         be numpy arrays on CPU.
+        :param device_num: the GPU number on which to run. Default 0.
         """
         super().__init__()
 
@@ -56,7 +58,9 @@ class RegularizedDualVQRSolver(VQRSolver):
         self._num_epochs = num_epochs
         self._lr = learning_rate
         self._dtype = torch.float64 if full_precision else torch.float32
-        self._device = torch.device("cuda") if gpu else torch.device("cpu")
+        self._device = (
+            torch.device(f"cuda:{device_num}") if gpu else torch.device("cpu")
+        )
         if nn_init is None:
             self._nn_init = lambda k: torch.nn.Identity()
         else:
