@@ -270,15 +270,8 @@ class RegularizedDualVQRSolver(VQRSolver):
             bX = b @ net(X).T
 
         max_arg = UY - bX - psi.reshape(1, -1)  # (T^d,N)-(T^d,N)-(1,N) = (T^d, N)
-        max_val = torch.max(max_arg, dim=1, keepdim=True)[0]  # (T^d, 1)
+        phi = epsilon * torch.logsumexp(max_arg / epsilon, dim=1)
 
-        phi = (
-            epsilon
-            * torch.log(torch.sum(torch.exp((max_arg - max_val) / epsilon), dim=1))
-            + max_val[:, 0]
-        )
-
-        # TODO: Try with torch.logsumexp()
         return phi.reshape(-1, 1)  # (T^d, 1)
 
     def __repr__(self):
