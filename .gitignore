@@ -3,6 +3,7 @@
 __version__.py
 
 notebooks/figs/
+experiments/**/*.csv
 
 # Created by https://www.toptal.com/developers/gitignore/api/macos,windows,linux,python,latex
 # Edit at https://www.toptal.com/developers/gitignore?templates=macos,windows,linux,python,latex

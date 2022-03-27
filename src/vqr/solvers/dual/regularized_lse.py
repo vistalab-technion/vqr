@@ -1,0 +1,267 @@
+from __future__ import annotations
+
+import sys
+import logging
+from time import time
+from typing import Union, Callable, Optional, Sequence
+from functools import partial
+
+import numpy as np
+import torch
+from torch import tensor
+from tqdm.auto import tqdm
+from numpy.typing import ArrayLike as Array
+from torch.optim.lr_scheduler import ReduceLROnPlateau
+
+from vqr import VQRSolver, VectorQuantiles
+from vqr.vqr import quantile_levels
+from vqr.models import MLP
+
+_LOG = logging.getLogger(__name__)
+
+
+class RegularizedDualVQRSolver(VQRSolver):
+    """
+    Solves the Regularized Dual formulation of Vector Quantile Regression using
+    pytorch with gradient-based optimization.
+
+    Can solve a non-linear VQR problem, given an arbitrary neural network that acts
+    as a learnable non-linear transformation of the input features.
+    """
+
+    def __init__(
+        self,
+        epsilon: float = 1e-3,
+        num_epochs: int = 1000,
+        learning_rate: float = 0.9,
+        verbose: bool = False,
+        nn_init: Optional[Callable[[int], torch.nn.Module]] = None,
+        full_precision: bool = False,
+        gpu: bool = False,
+        device_num: int = 1,
+    ):
+        """
+        :param epsilon: Regularization. The lower, the more exact the solution.
+        :param num_epochs: Number of epochs (full iterations over all data) to
+        optimize for.
+        :param learning_rate: Optimizer learning rate.
+        :param verbose: Whether to print verbose output.
+        :param nn_init: Function that initializes a neural net given the number of
+        input features. Must be a callable that accepts a single int (the number of
+        input features, k) and returns a torch.nn.Module which for an input of
+        shape (N, k) produces an output of shape (N, k').
+        :param full_precision: Whether to use full precision (float64) or only
+        double precision (float32).
+        :param gpu: Whether to perform optimization on GPU. Outputs will in any case
+        be numpy arrays on CPU.
+        :param device_num: the GPU number on which to run, used if gpu=True.
+        """
+        super().__init__()
+
+        self._verbose = verbose
+        self._epsilon = epsilon
+        self._num_epochs = num_epochs
+        self._lr = learning_rate
+        self._dtype = torch.float64 if full_precision else torch.float32
+        self._device = (
+            torch.device(f"cuda:{device_num}") if gpu else torch.device("cpu")
+        )
+        if nn_init is None:
+            self._nn_init = lambda k: torch.nn.Identity()
+        else:
+            self._nn_init = nn_init
+
+    def solve_vqr(self, T: int, Y: Array, X: Optional[Array] = None) -> VectorQuantiles:
+        start_time = time()
+        log_level = logging.INFO if self._verbose else logging.NOTSET
+
+        N = len(Y)
+        Y = np.reshape(Y, (N, -1))
+
+        if X is not None:
+            X = np.reshape(X, (N, -1))
+
+        d: int = Y.shape[1]  # number or target dimensions
+        k: int = X.shape[1] if X is not None else 0  # Number of features (can be zero)
+
+        # All quantile levels
+        Td: int = T ** d
+
+        # Quantile levels grid: list of grid coordinate matrices, one per dimension
+        # d arrays of shape (T,..., T)
+        U_grids: Sequence[Array] = np.meshgrid(*([quantile_levels(T)] * d))
+        # Stack all nd-grid coordinates into one long matrix, of shape (T**d, d)
+        U: Array = np.stack([U_grid.reshape(-1) for U_grid in U_grids], axis=1)
+        assert U.shape == (Td, d)
+
+        #####
+        dtd = dict(dtype=self._dtype, device=self._device)
+        epsilon = self._epsilon
+        num_epochs = self._num_epochs
+
+        one_N = np.ones((N, 1))
+        one_T = np.ones((Td, 1))
+        Y_th = tensor(Y, **dtd)
+        U_th = tensor(U, **dtd)
+        mu = tensor(one_T / Td, **dtd)
+        nu = tensor(one_N / N, **dtd)
+
+        UY = U_th @ Y_th.T  # (T^d, N)
+        psi = torch.full(size=(N, 1), fill_value=0.1, requires_grad=True, **dtd)
+        X_th = None
+        b = None
+        net = None
+        k_out = k
+        if k > 0:
+            X_th = tensor(X, **dtd)
+
+            # Instantiate custom neural network
+            inner_net = self._nn_init(k)
+            inner_net.to(**dtd)
+
+            # Make sure the network produces the right output shape, and use it as k
+            with torch.no_grad():
+                inner_net.train(False)
+                net_out_shape = inner_net(torch.zeros(1, k, **dtd)).shape
+            if len(net_out_shape) != 2 or net_out_shape[0] != 1:
+                raise ValueError(
+                    "Invalid output shape from custom neural net: "
+                    "expected (N, k_in) input to produce (N, k_out) output"
+                )
+            k_out = net_out_shape[1]
+
+            # Add a non-trainable BatchNorm at the end
+            net = torch.nn.Sequential(
+                inner_net,
+                torch.nn.BatchNorm1d(
+                    num_features=k_out, affine=False, track_running_stats=True, **dtd
+                ),
+            )
+            net.train(True)  # note: also applied to inner_net
+            b = torch.zeros(*(Td, k_out), requires_grad=True, **dtd)
+
+        optimizer = torch.optim.SGD(
+            [
+                dict(params=[*net.parameters()] if k > 0 else []),
+                dict(
+                    params=[b, psi] if k > 0 else [psi],
+                ),
+            ],
+            lr=self._lr,
+            momentum=0.9,
+            nesterov=True,
+            weight_decay=0.0,
+        )
+
+        scheduler = ReduceLROnPlateau(
+            optimizer=optimizer,
+            mode="min",
+            factor=0.5,
+            patience=100,
+            threshold=5 * 0.01,  # loss needs to decrease by x% every patience epochs
+            threshold_mode="rel",
+            min_lr=self._lr * 0.5 ** 10,
+            verbose=False,
+        )
+
+        def _evaluate_phi():
+            bX = b @ net(X_th).T if k > 0 else 0
+            max_arg = UY - bX - psi.reshape(1, -1)  # (T^d,N)-(T^d,N)-(1,N) = (T^d, N)
+            max_val = torch.max(max_arg, dim=1, keepdim=True)[0]  # (T^d, 1)
+            phi_ = (
+                epsilon
+                * torch.log(torch.sum(torch.exp((max_arg - max_val) / epsilon), dim=1))
+                + max_val[:, 0]
+            )
+            return phi_.reshape(-1, 1)  # (T^d, 1)
+
+        _LOG.log(log_level, f"{self}: Solving with {N=}, {T=}, {d=}, {k=}, {k_out=}")
+        with tqdm(
+            total=num_epochs,
+            file=sys.stdout,
+            unit="epochs",
+            disable=not self._verbose,
+            mininterval=0.2,
+            position=0,
+            leave=True,
+        ) as pbar:
+            for epoch_idx in range(num_epochs):
+                # Optimize
+                optimizer.zero_grad()
+                phi = _evaluate_phi()
+                constraint_loss = phi.T @ mu
+                objective = psi.T @ nu + constraint_loss
+                objective.backward()
+                optimizer.step()
+                scheduler.step(objective)
+
+                # Update progress and stats
+                pbar.update(1)
+                pbar.set_postfix(
+                    total_loss=objective.item(),
+                    constraint_loss=constraint_loss.item(),
+                    lr=optimizer.param_groups[0]["lr"],
+                    refresh=False,
+                )
+
+        # Finalize phi and calculate VQR coefficients A and B
+        phi = _evaluate_phi()
+        A = phi.detach().cpu().numpy()
+        B = None
+        x_transform_fn = None
+        if k > 0:
+            B = b.detach().cpu().numpy()
+
+            # Finalize network: move to CPU, set eval mode, wrap with callable
+            net = net.cpu().to(dtype=self._dtype)
+            net.train(False)
+            x_transform_fn = partial(
+                self._features_transform, net=net, dtype=self._dtype
+            )
+
+        _LOG.log(log_level, f"{self}: total_time={time()-start_time:.2f}s")
+        return VectorQuantiles(T, d, U, A, B, X_transform=x_transform_fn, k_in=k)
+
+    @staticmethod
+    def _features_transform(X: Array, net: torch.nn.Module, dtype: torch.dtype):
+        # Assumes net is on cpu and in eval mode.
+        X_th = torch.from_numpy(X).to(dtype=dtype)
+        with torch.no_grad():
+            return net(X_th).numpy()
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}(eps={self._epsilon:.0e})"
+
+
+class MLPRegularizedDualVQRSolver(RegularizedDualVQRSolver):
+    """
+    Same as RegularizedDualVQRSolver, but with a general-purpose MLP as a
+    learnable non-linear feature transformation.
+    """
+
+    def __init__(
+        self,
+        hidden_layers: Sequence[int] = (32,),
+        activation: Union[str, torch.nn.Module] = "relu",
+        skip: bool = True,
+        batchnorm: bool = False,
+        dropout: float = 0,
+        **solver_opts,
+    ):
+        """
+        Supports init args of both :class:`MLP` and :class:`RegularizedDualVQRSolver`.
+        """
+        if "nn_init" in solver_opts:
+            raise ValueError("Can't provide nn_init to this solver")
+
+        super().__init__(
+            nn_init=partial(
+                MLP,
+                hidden_dims=hidden_layers,
+                nl=activation,
+                skip=skip,
+                batchnorm=batchnorm,
+                dropout=dropout,
+            ),
+            **solver_opts,
+        )

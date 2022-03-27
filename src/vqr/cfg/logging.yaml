@@ -1,7 +1,8 @@
 version: 1
 formatters:
   simple:
-    format: '[%(asctime)s %(name)20s] %(levelname)7s >> %(message)s'
+    format: '%(asctime)s|%(name)15s|%(levelname)7s|%(process)04d| %(message)s'
+
 handlers:
   console:
     class: logging.StreamHandler

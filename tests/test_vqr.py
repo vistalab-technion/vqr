@@ -4,13 +4,19 @@ from typing import Sequence
 import numpy as np
 import pytest
 import matplotlib.pyplot as plt
+from numpy.linalg import norm
 from sklearn.exceptions import NotFittedError
 
 from vqr import VectorQuantileEstimator, VectorQuantileRegressor
 from vqr.data import generate_mvn_data, generate_linear_x_y_mvn_data
+from vqr.solvers.dual.regularized_lse import (
+    RegularizedDualVQRSolver,
+    MLPRegularizedDualVQRSolver,
+)
 
 
 class TestVectorQuantileEstimator(object):
+    SOLVER = "regularized_dual"
     SOLVER_OPTS = {"verbose": True, "learning_rate": 0.1, "epsilon": 1e-6}
 
     @pytest.fixture(
@@ -30,7 +36,11 @@ class TestVectorQuantileEstimator(object):
         params = request.param
         d, N, T = params["d"], params["N"], params["T"]
         X, Y = generate_mvn_data(N, d, k=1)
-        vqe = VectorQuantileEstimator(n_levels=T, solver_opts=self.SOLVER_OPTS)
+        vqe = VectorQuantileEstimator(
+            n_levels=T,
+            solver=self.SOLVER,
+            solver_opts=self.SOLVER_OPTS,
+        )
         vqe.fit(Y)
         return Y, vqe
 
@@ -85,26 +95,48 @@ class TestVectorQuantileEstimator(object):
         d = 2
 
         _, Y = generate_mvn_data(n=N, d=d, k=1)
-        vqe = VectorQuantileEstimator(n_levels=T, solver_opts=self.SOLVER_OPTS)
+        vqe = VectorQuantileEstimator(
+            n_levels=T, solver=self.SOLVER, solver_opts=self.SOLVER_OPTS
+        )
         vqe.fit(Y)
 
         _test_monotonicity(
             Us=vqe.quantile_grid,
             Qs=vqe.vector_quantiles(),
             T=vqe.n_levels,
-            eps=0.06,
         )
 
 
 class TestVectorQuantileRegressor(object):
-    SOLVER_OPTS = {"verbose": True, "learning_rate": 0.5, "epsilon": 1e-6}
+    @pytest.fixture(
+        scope="class",
+        params=[
+            RegularizedDualVQRSolver(verbose=True, learning_rate=0.5, epsilon=1e-5),
+            MLPRegularizedDualVQRSolver(verbose=True, learning_rate=0.5, epsilon=1e-5),
+            MLPRegularizedDualVQRSolver(
+                verbose=True,
+                learning_rate=0.5,
+                epsilon=1e-5,
+                hidden_layers=[2, 4],
+                skip=False,  # No skip, so output will have different k
+                num_epochs=1500,
+            ),
+        ],
+        ids=[
+            "rvqr_linear",
+            "rvqr_mlp",
+            "rvqr_mlp_change_k",
+        ],
+    )
+    def vqr_solver(self, request):
+        return request.param
 
     @pytest.fixture(
         scope="class",
         params=[
-            {"d": 1, "k": 5, "N": 500, "T": 20},
-            {"d": 2, "k": 7, "N": 500, "T": 20},
-            {"d": 3, "k": 3, "N": 500, "T": 10},
+            {"d": 1, "k": 5, "N": 1000, "T": 20},
+            {"d": 2, "k": 7, "N": 1000, "T": 20},
+            {"d": 3, "k": 3, "N": 1000, "T": 10},
         ],
         ids=[
             "d=1,k=5",
@@ -112,12 +144,12 @@ class TestVectorQuantileRegressor(object):
             "d=3,k=3",
         ],
     )
-    def vqr_fitted(self, request):
+    def vqr_fitted(self, request, vqr_solver):
         params = request.param
         N, d, k, T = params["N"], params["d"], params["k"], params["T"]
         X, Y = generate_linear_x_y_mvn_data(N, d=d, k=k)
 
-        vqr = VectorQuantileRegressor(n_levels=T, solver_opts=self.SOLVER_OPTS)
+        vqr = VectorQuantileRegressor(n_levels=T, solver=vqr_solver)
         vqr.fit(X, Y)
 
         return X, Y, vqr
@@ -187,31 +219,41 @@ class TestVectorQuantileRegressor(object):
         N, k = X.shape
         T = vqr.n_levels
 
-        cov = vqr.coverage(Y, alpha=0.05, x=np.median(X, axis=0))
+        cov = np.mean(
+            [
+                # Coverage for each single data point is just 0 or 1
+                vqr.coverage(y.reshape(1, d), alpha=0.05, x=x)
+                for (x, y) in zip(X, Y)
+            ]
+        )
+
         print(f"{cov=}")
         assert cov > (0.6 if d < 3 else 0.2)
 
     @pytest.mark.parametrize("i", range(5))
-    def test_monotonicity(self, i):
+    def test_monotonicity(self, i, vqr_solver):
         N = 1000
         d = 2
         k = 3
         T = 15
         X, Y = generate_linear_x_y_mvn_data(n=N, d=d, k=k)
 
-        vqr = VectorQuantileRegressor(n_levels=T, solver_opts=self.SOLVER_OPTS)
+        vqr = VectorQuantileRegressor(n_levels=T, solver=vqr_solver)
         vqr.fit(X, Y)
 
         _test_monotonicity(
             Us=vqr.quantile_grid,
             Qs=vqr.vector_quantiles(X=X[[i]])[0],
             T=vqr.n_levels,
-            eps=0.06,
         )
 
 
 def _test_monotonicity(
-    Us: Sequence[np.ndarray], Qs: Sequence[np.ndarray], T: int, eps: float
+    Us: Sequence[np.ndarray],
+    Qs: Sequence[np.ndarray],
+    T: int,
+    projection_tolerance: float = 0.0,
+    offending_proportion_limit: float = 0.005,
 ):
     # Only supports 2d for now.
     U1, U2 = Us
@@ -220,8 +262,8 @@ def _test_monotonicity(
     ii = jj = tuple(range(1, T))
 
     n, n_c = 0, 0
-    offending_points = []
-    offending_dists = []
+    projections = []
+    offending_projections = []
     for i0, j0 in it.product(ii, jj):
         u0 = np.array([U1[i0, j0], U2[i0, j0]])
         q0 = np.array([Q1[i0, j0], Q2[i0, j0]])
@@ -231,20 +273,27 @@ def _test_monotonicity(
 
             u1 = np.array([U1[i1, j1], U2[i1, j1]])
             q1 = np.array([Q1[i1, j1], Q2[i1, j1]])
+            du = u1 - u0
+            dq = q1 - q0
+            projection = np.dot(dq, du)
 
-            if np.dot(q1 - q0, u1 - u0) < -eps:
-                offending = (
-                    f"{(i0, j0)=}, {(i1, j1)=}, "
-                    f"{q1-q0=}, "
-                    f"{u1-u0=}, "
-                    f"{np.dot(q1-q0, u1-u0)=}"
-                )
-                offending_points.append(offending)
-                offending_dists.append(np.dot(q1 - q0, u1 - u0).item())
+            # normalize projection to [-1, 1]
+            # but only if it has any length (to prevent 0/0 -> NaN)
+            if np.abs(projection) > 0:
+                projection = projection / norm(dq) / norm(du)
+
+            assert not np.isnan(projection)
+            if projection < -projection_tolerance:
+                offending_projections.append(projection.item())
                 n_c += 1
 
-    if offending_dists:
-        print(offending_points, offending_dists)
-        print(f"max dist: {np.max(np.abs(offending_dists))}")
+            projections.append(projection)
 
-    assert len(offending_points) == 0, f"{n=}, {n_c=}, {n_c/n=:.2f}"
+    offending_proportion = n_c / n
+    if offending_projections:
+        q = [0.01, 0.1, 0.25, 0.5, 0.75, 0.9, 0.99]
+        print(f"err quantiles: {np.quantile(offending_projections, q=q)}")
+        print(f"all quantiles: {np.quantile(projections, q=q)}")
+        print(f"{n=}, {n_c=}, {n_c/n=}")
+
+    assert offending_proportion < offending_proportion_limit

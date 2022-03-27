@@ -1,20 +1,12 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from time import time
-from typing import Any, Dict, List, Union, Callable, Optional, Sequence
+from typing import List, Union, Callable, Optional, Sequence
 
-import cvxpy as cp
 import numpy as np
-import torch
 from numpy import ndarray
-from torch import tensor
 from numpy.typing import ArrayLike as Array
 from sklearn.utils import check_array
-from scipy.spatial.distance import cdist
-from torch.optim.lr_scheduler import ReduceLROnPlateau
-
-SIMILARITY_FN_INNER_PROD = lambda x, y: np.dot(x, y)
 
 
 class VectorQuantiles:
@@ -26,8 +18,8 @@ class VectorQuantiles:
     Should only be constructed by :class:`VQRSolver`s, not manually.
 
     Given a sample x of shape (1, k), the conditional d-dimensional vector quantiles
-    Y|X=x are given by
-    Y_hat = B @ x.T  + A.
+    Y|X=x are given by d/du [ B @ x.T  + A ].
+    We first calculate the regression targets Y_hat = B @ x.T  + A.
     This is an array of shape (T**d, 1).
     In order to obtain the d vector quantile surfaces (one for each dimension of Y),
     use the :obj:`decode_quantile_values` function on Y_hat.
@@ -42,6 +34,7 @@ class VectorQuantiles:
         A: Array,
         B: Optional[Array] = None,
         X_transform: Optional[Callable[[Array], Array]] = None,
+        k_in: Optional[int] = None,
     ):
         """
         :param U: Array of shape (T**d, d). Contains the d-dimensional grid on
@@ -52,9 +45,14 @@ class VectorQuantiles:
         :obj:`decode_quantile_values` function.
         :param B: Array of shape (T**d, k). Contains the  regression coefficients.
         Will be None if the input was an estimation problem (X=None) instead of a
-        regression problem.
+        regression problem. The k is the dimension of the covariates (X). If an
+        X_transform is provided, k corresponds to the dimension AFTER the
+        transformation.
         :param X_transform: Transformation to apply to covariates (X) for non-linear
-        VQR.
+        VQR. Must be provided together with k_in. The transformation is assumed to
+        take input of shape (N, k_in) and return output of shape (N, k).
+        :param k_in: Covariates input dimension of the X_transform.
+        If X_transform is None, must be None or zero.
         """
         # Validate dimensions
         assert all(x is not None for x in [T, d, U, A])
@@ -62,6 +60,7 @@ class VectorQuantiles:
         assert U.shape[0] == A.shape[0] == T ** d
         assert A.shape[1] == 1
         assert B is None or (B.ndim == 2 and B.shape[0] == T ** d)
+        assert (X_transform is not None and k_in) or (X_transform is None and not k_in)
 
         self._T = T
         self._d = d
@@ -70,6 +69,7 @@ class VectorQuantiles:
         self._B = B
         self._k = B.shape[1] if B is not None else 0
         self._X_transform = X_transform
+        self._k_in = k_in
 
     @property
     def is_conditional(self) -> bool:
@@ -90,15 +90,19 @@ class VectorQuantiles:
         if X is not None and not self.is_conditional:
             raise ValueError(f"VQR not conditional but covariates were supplied")
 
-        if not self.is_conditional:
+        if not self.is_conditional or X is None:
             Y_hats = [self._A]
         else:
-            if X is None:
-                X = np.zeros(shape=(1, self._k))
-
             check_array(X, ensure_2d=True, allow_nd=False)
 
             if self._X_transform is not None:
+                N, k_in = X.shape
+                if k_in != self._k_in:
+                    raise ValueError(
+                        f"VQR model was trained with X_transform expecting k_in"
+                        f"={self._k_in}, but got covariates with {k_in=} features."
+                    )
+
                 X = self._X_transform(X)
 
             N, k = X.shape
@@ -144,9 +148,12 @@ class VectorQuantiles:
     @property
     def dim_x(self) -> int:
         """
-        :return: The dimension k, of the covariates (X).
+        :return: The dimension k, of the covariates (X) which are expected to be
+        passed in to obtain conditional quantiles.
         """
-        return self._k
+        # If there was an X_transform, the input dimension of that is what we expect to
+        # receive.
+        return self._k_in or self._k
 
 
 class VQRSolver(ABC):
@@ -158,22 +165,6 @@ class VQRSolver(ABC):
         Vector quantile regression and optimal transport, from theory to numerics.
         Empirical Econometrics, 2020.
     """
-
-    def __init__(
-        self,
-        similarity_fn: Union[str, Callable] = SIMILARITY_FN_INNER_PROD,
-        verbose: bool = False,
-        **solver_opts,
-    ):
-        """
-        :param similarity_fn: A scalar function to use in order to compute pairwise
-            similarity/distance between the data (Y) and the quantile-grid (U).
-            Should accept to vectors in dimension d and return a scalar.
-        :param solver_opts: Kwargs for underlying solver. Implementation specific.
-        """
-        self._similarity_fn = similarity_fn
-        self._solver_opts = solver_opts
-        self._verbose = verbose
 
     @abstractmethod
     def solve_vqr(
@@ -197,231 +188,6 @@ class VQRSolver(ABC):
         :return: A VQRSolution containing the vector quantiles and regression coefficients.
         """
         pass
-
-
-class RVQRDualLSESolver(VQRSolver):
-    """
-    Solves the Regularized Dual formulation of Vector Quantile Regression using
-    torch with SGD as a solver backend.
-    """
-
-    def __init__(
-        self,
-        epsilon: float = 0.01,
-        num_epochs: int = 1000,
-        learning_rate: float = 0.9,
-        verbose: bool = False,
-        **solver_opts,
-    ):
-        super().__init__(
-            similarity_fn=SIMILARITY_FN_INNER_PROD, verbose=verbose, **solver_opts
-        )
-        self._epsilon = epsilon
-        self._num_epochs = num_epochs
-        self._lr = learning_rate
-
-    def solve_vqr(self, T: int, Y: Array, X: Optional[Array] = None) -> VectorQuantiles:
-        N = len(Y)
-        Y = np.reshape(Y, (N, -1))
-
-        ones = np.ones(shape=(N, 1))
-        if X is None:
-            X = ones
-        else:
-            X = np.reshape(X, (N, -1))
-            X = np.concatenate([ones, X], axis=1)
-
-        k: int = X.shape[1] - 1  # Number of features (can be zero)
-        d: int = Y.shape[1]  # number or target dimensions
-
-        X_bar = np.mean(X, axis=0, keepdims=True)  # (1, k+1)
-
-        # All quantile levels
-        Td: int = T ** d
-        u: Array = quantile_levels(T)
-
-        # Quantile levels grid: list of grid coordinate matrices, one per dimension
-        U_grids: Sequence[Array] = np.meshgrid(
-            *([u] * d)
-        )  # d arrays of shape (T,..., T)
-        # Stack all nd-grid coordinates into one long matrix, of shape (T**d, d)
-        U: Array = np.stack([U_grid.reshape(-1) for U_grid in U_grids], axis=1)
-        assert U.shape == (Td, d)
-
-        # Pairwise distances (similarity)
-        S: Array = cdist(U, Y, self._similarity_fn)  # (Td, d) and (N, d)
-
-        one_N = np.ones([N, 1])
-        one_T = np.ones([Td, 1])
-
-        #####
-        dtype = torch.float32
-        Y_th = tensor(Y, dtype=dtype)
-        U_th = tensor(U, dtype=dtype)
-        mu = tensor(one_T / Td, dtype=dtype)
-        nu = tensor(one_N / N, dtype=dtype)
-        X_th = tensor(X, dtype=dtype)
-        b = torch.zeros(*(Td, X.shape[-1] - 1), dtype=dtype, requires_grad=True)
-        psi_init = 0.1 * torch.ones(N, dtype=dtype)
-        psi = psi_init.clone().detach().requires_grad_(True)
-        epsilon = self._epsilon
-        num_epochs = self._num_epochs
-
-        optimizer = torch.optim.SGD(
-            params=[b, psi],
-            lr=self._lr,
-            momentum=0.9,
-            nesterov=True,
-            weight_decay=0.0,
-        )
-
-        scheduler = ReduceLROnPlateau(
-            optimizer=optimizer,
-            mode="min",
-            factor=0.5,
-            patience=100,
-            threshold=5 * 0.01,  # loss needs to decrease by x% every patience epochs
-            threshold_mode="rel",
-            min_lr=self._lr * 0.5 ** 10,
-            verbose=self._verbose,
-        )
-        UY = U_th @ Y_th.T
-
-        def _forward():
-            pass
-
-        total_time, last_print_time = 0, time()
-        for epoch_idx in range(num_epochs):
-            epoch_start_time = time()
-
-            optimizer.zero_grad()
-            bX = b @ X_th[:, 1:].T
-            max_arg = UY - bX - psi.reshape(1, -1)
-            phi = (
-                epsilon
-                * torch.log(
-                    torch.sum(
-                        torch.exp(
-                            (max_arg - torch.max(max_arg, dim=1)[0][:, None]) / epsilon
-                        ),
-                        dim=1,
-                    )
-                )
-                + torch.max(max_arg, dim=1)[0]
-            )
-            obj = psi @ nu + phi @ mu
-            obj.backward()
-            optimizer.step()
-            total_loss = obj.item()
-            constraint_loss = (phi @ mu).item()
-
-            scheduler.step(total_loss)
-
-            epoch_elapsed_time = time() - epoch_start_time
-            total_time += epoch_elapsed_time
-            if self._verbose and (epoch_idx % 100 == 0 or epoch_idx == num_epochs - 1):
-                elapsed = time() - last_print_time
-                print(
-                    f"{epoch_idx=}, {total_loss=:.6f} {constraint_loss=:.6f}, "
-                    f"{elapsed=:.2f}s"
-                )
-                last_print_time = time()
-
-        max_arg = UY - bX - psi.reshape(1, -1)
-        phi = (
-            epsilon
-            * torch.log(
-                torch.sum(
-                    torch.exp(
-                        (max_arg - torch.max(max_arg, dim=1)[0][:, None]) / epsilon
-                    ),
-                    dim=1,
-                )
-            )
-            + torch.max(max_arg, dim=1)[0]
-        )
-
-        A = phi.detach().numpy()[:, None]
-        if k == 0:
-            B = None
-        else:
-            B = b.detach().numpy()
-
-        if self._verbose:
-            print(f"{total_time=:.2f}s")
-        return VectorQuantiles(T, d, U, A, B)
-
-
-class CVXVQRSolver(VQRSolver):
-    """
-    Solves the Optimal Transport formulation of Vector Quantile Regression using
-    CVXPY as a solver backend.
-
-    See:
-        Carlier, Chernozhukov, Galichon. Vector quantile regression:
-        An optimal transport approach,
-        Annals of Statistics, 2016
-    """
-
-    def __init__(self, **cvx_solver_opts):
-        super().__init__(similarity_fn=SIMILARITY_FN_INNER_PROD, **cvx_solver_opts)
-
-    def solve_vqr(self, T: int, Y: Array, X: Optional[Array] = None) -> VectorQuantiles:
-        N = len(Y)
-        Y = np.reshape(Y, (N, -1))
-
-        ones = np.ones(shape=(N, 1))
-        if X is None:
-            X = ones
-        else:
-            X = np.reshape(X, (N, -1))
-            X = np.concatenate([ones, X], axis=1)
-
-        k: int = X.shape[1] - 1  # Number of features (can be zero)
-        d: int = Y.shape[1]  # number or target dimensions
-
-        X_bar = np.mean(X, axis=0, keepdims=True)  # (1, k+1)
-
-        # All quantile levels
-        Td: int = T ** d
-        u: Array = quantile_levels(T)
-
-        # Quantile levels grid: list of grid coordinate matrices, one per dimension
-        U_grids: Sequence[Array] = np.meshgrid(
-            *([u] * d)
-        )  # d arrays of shape (T,..., T)
-        # Stack all nd-grid coordinates into one long matrix, of shape (T**d, d)
-        U: Array = np.stack([U_grid.reshape(-1) for U_grid in U_grids], axis=1)
-        assert U.shape == (Td, d)
-
-        # Pairwise distances (similarity)
-        S: Array = cdist(U, Y, self._similarity_fn)  # (Td, d) and (N, d)
-
-        # Optimization problem definition: optimal transport formulation
-        one_N = np.ones([N, 1])
-        one_T = np.ones([Td, 1])
-        Pi = cp.Variable(shape=(Td, N))
-        Pi_S = cp.sum(cp.multiply(Pi, S))
-        constraints = [
-            Pi @ X == 1 / Td * one_T @ X_bar,
-            Pi >= 0,
-            one_T.T @ Pi == 1 / N * one_N.T,
-        ]
-        problem = cp.Problem(objective=cp.Maximize(Pi_S), constraints=constraints)
-
-        # Solve the problem
-        problem.solve(**self._solver_opts)
-
-        # Obtain the lagrange multipliers Alpha (A) and Beta (B)
-        AB: Array = constraints[0].dual_value
-        AB = np.reshape(AB, newshape=[Td, k + 1])
-        A = AB[:, [0]]  # A is (T**d, 1)
-        if k == 0:
-            B = None
-        else:
-            B = AB[:, 1:]  # B is (T**d, k)
-
-        return VectorQuantiles(T, d, U, A, B)
 
 
 def quantile_levels(T: int) -> ndarray:
