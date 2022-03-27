@@ -37,6 +37,8 @@ class RegularizedDualVQRSolver(VQRSolver):
         learning_rate: float = 0.9,
         verbose: bool = False,
         nn_init: Optional[Callable[[int], torch.nn.Module]] = None,
+        batchsize_y: Optional[int] = None,
+        batchsize_u: Optional[int] = None,
         full_precision: bool = False,
         gpu: bool = False,
         device_num: int = 1,
@@ -73,6 +75,9 @@ class RegularizedDualVQRSolver(VQRSolver):
             self._nn_init = lambda k: torch.nn.Identity()
         else:
             self._nn_init = nn_init
+
+        self._batchsize_y = batchsize_y
+        self._batchsize_u = batchsize_u
 
     def solve_vqr(self, T: int, Y: Array, X: Optional[Array] = None) -> VectorQuantiles:
         start_time = time()
@@ -171,9 +176,15 @@ class RegularizedDualVQRSolver(VQRSolver):
             position=0,
             leave=True,
         ) as pbar:
-            self._train_fullbatch(
-                Y_th, U_th, psi, X_th, b, net, optimizer, scheduler, pbar
-            )
+            if self._batchsize_y or self._batchsize_u:
+                self._train_minibatch(
+                    Y_th, U_th, psi, X_th, b, net, optimizer, scheduler, pbar
+                )
+
+            else:
+                self._train_fullbatch(
+                    Y_th, U_th, psi, X_th, b, net, optimizer, scheduler, pbar
+                )
 
         # Finalize phi and calculate VQR coefficients A and B
         phi = self._evaluate_phi(Y_th, U_th, psi, epsilon, X_th, b, net, UY=None)
@@ -214,10 +225,8 @@ class RegularizedDualVQRSolver(VQRSolver):
     ):
         N = len(Y)
         Td = len(U)
-        one_N = np.ones((N, 1))
-        one_T = np.ones((Td, 1))
-        mu = tensor(one_T / Td, **self._dtd)
-        nu = tensor(one_N / N, **self._dtd)
+        mu = torch.ones(Td, 1, **self._dtd) / Td
+        nu = torch.ones(N, 1, **self._dtd) / N
 
         UY = U @ Y.T  # (T^d, N)
 
@@ -239,6 +248,87 @@ class RegularizedDualVQRSolver(VQRSolver):
                 total_loss=objective.item(),
                 constraint_loss=constraint_loss.item(),
                 lr=optimizer.param_groups[0]["lr"],
+                refresh=False,
+            )
+
+    def _train_minibatch(
+        self,
+        Y: Tensor,
+        U: Tensor,
+        psi: Tensor,
+        X: Tensor,
+        b: Tensor,
+        net: torch.nn.Module,
+        optimizer: Optimizer,
+        scheduler: Any,
+        pbar: tqdm,
+    ):
+        N = len(Y)
+        Td = len(U)
+        epsilon = self._epsilon
+
+        def _num_batches(num_samples, batch_size):
+            if not batch_size:
+                batch_size = num_samples
+            return int(np.ceil(num_samples / batch_size))
+
+        def _yield_batches(num_samples, batch_size):
+            if not batch_size:
+                batch_size = num_samples
+
+            while True:
+                idx = np.random.permutation(num_samples)
+                for batch_idx in range(_num_batches(num_samples, batch_size)):
+                    batch_slice = idx[
+                        batch_size
+                        * batch_idx : min(batch_size * (batch_idx + 1), num_samples)
+                    ]
+                    yield batch_slice
+
+        num_batches_xy = _num_batches(N, self._batchsize_y)
+        num_batches_u = _num_batches(Td, self._batchsize_u)
+        total_batches = max(num_batches_xy, num_batches_u)
+
+        for epoch_idx in range(self._num_epochs):
+
+            total_objective = tensor([0.0], **self._dtd)
+
+            for batch_idx, xy_slice, u_slice in zip(
+                range(total_batches),
+                _yield_batches(N, self._batchsize_y),
+                _yield_batches(Td, self._batchsize_u),
+            ):
+                Y_batch = Y[xy_slice]
+                U_batch = U[u_slice]
+                psi_batch = psi[xy_slice, :]
+                mu_batch = torch.ones(len(U_batch), 1, **self._dtd) / len(U_batch)
+                nu_batch = torch.ones(len(Y_batch), 1, **self._dtd) / len(Y_batch)
+                X_batch, b_batch = None, None
+                if X is not None:
+                    X_batch = X[xy_slice]
+                    b_batch = b[u_slice, :]
+
+                # Optimize
+                optimizer.zero_grad()
+                phi_batch = self._evaluate_phi(
+                    Y_batch, U_batch, psi_batch, epsilon, X_batch, b_batch, net, UY=None
+                )
+                constraint_loss = phi_batch.T @ mu_batch
+                objective = psi_batch.T @ nu_batch + constraint_loss
+                objective.backward()
+                optimizer.step()
+
+                total_objective = total_objective + objective
+
+            total_objective /= total_batches
+            scheduler.step(total_objective)
+
+            # Update progress and stats
+            pbar.update(1)
+            pbar.set_postfix(
+                total_loss=total_objective.item(),
+                lr=optimizer.param_groups[0]["lr"],
+                total_batches=total_batches,
                 refresh=False,
             )
 
