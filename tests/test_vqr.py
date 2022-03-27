@@ -16,8 +16,22 @@ from vqr.solvers.dual.regularized_lse import (
 
 
 class TestVectorQuantileEstimator(object):
-    SOLVER = "regularized_dual"
-    SOLVER_OPTS = {"verbose": True, "learning_rate": 0.1, "epsilon": 1e-6}
+    @pytest.fixture(
+        scope="class",
+        params=[
+            (
+                "regularized_dual",
+                {"verbose": True, "learning_rate": 0.1, "epsilon": 1e-6},
+            ),
+            ("cvx_primal", {"verbose": True}),
+        ],
+        ids=[
+            "rvqr_linear",
+            "cvx_primal",
+        ],
+    )
+    def vqr_solver_opts(self, request):
+        return request.param
 
     @pytest.fixture(
         scope="class",
@@ -32,14 +46,15 @@ class TestVectorQuantileEstimator(object):
             "d=3",
         ],
     )
-    def vqe_fitted(self, request):
+    def vqe_fitted(self, request, vqr_solver_opts):
         params = request.param
+        solver, solver_opts = vqr_solver_opts
         d, N, T = params["d"], params["N"], params["T"]
         X, Y = generate_mvn_data(N, d, k=1)
         vqe = VectorQuantileEstimator(
             n_levels=T,
-            solver=self.SOLVER,
-            solver_opts=self.SOLVER_OPTS,
+            solver=solver,
+            solver_opts=solver_opts,
         )
         vqe.fit(Y)
         return Y, vqe
@@ -89,14 +104,16 @@ class TestVectorQuantileEstimator(object):
             _ = vq.vector_quantiles()
 
     @pytest.mark.repeat(5)
-    def test_monotonicity(self):
+    def test_monotonicity(self, vqr_solver_opts):
+        solver, solver_opts = vqr_solver_opts
+
         T = 15
         N = 1000
         d = 2
 
         _, Y = generate_mvn_data(n=N, d=d, k=1)
         vqe = VectorQuantileEstimator(
-            n_levels=T, solver=self.SOLVER, solver_opts=self.SOLVER_OPTS
+            n_levels=T, solver=solver, solver_opts=solver_opts
         )
         vqe.fit(Y)
 
