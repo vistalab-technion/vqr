@@ -3,13 +3,14 @@ from __future__ import annotations
 import sys
 import logging
 from time import time
-from typing import Union, Callable, Optional, Sequence
+from typing import Any, Union, Callable, Optional, Sequence
 from functools import partial
 
 import numpy as np
 import torch
-from torch import tensor
+from torch import Tensor, tensor
 from tqdm.auto import tqdm
+from torch.optim import Optimizer
 from numpy.typing import ArrayLike as Array
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
@@ -66,6 +67,8 @@ class RegularizedDualVQRSolver(VQRSolver):
         self._device = (
             torch.device(f"cuda:{device_num}") if gpu else torch.device("cpu")
         )
+        self._dtd = dict(dtype=self._dtype, device=self._device)
+
         if nn_init is None:
             self._nn_init = lambda k: torch.nn.Identity()
         else:
@@ -95,18 +98,12 @@ class RegularizedDualVQRSolver(VQRSolver):
         assert U.shape == (Td, d)
 
         #####
-        dtd = dict(dtype=self._dtype, device=self._device)
+        dtd = self._dtd
         epsilon = self._epsilon
         num_epochs = self._num_epochs
 
-        one_N = np.ones((N, 1))
-        one_T = np.ones((Td, 1))
         Y_th = tensor(Y, **dtd)
         U_th = tensor(U, **dtd)
-        mu = tensor(one_T / Td, **dtd)
-        nu = tensor(one_N / N, **dtd)
-
-        UY = U_th @ Y_th.T  # (T^d, N)
         psi = torch.full(size=(N, 1), fill_value=0.1, requires_grad=True, **dtd)
         X_th = None
         b = None
@@ -164,17 +161,6 @@ class RegularizedDualVQRSolver(VQRSolver):
             verbose=False,
         )
 
-        def _evaluate_phi():
-            bX = b @ net(X_th).T if k > 0 else 0
-            max_arg = UY - bX - psi.reshape(1, -1)  # (T^d,N)-(T^d,N)-(1,N) = (T^d, N)
-            max_val = torch.max(max_arg, dim=1, keepdim=True)[0]  # (T^d, 1)
-            phi_ = (
-                epsilon
-                * torch.log(torch.sum(torch.exp((max_arg - max_val) / epsilon), dim=1))
-                + max_val[:, 0]
-            )
-            return phi_.reshape(-1, 1)  # (T^d, 1)
-
         _LOG.log(log_level, f"{self}: Solving with {N=}, {T=}, {d=}, {k=}, {k_out=}")
         with tqdm(
             total=num_epochs,
@@ -185,27 +171,12 @@ class RegularizedDualVQRSolver(VQRSolver):
             position=0,
             leave=True,
         ) as pbar:
-            for epoch_idx in range(num_epochs):
-                # Optimize
-                optimizer.zero_grad()
-                phi = _evaluate_phi()
-                constraint_loss = phi.T @ mu
-                objective = psi.T @ nu + constraint_loss
-                objective.backward()
-                optimizer.step()
-                scheduler.step(objective)
-
-                # Update progress and stats
-                pbar.update(1)
-                pbar.set_postfix(
-                    total_loss=objective.item(),
-                    constraint_loss=constraint_loss.item(),
-                    lr=optimizer.param_groups[0]["lr"],
-                    refresh=False,
-                )
+            self._train_fullbatch(
+                Y_th, U_th, psi, X_th, b, net, optimizer, scheduler, pbar
+            )
 
         # Finalize phi and calculate VQR coefficients A and B
-        phi = _evaluate_phi()
+        phi = self._evaluate_phi(Y_th, U_th, psi, epsilon, X_th, b, net, UY=None)
         A = phi.detach().cpu().numpy()
         B = None
         x_transform_fn = None
@@ -228,6 +199,87 @@ class RegularizedDualVQRSolver(VQRSolver):
         X_th = torch.from_numpy(X).to(dtype=dtype)
         with torch.no_grad():
             return net(X_th).numpy()
+
+    def _train_fullbatch(
+        self,
+        Y: Tensor,
+        U: Tensor,
+        psi: Tensor,
+        X: Tensor,
+        b: Tensor,
+        net: torch.nn.Module,
+        optimizer: Optimizer,
+        scheduler: Any,
+        pbar: tqdm,
+    ):
+        N = len(Y)
+        Td = len(U)
+        one_N = np.ones((N, 1))
+        one_T = np.ones((Td, 1))
+        mu = tensor(one_T / Td, **self._dtd)
+        nu = tensor(one_N / N, **self._dtd)
+
+        UY = U @ Y.T  # (T^d, N)
+
+        epsilon = self._epsilon
+        for epoch_idx in range(self._num_epochs):
+
+            # Optimize
+            optimizer.zero_grad()
+            phi = self._evaluate_phi(Y, U, psi, epsilon, X, b, net, UY)
+            constraint_loss = phi.T @ mu
+            objective = psi.T @ nu + constraint_loss
+            objective.backward()
+            optimizer.step()
+            scheduler.step(objective)
+
+            # Update progress and stats
+            pbar.update(1)
+            pbar.set_postfix(
+                total_loss=objective.item(),
+                constraint_loss=constraint_loss.item(),
+                lr=optimizer.param_groups[0]["lr"],
+                refresh=False,
+            )
+
+    @staticmethod
+    def _evaluate_phi(
+        Y: Tensor,
+        U: Tensor,
+        psi: Tensor,
+        epsilon: float,
+        X: Tensor,
+        b: Tensor,
+        net: torch.nn.Module,
+        UY: Optional[Tensor] = None,
+    ):
+        """
+        Calculates the phi optimization variable of the VQR objective.
+
+        Phi is defined for quantile level i as follows:
+            phi_i = max_j { u_i y_j - b_i x_j - psi_j }
+
+        This implementation uses a log-sum-exp reduction with
+        epsilon-smoothing instead of taking max_j.
+        """
+        if UY is None:
+            UY = U @ Y.T  # (T^d, N)
+
+        bX = 0
+        if X is not None:
+            bX = b @ net(X).T
+
+        max_arg = UY - bX - psi.reshape(1, -1)  # (T^d,N)-(T^d,N)-(1,N) = (T^d, N)
+        max_val = torch.max(max_arg, dim=1, keepdim=True)[0]  # (T^d, 1)
+
+        phi = (
+            epsilon
+            * torch.log(torch.sum(torch.exp((max_arg - max_val) / epsilon), dim=1))
+            + max_val[:, 0]
+        )
+
+        # TODO: Try with torch.logsumexp()
+        return phi.reshape(-1, 1)  # (T^d, 1)
 
     def __repr__(self):
         return f"{self.__class__.__name__}(eps={self._epsilon:.0e})"
