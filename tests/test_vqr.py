@@ -128,12 +128,23 @@ class TestVectorQuantileRegressor(object):
     @pytest.fixture(
         scope="class",
         params=[
-            RegularizedDualVQRSolver(verbose=True, learning_rate=0.5, epsilon=1e-5),
-            MLPRegularizedDualVQRSolver(verbose=True, learning_rate=0.5, epsilon=1e-5),
+            RegularizedDualVQRSolver(
+                verbose=True,
+                learning_rate=0.5,
+                epsilon=1e-9,
+            ),
+            RegularizedDualVQRSolver(
+                verbose=True,
+                learning_rate=0.5,
+                epsilon=1e-9,
+                batchsize_y=1000,
+                batchsize_u=100,
+            ),
+            MLPRegularizedDualVQRSolver(verbose=True, learning_rate=0.5, epsilon=1e-9),
             MLPRegularizedDualVQRSolver(
                 verbose=True,
                 learning_rate=0.5,
-                epsilon=1e-5,
+                epsilon=1e-9,
                 hidden_layers=[2, 4],
                 skip=False,  # No skip, so output will have different k
                 num_epochs=1500,
@@ -141,6 +152,7 @@ class TestVectorQuantileRegressor(object):
         ],
         ids=[
             "rvqr_linear",
+            "rvqr_linear_batches",
             "rvqr_mlp",
             "rvqr_mlp_change_k",
         ],
