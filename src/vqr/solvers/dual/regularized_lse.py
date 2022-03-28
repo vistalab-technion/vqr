@@ -198,8 +198,8 @@ class RegularizedDualVQRSolver(VQRSolver):
         Y_th = Y_th.cpu()
         U_th = U_th.cpu()
         psi = psi.cpu()
-        X_th = X_th.cpu()
-        b = b.cpu()
+        X_th = X_th.cpu() if X_th is not None else None
+        b = b.cpu() if b is not None else None
 
         # Finalize phi and calculate VQR coefficients A and B
         phi = self._evaluate_phi_inference(
@@ -400,7 +400,7 @@ class RegularizedDualVQRSolver(VQRSolver):
         idx = np.arange(Td)
         Y = Y.to(self._device)
         psi = psi.to(self._device)
-        X = X.to(self._device)
+        X = X.to(self._device) if X is not None else None
 
         for batch_idx in range(num_batches_us):
             batch_slice = idx[
@@ -408,7 +408,7 @@ class RegularizedDualVQRSolver(VQRSolver):
                 * batch_idx : min(self._inference_batch_size * (batch_idx + 1), Td)
             ]
             U_batch = U[batch_slice].to(self._device)
-            b_batch = b[batch_slice].to(self._device)
+            b_batch = b[batch_slice].to(self._device) if b is not None else None
             phi = self._evaluate_phi(
                 Y,
                 U_batch,
