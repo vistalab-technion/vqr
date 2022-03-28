@@ -1,38 +1,42 @@
 name: vqr
 channels:
   - conda-forge
-  - pytorch
   - defaults
 dependencies:
-  # Dev deps
+  # Development deps
   - black
+  - click
+  - cmake # needed to compile cvxpy when installed via pip
+  - cudatoolkit-dev # comment this out on osx-arm64
   - ipython
   - isort
   - jupyter
   - jupyterlab
   - jupyterlab-spellchecker
+  - llvm-openmp
   - matplotlib
   - nodejs
+  - pandas
+  - pip
+  - pot
   - pre-commit
   - pytest
   - pytest-benchmark
   - pytest-cov
   - pytest-repeat
   - pytest-xdist
-  # Deps
-  - cvxpy
-  - numpy
-  - pandas
-  - pip
-  - pot
   - python=3.9.*
-  - pytorch>1.9
   - requests
-  - scikit-learn
-  - scipy
-  - tqdm
+
+  # VQR lib
+  # control pytorch version (won't be installed again by pip install -e .)
+  - pytorch=1.10.*
   - pip:
-    - -e . # install this package
+    # install vqp as a lib with pip (its deps are specified in setup.cfg)
+    # Note: For KeOps to work, after installing this env run:
+    # conda env config vars set CPATH=${CONDA_PREFIX}/include:${CPATH}
+    - -e .
+
 platforms:
   - osx-64
   - osx-arm64
