@@ -6,7 +6,7 @@ import pytest
 from _pytest.fixtures import FixtureRequest
 
 from tests import TESTS_OUT_DIR
-from vqr.main import setup_logging
+from tests.logging import setup_logging
 
 setup_logging()
 
