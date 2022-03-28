@@ -47,7 +47,7 @@ class CVXVQRSolver(VQRSolver):
         X_bar = np.mean(X, axis=0, keepdims=True)  # (1, k+1)
 
         # All quantile levels
-        Td: int = T ** d
+        Td: int = T**d
         u: Array = quantile_levels(T)
 
         # Quantile levels grid: list of grid coordinate matrices, one per dimension

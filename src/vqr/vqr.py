@@ -57,9 +57,9 @@ class VectorQuantiles:
         # Validate dimensions
         assert all(x is not None for x in [T, d, U, A])
         assert U.ndim == 2 and A.ndim == 2
-        assert U.shape[0] == A.shape[0] == T ** d
+        assert U.shape[0] == A.shape[0] == T**d
         assert A.shape[1] == 1
-        assert B is None or (B.ndim == 2 and B.shape[0] == T ** d)
+        assert B is None or (B.ndim == 2 and B.shape[0] == T**d)
         assert (X_transform is not None and k_in) or (X_transform is None and not k_in)
 
         self._T = T
@@ -225,7 +225,7 @@ def decode_quantile_values(T: int, d: int, Y_hat: ndarray) -> Sequence[ndarray]:
         pad_with[axis] = (1, 0)
         dQ_du = np.pad(dQ_du, pad_width=pad_with, mode="edge")
 
-        Q_functions[d - 1 - axis] = dQ_du * T ** 2
+        Q_functions[d - 1 - axis] = dQ_du * T**2
 
     return tuple(Q_functions)
 

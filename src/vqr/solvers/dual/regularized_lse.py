@@ -100,7 +100,7 @@ class RegularizedDualVQRSolver(VQRSolver):
         k: int = X.shape[1] if X is not None else 0  # Number of features (can be zero)
 
         # All quantile levels
-        Td: int = T ** d
+        Td: int = T**d
 
         # Quantile levels grid: list of grid coordinate matrices, one per dimension
         # d arrays of shape (T,..., T)
@@ -170,7 +170,7 @@ class RegularizedDualVQRSolver(VQRSolver):
             patience=100,
             threshold=5 * 0.01,  # loss needs to decrease by x% every patience epochs
             threshold_mode="rel",
-            min_lr=self._lr * 0.5 ** 10,
+            min_lr=self._lr * 0.5**10,
             verbose=False,
         )
 
