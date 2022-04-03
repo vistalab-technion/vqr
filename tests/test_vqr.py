@@ -1,3 +1,4 @@
+import random
 import itertools as it
 from typing import Sequence
 
@@ -87,6 +88,7 @@ class TestVectorQuantileEstimator(object):
             ax.legend()
             fig.savefig(test_out_dir.joinpath("vqe_sample.pdf"), bbox_inches="tight")
 
+    @pytest.mark.flaky(reruns=1)
     def test_coverage(self, vqe_fitted, test_out_dir):
         Y, vqe = vqe_fitted
         N, d = Y.shape
@@ -103,7 +105,7 @@ class TestVectorQuantileEstimator(object):
         with pytest.raises(NotFittedError):
             _ = vq.vector_quantiles()
 
-    @pytest.mark.repeat(5)
+    @pytest.mark.flaky(reruns=1)
     def test_monotonicity(self, vqr_solver_opts):
         solver, solver_opts = vqr_solver_opts
 
@@ -242,6 +244,7 @@ class TestVectorQuantileRegressor(object):
             ax.legend()
             fig.savefig(test_out_dir.joinpath("vqr_sample.pdf"), bbox_inches="tight")
 
+    @pytest.mark.flaky(reruns=1)
     def test_coverage(self, vqr_fitted, test_out_dir):
         X, Y, vqr = vqr_fitted
         N, d = Y.shape
@@ -259,8 +262,8 @@ class TestVectorQuantileRegressor(object):
         print(f"{cov=}")
         assert cov > (0.6 if d < 3 else 0.2)
 
-    @pytest.mark.parametrize("i", range(5))
-    def test_monotonicity(self, i, vqr_solver):
+    @pytest.mark.flaky(reruns=1)
+    def test_monotonicity(self, vqr_solver):
         N = 1000
         d = 2
         k = 3
@@ -269,6 +272,8 @@ class TestVectorQuantileRegressor(object):
 
         vqr = VectorQuantileRegressor(n_levels=T, solver=vqr_solver)
         vqr.fit(X, Y)
+
+        i = random.randrange(0, N)
 
         _test_monotonicity(
             Us=vqr.quantile_grid,
