@@ -1,19 +1,20 @@
 import ot
+import numpy as np
 import torch
 from numpy import array, zeros
-from torch import tensor
+from torch import Tensor, tensor
+from matplotlib import cm
 from matplotlib import pyplot as plt
 from numpy.random import randint
 
 from vqr.api import VectorQuantileRegressor
 from experiments.utils import w2_pot, w2_keops
+from experiments.utils import kde_keops
 from experiments.data.nonlinear_data import get_k_dim_banana
 from vqr.solvers.dual.regularized_lse import (
     RegularizedDualVQRSolver,
     MLPRegularizedDualVQRSolver,
 )
-
-GPU_DEVICE_NUM = 7
 
 
 def w2(Y_gt_, Y_est_, emd: bool = False):
@@ -23,16 +24,58 @@ def w2(Y_gt_, Y_est_, emd: bool = False):
         return w2_keops(Y_gt_, Y_est_, gpu_device=GPU_DEVICE_NUM)
 
 
-n = 1000000
+def get_kde(Y_: Tensor, sigma_: float):
+    res = 100
+    xticks = np.linspace(-3, 3, res + 1)[:-1] + 0.5 / res
+    yticks = np.linspace(-0.5, 2.5, res + 1)[:-1] + 0.5 / res
+    kde_map = kde_keops(
+        x1=Y_,
+        xticks=xticks,
+        yticks=yticks,
+        sigma=sigma_,
+        device=f"cuda:{GPU_DEVICE_NUM}" if GPU_DEVICE_NUM is not None else "cpu",
+    )
+    torch.cuda.empty_cache()
+    return kde_map
+
+
+def plot_kde(kde_map_1, kde_map_2):
+    fig, axes = plt.subplots(1, 2, figsize=(10, 5))
+    axes[0].imshow(
+        -kde_map_1,
+        interpolation="bilinear",
+        origin="lower",
+        # vmin=-10,
+        # vmax=10,
+        cmap=cm.RdPu,
+        extent=(0, 1, 0, 1),
+    )
+    axes[1].imshow(
+        -kde_map_2,
+        interpolation="bilinear",
+        origin="lower",
+        # vmin=-10,
+        # vmax=10,
+        cmap=cm.RdPu,
+        extent=(0, 1, 0, 1),
+    )
+    l1 = np.mean(np.abs(kde_map_1 - kde_map_2))
+    plt.title(f"L1 distance: {l1}")
+    plt.show()
+
+
+n = 100000
 d = 2
 k = 1
 T = 50
-num_epochs = 10000
+num_epochs = 20000
 linear = True
+sigma = 0.1
+GPU_DEVICE_NUM = 3
 
 Y1, Y2, X, _ = get_k_dim_banana(n=n, k=k, d=d, is_nonlinear=True)
 Y = torch.stack([Y1, Y2], dim=1)
-#
+
 Y_15_1, Y_15_2, _, _ = get_k_dim_banana(
     n=n, k=k, d=d, is_nonlinear=True, X=tensor(array([[1.5]]), dtype=torch.float32)
 )
@@ -53,8 +96,8 @@ if linear:
         gpu=True,
         full_precision=False,
         device_num=GPU_DEVICE_NUM,
-        batchsize_y=50000,
-        batchsize_u=2000,
+        batchsize_y=100000,
+        batchsize_u=2500,
         inference_batch_size=100,
     )
 else:
@@ -68,8 +111,8 @@ else:
         batchnorm=True,
         hidden_layers=(1000, 1000, 1000),
         device_num=GPU_DEVICE_NUM,
-        batchsize_y=50000,
-        batchsize_u=2000,
+        batchsize_y=100000,
+        batchsize_u=2500,
         inference_batch_size=100,
     )
 vqr_est = VectorQuantileRegressor(n_levels=T, solver=solver)
@@ -117,6 +160,28 @@ Y_nl_est_given_X25[:, 1] = Q2_25[u1, u2]
 w2_15 = w2(torch.stack([Y_15_1, Y_15_2]).numpy().T, Y_nl_est_given_X15)
 w2_20 = w2(torch.stack([Y_20_1, Y_20_2]).numpy().T, Y_nl_est_given_X20)
 w2_25 = w2(torch.stack([Y_25_1, Y_25_2]).numpy().T, Y_nl_est_given_X25)
+
+# Y | X = 1.5
+kde_15_orig = get_kde(torch.stack([Y_15_1, Y_15_2], dim=1), sigma_=sigma)
+kde_15_est = get_kde(
+    torch.tensor(Y_nl_est_given_X15, dtype=torch.float32), sigma_=sigma
+)
+plot_kde(kde_15_orig, kde_15_est)
+
+# Y | X = 2.0
+kde_20_orig = get_kde(torch.stack([Y_20_1, Y_20_2], dim=1), sigma_=sigma)
+kde_20_est = get_kde(
+    torch.tensor(Y_nl_est_given_X20, dtype=torch.float32), sigma_=sigma
+)
+plot_kde(kde_20_orig, kde_20_est)
+
+# Y | X = 2.5
+kde_25_orig = get_kde(torch.stack([Y_25_1, Y_25_2], dim=1), sigma_=sigma)
+kde_25_est = get_kde(
+    torch.tensor(Y_nl_est_given_X25, dtype=torch.float32), sigma_=sigma
+)
+plot_kde(kde_25_orig, kde_25_est)
+
 
 fig, axes = plt.subplots(1, 2, figsize=(10, 5))
 
