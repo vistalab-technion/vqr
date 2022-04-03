@@ -1,6 +1,7 @@
 import logging
 from time import time
 from typing import Optional, Sequence
+from pathlib import Path
 from itertools import product
 
 import numpy as np
@@ -9,7 +10,8 @@ from numpy import ndarray
 
 from vqr.api import VectorQuantileRegressor
 from vqr.data import generate_linear_x_y_mvn_data
-from experiments.utils import run_parallel_exp
+from experiments import EXPERIMENTS_OUT_DIR
+from experiments.utils import experiment_id, run_parallel_exp
 from experiments.logging import setup_logging
 
 _LOG = logging.getLogger(__name__)
@@ -95,7 +97,11 @@ def run_scale_exps(
     eps: Sequence[float],
     gpu_device: int = 0,
     processes: int = 1,
+    out_tag: str = None,
+    out_dir: Path = EXPERIMENTS_OUT_DIR,
 ):
+    exp_id = experiment_id(name="scale", tag=out_tag)
+
     exp_configs = [
         dict(
             N=N_,
@@ -117,13 +123,16 @@ def run_scale_exps(
     ]
 
     results_df = run_parallel_exp(
-        exp_name="scale",
+        exp_name=exp_id,
         exp_fn=single_scale_exp,
         exp_configs=exp_configs,
         max_workers=processes,
     )
 
-    print(results_df)
+    out_file_path = out_dir.joinpath(f"{exp_id}.csv")
+    results_df.to_csv(out_file_path, index=False)
+    _LOG.info(f"Wrote output file: {out_file_path.absolute()!s}")
+    return results_df
 
 
 if __name__ == "__main__":
@@ -131,7 +140,7 @@ if __name__ == "__main__":
 
     run_scale_exps(
         N=[1000],
-        T=[20],
+        T=[15, 20],
         d=[2],
         k=[3, 5],
         bs_y=[None],
