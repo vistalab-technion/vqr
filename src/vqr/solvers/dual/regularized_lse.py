@@ -116,6 +116,7 @@ class RegularizedDualVQRSolver(VQRSolver):
 
         Y_th = tensor(Y, **dtd)
         U_th = tensor(U, **dtd)
+
         psi = torch.full(size=(N, 1), fill_value=0.1, requires_grad=True, **dtd)
         X_th = None
         b = None
@@ -175,6 +176,8 @@ class RegularizedDualVQRSolver(VQRSolver):
         )
 
         _LOG.log(log_level, f"{self}: Solving with {N=}, {T=}, {d=}, {k=}, {k_out=}")
+
+        final_loss = None
         with tqdm(
             total=num_epochs,
             file=sys.stdout,
@@ -186,16 +189,18 @@ class RegularizedDualVQRSolver(VQRSolver):
             ncols=100,
         ) as pbar:
             if self._batchsize_y or self._batchsize_u:
-                self._train_minibatch(
+                final_loss = self._train_minibatch(
                     Y_th, U_th, psi, X_th, b, net, optimizer, scheduler, pbar
                 )
 
             else:
-                self._train_fullbatch(
+                final_loss = self._train_fullbatch(
                     Y_th, U_th, psi, X_th, b, net, optimizer, scheduler, pbar
                 )
 
-        # Bring stuff to CPU
+        train_time = time() - start_time
+
+        # Move data back to main memory, and free GPU memory for inference
         Y_th = Y_th.cpu()
         U_th = U_th.cpu()
         psi = psi.cpu()
@@ -219,8 +224,25 @@ class RegularizedDualVQRSolver(VQRSolver):
                 self._features_transform, net=net, dtype=self._dtype
             )
 
-        _LOG.log(log_level, f"{self}: total_time={time()-start_time:.2f}s")
-        return VectorQuantiles(T, d, U, A, B, X_transform=x_transform_fn, k_in=k)
+        total_time = time() - start_time
+        inference_time = total_time - train_time
+        _LOG.log(log_level, f"{self}: total_time={total_time:.2f}s")
+
+        return VectorQuantiles(
+            T,
+            d,
+            U,
+            A,
+            B,
+            X_transform=x_transform_fn,
+            k_in=k,
+            solution_metrics=dict(
+                train_time=train_time,
+                inference_time=inference_time,
+                total_time=total_time,
+                final_loss=final_loss,
+            ),
+        )
 
     @staticmethod
     def _features_transform(X: Array, net: torch.nn.Module, dtype: torch.dtype):
@@ -240,7 +262,7 @@ class RegularizedDualVQRSolver(VQRSolver):
         optimizer: Optimizer,
         scheduler: Any,
         pbar: tqdm,
-    ):
+    ) -> float:
         N = len(Y)
         Td = len(U)
         mu = torch.ones(Td, 1, **self._dtd) / Td
@@ -249,6 +271,7 @@ class RegularizedDualVQRSolver(VQRSolver):
         UY = U @ Y.T  # (T^d, N)
 
         epsilon = self._epsilon
+        objective = tensor(float("nan"))
         for epoch_idx in range(self._num_epochs):
 
             # Optimize
@@ -269,6 +292,8 @@ class RegularizedDualVQRSolver(VQRSolver):
                 refresh=False,
             )
 
+        return objective.item()
+
     def _train_minibatch(
         self,
         Y: Tensor,
@@ -280,7 +305,7 @@ class RegularizedDualVQRSolver(VQRSolver):
         optimizer: Optimizer,
         scheduler: Any,
         pbar: tqdm,
-    ):
+    ) -> float:
         N = len(Y)
         Td = len(U)
         epsilon = self._epsilon
@@ -307,6 +332,7 @@ class RegularizedDualVQRSolver(VQRSolver):
         num_batches_u = _num_batches(Td, self._batchsize_u)
         total_batches = max(num_batches_xy, num_batches_u)
 
+        total_objective = tensor(float("nan"))
         for epoch_idx in range(self._num_epochs):
 
             total_objective = tensor([0.0], **self._dtd)
@@ -349,6 +375,8 @@ class RegularizedDualVQRSolver(VQRSolver):
                 total_batches=total_batches,
                 refresh=False,
             )
+
+        return total_objective.item()
 
     @staticmethod
     def _evaluate_phi(
