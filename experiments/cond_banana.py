@@ -42,7 +42,7 @@ def get_kde(Y_: Tensor, sigma_: float):
 def plot_kde(kde_map_1, kde_map_2):
     fig, axes = plt.subplots(1, 2, figsize=(10, 5))
     axes[0].imshow(
-        -kde_map_1,
+        kde_map_1,
         interpolation="bilinear",
         origin="lower",
         # vmin=-10,
@@ -51,7 +51,7 @@ def plot_kde(kde_map_1, kde_map_2):
         extent=(0, 1, 0, 1),
     )
     axes[1].imshow(
-        -kde_map_2,
+        kde_map_2,
         interpolation="bilinear",
         origin="lower",
         # vmin=-10,
