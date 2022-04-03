@@ -65,10 +65,7 @@ def single_scale_exp(
     vqr = VectorQuantileRegressor(
         n_levels=T, solver=solver_type, solver_opts=solver_opts
     )
-
-    start_time = time()
     vqr.fit(X, Y)
-    vqr_fit_time = time() - start_time
 
     # Measure coverage on n_coverage samples
     cov_train = _measure_paired_coverage(X, Y, vqr, cov_n, cov_alpha, seed)
@@ -84,7 +81,7 @@ def single_scale_exp(
         "train_coverage": cov_train,
         "valid_coverage": cov_valid,
         "w2": None,  # TODO: for this we need to generate data given X=x
-        "time": vqr_fit_time,
+        **vqr.solution_metrics,
     }
 
 
