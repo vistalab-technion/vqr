@@ -24,6 +24,7 @@ dependencies:
   - pytest-benchmark
   - pytest-cov
   - pytest-repeat
+  - pytest-rerunfailures
   - pytest-xdist
   - python=3.9.*
   - requests
