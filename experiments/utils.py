@@ -133,4 +133,5 @@ def kde_keops(
     b = b.view(-1, 1).contiguous()
     heatmap = (-Vi(x2).weightedsqdist(Vj(x1), Pm(gamma))).exp() @ b
     heatmap = heatmap.view(len(xticks), len(yticks)).cpu().numpy()
-    return -heatmap
+    heatmap /= heatmap.sum()
+    return heatmap
