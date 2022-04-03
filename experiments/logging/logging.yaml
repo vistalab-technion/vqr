@@ -12,17 +12,17 @@ handlers:
 loggers:
 
   vqr:
-    level: DEBUG
+    level: INFO
     handlers: [console]
     propagate: no
 
   experiments:
-    level: DEBUG
+    level: INFO
     handlers: [console]
     propagate: no
 
   __main__:
-    level: DEBUG
+    level: INFO
     handlers: [console]
     propagate: no
 
