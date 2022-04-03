@@ -39,6 +39,7 @@ class RegularizedDualVQRSolver(VQRSolver):
         nn_init: Optional[Callable[[int], torch.nn.Module]] = None,
         batchsize_y: Optional[int] = None,
         batchsize_u: Optional[int] = None,
+        inference_batch_size: int = 1,
         full_precision: bool = False,
         gpu: bool = False,
         device_num: int = 1,
@@ -58,6 +59,11 @@ class RegularizedDualVQRSolver(VQRSolver):
         :param gpu: Whether to perform optimization on GPU. Outputs will in any case
         be numpy arrays on CPU.
         :param device_num: the GPU number on which to run, used if gpu=True.
+        :param batchsize_u: The batch size of quantile levels during training.
+        If set to None, full batch will be used.
+        :param batchsize_y: Batch size of samples during training. If set to None,
+        full batch will be used.
+        :param inference_batch_size: Batch size to be used for inference. Default is 1.
         """
         super().__init__()
 
@@ -78,6 +84,7 @@ class RegularizedDualVQRSolver(VQRSolver):
 
         self._batchsize_y = batchsize_y
         self._batchsize_u = batchsize_u
+        self._inference_batch_size = inference_batch_size
 
     def solve_vqr(self, T: int, Y: Array, X: Optional[Array] = None) -> VectorQuantiles:
         start_time = time()
@@ -139,6 +146,7 @@ class RegularizedDualVQRSolver(VQRSolver):
                     num_features=k_out, affine=False, track_running_stats=True, **dtd
                 ),
             )
+            del inner_net
             net.train(True)  # note: also applied to inner_net
             b = torch.zeros(*(Td, k_out), requires_grad=True, **dtd)
 
@@ -175,6 +183,7 @@ class RegularizedDualVQRSolver(VQRSolver):
             mininterval=0.2,
             position=0,
             leave=True,
+            ncols=100,
         ) as pbar:
             if self._batchsize_y or self._batchsize_u:
                 self._train_minibatch(
@@ -186,8 +195,17 @@ class RegularizedDualVQRSolver(VQRSolver):
                     Y_th, U_th, psi, X_th, b, net, optimizer, scheduler, pbar
                 )
 
+        # Bring stuff to CPU
+        Y_th = Y_th.cpu()
+        U_th = U_th.cpu()
+        psi = psi.cpu()
+        X_th = X_th.cpu() if X_th is not None else None
+        b = b.cpu() if b is not None else None
+        net = net.cpu() if net is not None else None
+        torch.cuda.empty_cache()
+
         # Finalize phi and calculate VQR coefficients A and B
-        phi = self._evaluate_phi(Y_th, U_th, psi, epsilon, X_th, b, net, UY=None)
+        phi = self._evaluate_phi_inference(Y_th, U_th, psi, epsilon, X_th, b, net)
         A = phi.detach().cpu().numpy()
         B = None
         x_transform_fn = None
@@ -363,6 +381,50 @@ class RegularizedDualVQRSolver(VQRSolver):
         phi = epsilon * torch.logsumexp(max_arg / epsilon, dim=1)
 
         return phi.reshape(-1, 1)  # (T^d, 1)
+
+    def _evaluate_phi_inference(
+        self,
+        Y: Tensor,
+        U: Tensor,
+        psi: Tensor,
+        epsilon: float,
+        X: Tensor,
+        b: Tensor,
+        net: torch.nn.Module,
+    ):
+        Td, d = U.shape
+        N, _ = Y.shape
+
+        phi_full = torch.empty(Td, 1, dtype=self._dtype, device="cpu")
+        num_batches_us = int(np.ceil(Td / self._inference_batch_size))
+        idx = np.arange(Td)
+        Y = Y.to(self._device)
+        psi = psi.to(self._device)
+        X = X.to(self._device) if X is not None else None
+        net = net.to(self._device) if net is not None else None
+
+        with torch.no_grad():
+            for batch_idx in range(num_batches_us):
+                batch_slice = idx[
+                    self._inference_batch_size
+                    * batch_idx : min(self._inference_batch_size * (batch_idx + 1), Td)
+                ]
+                U_batch = U[batch_slice].to(self._device)
+                b_batch = b[batch_slice].to(self._device) if b is not None else None
+                phi = self._evaluate_phi(
+                    Y,
+                    U_batch,
+                    psi,
+                    epsilon,
+                    X,
+                    b_batch,
+                    net,
+                    UY=None,
+                )
+                phi = phi.cpu().detach()
+                phi_full[batch_slice] = phi
+
+        return phi_full.reshape(-1, 1)
 
     def __repr__(self):
         return f"{self.__class__.__name__}(eps={self._epsilon:.0e})"
