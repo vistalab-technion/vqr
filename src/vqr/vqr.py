@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import List, Union, Callable, Optional, Sequence
+from typing import Any, Dict, List, Union, Callable, Optional, Sequence
 
 import numpy as np
 from numpy import ndarray
@@ -35,6 +35,7 @@ class VectorQuantiles:
         B: Optional[Array] = None,
         X_transform: Optional[Callable[[Array], Array]] = None,
         k_in: Optional[int] = None,
+        solution_metrics: Optional[Dict[str, Any]] = None,
     ):
         """
         :param U: Array of shape (T**d, d). Contains the d-dimensional grid on
@@ -53,6 +54,10 @@ class VectorQuantiles:
         take input of shape (N, k_in) and return output of shape (N, k).
         :param k_in: Covariates input dimension of the X_transform.
         If X_transform is None, must be None or zero.
+        :param solution_metrics: Optional key-value pairs which can contain any
+        metric values which are tracked by the solver, such as losses, runtimes, etc.
+        The keys in this dict are solver-specific and should be specified in the
+        documentation of the corresponding solver.
         """
         # Validate dimensions
         assert all(x is not None for x in [T, d, U, A])
@@ -61,6 +66,7 @@ class VectorQuantiles:
         assert A.shape[1] == 1
         assert B is None or (B.ndim == 2 and B.shape[0] == T**d)
         assert (X_transform is not None and k_in) or (X_transform is None and not k_in)
+        assert solution_metrics is None or isinstance(solution_metrics, dict)
 
         self._T = T
         self._d = d
@@ -70,6 +76,7 @@ class VectorQuantiles:
         self._k = B.shape[1] if B is not None else 0
         self._X_transform = X_transform
         self._k_in = k_in
+        self._solution_metrics = solution_metrics or {}
 
     @property
     def is_conditional(self) -> bool:
@@ -154,6 +161,13 @@ class VectorQuantiles:
         # If there was an X_transform, the input dimension of that is what we expect to
         # receive.
         return self._k_in or self._k
+
+    @property
+    def metrics(self):
+        """
+        :return: A dict containing solver-specific metrics about the solution.
+        """
+        return self._solution_metrics.copy()
 
 
 class VQRSolver(ABC):
