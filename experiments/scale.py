@@ -4,6 +4,7 @@ from typing import Optional, Sequence
 from pathlib import Path
 from itertools import product
 
+import click
 import numpy as np
 import torch.cuda
 from numpy import ndarray
@@ -12,7 +13,6 @@ from vqr.api import VectorQuantileRegressor
 from vqr.data import generate_linear_x_y_mvn_data
 from experiments import EXPERIMENTS_OUT_DIR
 from experiments.utils import experiment_id, run_parallel_exp
-from experiments.logging import setup_logging
 
 _LOG = logging.getLogger(__name__)
 
@@ -87,6 +87,18 @@ def single_scale_exp(
     }
 
 
+@click.command(name="scale-exp")
+@click.option("-N", "N", type=int, multiple=True, default=[1000])
+@click.option("-T", "T", type=int, multiple=True, default=[20])
+@click.option("-d", type=int, multiple=True, default=[2])
+@click.option("-k", type=int, multiple=True, default=[3])
+@click.option("--bs-y", type=int, multiple=True, default=[-1])
+@click.option("--bs-u", type=int, multiple=True, default=[-1])
+@click.option("--eps", type=float, multiple=True, default=[1e-6])
+@click.option("--gpu-device", type=int, default=0)
+@click.option("--processes", type=int, default=1)
+@click.option("--out-tag", type=str, default="")
+@click.option("--out-dir", type=Path, default=EXPERIMENTS_OUT_DIR)
 def run_scale_exps(
     N: Sequence[int],
     T: Sequence[int],
@@ -113,8 +125,8 @@ def run_scale_exps(
                 verbose=False,
                 epsilon=eps_,
                 learning_rate=0.5,
-                batchsize_y=bs_y_,
-                batchsize_u=bs_u_,
+                batchsize_y=bs_y_ if bs_y_ > 0 else None,
+                batchsize_u=bs_u_ if bs_u_ > 0 else None,
                 gpu=torch.cuda.is_available(),
                 device_num=gpu_device,
             ),
@@ -133,18 +145,3 @@ def run_scale_exps(
     results_df.to_csv(out_file_path, index=False)
     _LOG.info(f"Wrote output file: {out_file_path.absolute()!s}")
     return results_df
-
-
-if __name__ == "__main__":
-    setup_logging()
-
-    run_scale_exps(
-        N=[1000],
-        T=[15, 20],
-        d=[2],
-        k=[3, 5],
-        bs_y=[None],
-        bs_u=[None],
-        eps=[1e-6],
-        processes=2,
-    )
