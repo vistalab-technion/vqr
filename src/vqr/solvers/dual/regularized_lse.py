@@ -147,6 +147,8 @@ class RegularizedDualVQRSolver(VQRSolver):
                     num_features=k_out, affine=False, track_running_stats=True, **dtd
                 ),
             )
+            # drop reference to inner_net to prevent memory being held after we move
+            # net to RAM
             del inner_net
             net.train(True)  # note: also applied to inner_net
             b = torch.zeros(*(Td, k_out), requires_grad=True, **dtd)
@@ -203,10 +205,11 @@ class RegularizedDualVQRSolver(VQRSolver):
         # Move data back to main memory, and free GPU memory for inference
         Y_th = Y_th.cpu()
         U_th = U_th.cpu()
-        psi = psi.cpu()
-        X_th = X_th.cpu() if X_th is not None else None
-        b = b.cpu() if b is not None else None
-        net = net.cpu() if net is not None else None
+        psi = psi.detach_().cpu()
+        if k > 0:
+            X_th = X_th.cpu()
+            b = b.detach_().cpu()
+            net = net.cpu()
         torch.cuda.empty_cache()
 
         # Finalize phi and calculate VQR coefficients A and B
@@ -215,10 +218,8 @@ class RegularizedDualVQRSolver(VQRSolver):
         B = None
         x_transform_fn = None
         if k > 0:
-            B = b.detach().cpu().numpy()
-
-            # Finalize network: move to CPU, set eval mode, wrap with callable
-            net = net.cpu().to(dtype=self._dtype)
+            B = b.numpy()
+            # Finalize network: set eval mode, wrap with callable
             net.train(False)
             x_transform_fn = partial(
                 self._features_transform, net=net, dtype=self._dtype
