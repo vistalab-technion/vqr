@@ -125,6 +125,14 @@ class VectorQuantileBase(BaseEstimator, ABC):
         check_is_fitted(self)
         return self._fitted_solution.dim_x
 
+    @property
+    def solution_metrics(self) -> Dict[str, Any]:
+        """
+        :return: A dict containing solver-specific metrics about the solution.
+        """
+        check_is_fitted(self)
+        return self._fitted_solution.metrics
+
     def plot_quantiles(
         self, surf_2d: bool = False, figsize: Optional[Tuple[int, int]] = None
     ) -> Figure:
