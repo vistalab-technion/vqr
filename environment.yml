@@ -32,6 +32,8 @@ dependencies:
   # control pytorch version (won't be installed again by pip install -e .)
   - pytorch=1.10.*
   - pip:
+    - pykeops
+    - geomloss
     # install vqp as a lib with pip (its deps are specified in setup.cfg)
     # Note: For KeOps to work, after installing this env run:
     # conda env config vars set CPATH=${CONDA_PREFIX}/include:${CPATH}
