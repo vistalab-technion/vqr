@@ -73,7 +73,7 @@ def get_syn_data(
         Z = torch.rand(n)
         R = 0.2 * Z * (1 + (1 - T.abs()) / 2)
         Y1 = T + R * torch.cos(phi)
-        Y2 = T ** 2 + R * torch.sin(phi)
+        Y2 = T**2 + R * torch.sin(phi)
         decomposed = torch.cat(
             [T.unsqueeze(-1), phi.unsqueeze(-1), R.unsqueeze(-1)], dim=1
         )
