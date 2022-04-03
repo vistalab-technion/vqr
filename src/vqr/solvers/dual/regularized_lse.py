@@ -165,9 +165,9 @@ class RegularizedDualVQRSolver(VQRSolver):
         scheduler = ReduceLROnPlateau(
             optimizer=optimizer,
             mode="min",
-            factor=0.5,
-            patience=100,
-            threshold=5 * 0.01,  # loss needs to decrease by x% every patience epochs
+            factor=0.9,
+            patience=400,
+            threshold=0.5 * 0.01,  # loss needs to decrease by x% every patience epochs
             threshold_mode="rel",
             min_lr=self._lr * 0.5 ** 10,
             verbose=False,
@@ -200,6 +200,8 @@ class RegularizedDualVQRSolver(VQRSolver):
         psi = psi.cpu()
         X_th = X_th.cpu() if X_th is not None else None
         b = b.cpu() if b is not None else None
+        net = net.cpu()
+        torch.cuda.empty_cache()
 
         # Finalize phi and calculate VQR coefficients A and B
         phi = self._evaluate_phi_inference(
@@ -401,26 +403,28 @@ class RegularizedDualVQRSolver(VQRSolver):
         Y = Y.to(self._device)
         psi = psi.to(self._device)
         X = X.to(self._device) if X is not None else None
+        net = net.to(self._device)
 
-        for batch_idx in range(num_batches_us):
-            batch_slice = idx[
-                self._inference_batch_size
-                * batch_idx : min(self._inference_batch_size * (batch_idx + 1), Td)
-            ]
-            U_batch = U[batch_slice].to(self._device)
-            b_batch = b[batch_slice].to(self._device) if b is not None else None
-            phi = self._evaluate_phi(
-                Y,
-                U_batch,
-                psi,
-                epsilon,
-                X,
-                b_batch,
-                net,
-                UY,
-            )
-            phi = phi.cpu().detach()
-            phi_full[batch_slice] = phi
+        with torch.no_grad():
+            for batch_idx in range(num_batches_us):
+                batch_slice = idx[
+                    self._inference_batch_size
+                    * batch_idx : min(self._inference_batch_size * (batch_idx + 1), Td)
+                ]
+                U_batch = U[batch_slice].to(self._device)
+                b_batch = b[batch_slice].to(self._device) if b is not None else None
+                phi = self._evaluate_phi(
+                    Y,
+                    U_batch,
+                    psi,
+                    epsilon,
+                    X,
+                    b_batch,
+                    net,
+                    UY,
+                )
+                phi = phi.cpu().detach()
+                phi_full[batch_slice] = phi
 
         return phi_full.reshape(-1, 1)
 
