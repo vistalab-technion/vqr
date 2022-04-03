@@ -6,7 +6,7 @@ import pytest
 from _pytest.fixtures import FixtureRequest
 
 from tests import TESTS_OUT_DIR
-from tests.logging import setup_logging
+from experiments.logging import setup_logging
 
 setup_logging()
 

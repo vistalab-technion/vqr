@@ -1,6 +1,8 @@
 import logging
 
-from tests.conftest import setup_logging
+import click
+
+from experiments.logging import setup_logging
 
 _LOG = logging.getLogger()
 
