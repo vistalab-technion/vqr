@@ -146,6 +146,7 @@ class RegularizedDualVQRSolver(VQRSolver):
                     num_features=k_out, affine=False, track_running_stats=True, **dtd
                 ),
             )
+            del inner_net
             net.train(True)  # note: also applied to inner_net
             b = torch.zeros(*(Td, k_out), requires_grad=True, **dtd)
 
@@ -165,9 +166,9 @@ class RegularizedDualVQRSolver(VQRSolver):
         scheduler = ReduceLROnPlateau(
             optimizer=optimizer,
             mode="min",
-            factor=0.9,
-            patience=400,
-            threshold=0.5 * 0.01,  # loss needs to decrease by x% every patience epochs
+            factor=0.5,
+            patience=100,
+            threshold=5 * 0.01,  # loss needs to decrease by x% every patience epochs
             threshold_mode="rel",
             min_lr=self._lr * 0.5 ** 10,
             verbose=False,
@@ -200,13 +201,11 @@ class RegularizedDualVQRSolver(VQRSolver):
         psi = psi.cpu()
         X_th = X_th.cpu() if X_th is not None else None
         b = b.cpu() if b is not None else None
-        net = net.cpu()
+        net = net.cpu() if net is not None else None
         torch.cuda.empty_cache()
 
         # Finalize phi and calculate VQR coefficients A and B
-        phi = self._evaluate_phi_inference(
-            Y_th, U_th, psi, epsilon, X_th, b, net, UY=None
-        )
+        phi = self._evaluate_phi_inference(Y_th, U_th, psi, epsilon, X_th, b, net)
         A = phi.detach().cpu().numpy()
         B = None
         x_transform_fn = None
@@ -392,7 +391,6 @@ class RegularizedDualVQRSolver(VQRSolver):
         X: Tensor,
         b: Tensor,
         net: torch.nn.Module,
-        UY: Optional[Tensor] = None,
     ):
         Td, d = U.shape
         N, _ = Y.shape
@@ -403,7 +401,7 @@ class RegularizedDualVQRSolver(VQRSolver):
         Y = Y.to(self._device)
         psi = psi.to(self._device)
         X = X.to(self._device) if X is not None else None
-        net = net.to(self._device)
+        net = net.to(self._device) if net is not None else None
 
         with torch.no_grad():
             for batch_idx in range(num_batches_us):
@@ -421,7 +419,7 @@ class RegularizedDualVQRSolver(VQRSolver):
                     X,
                     b_batch,
                     net,
-                    UY,
+                    UY=None,
                 )
                 phi = phi.cpu().detach()
                 phi_full[batch_slice] = phi
