@@ -59,9 +59,11 @@ def single_scale_exp(
     seed: int = 42,
 ):
     # Generate data
-    X, Y = generate_linear_x_y_mvn_data(n=N, d=d, k=k, seed=seed)
-    N_valid = int(N * validation_proportion)
-    X_valid, Y_valid = generate_linear_x_y_mvn_data(n=N_valid, d=d, k=k, seed=seed + 1)
+    X, Y = generate_linear_x_y_mvn_data(
+        n=int(N * (1 + validation_proportion)), d=d, k=k, seed=seed
+    )
+    X_valid, Y_valid = X[N:, :], Y[N:, :]
+    X, Y = X[:N, :], Y[:N, :]
 
     # Solve
     vqr = VectorQuantileRegressor(
