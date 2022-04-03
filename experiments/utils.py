@@ -129,7 +129,7 @@ def kde_keops(
     )
     sigma = Tensor([sigma]).type(dtype).to(device).contiguous()
     gamma = 1.0 / sigma ** 2
-    b = ones_like(x2[:, 0]).type(dtype).to(device)
+    b = ones_like(x1[:, 0]).type(dtype).to(device)
     b = b.view(-1, 1).contiguous()
     heatmap = (-Vi(x2).weightedsqdist(Vj(x1), Pm(gamma))).exp() @ b
     heatmap = heatmap.view(len(xticks), len(yticks)).cpu().numpy()
