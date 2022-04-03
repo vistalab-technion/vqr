@@ -195,6 +195,7 @@ class TestVectorQuantileRegressor(object):
         assert vqr.dim_x == k
         assert len(vqr.quantile_grid) == d
         assert all(q.shape == (T,) * d for q in vqr.quantile_grid)
+        assert vqr.solution_metrics is not None
 
         for X_ in [None, X]:
             N_ = N if X_ is not None else 1
