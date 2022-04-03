@@ -15,19 +15,22 @@ from typing import (
 )
 
 import numpy as np
+from torch import Tensor, ones_like, from_numpy
+from pykeops.torch import Pm, Vi, Vj, LazyTensor
 
 _LOG = logging.getLogger(__name__)
 
+
 def kde_2d(
-        x1: np.ndarray,
-        x2: np.ndarray,
-        kernel_fn: Callable[[np.ndarray, np.ndarray], np.ndarray],
-        n_bins: int,
-        grid_low: float,
-        grid_high: float,
-        batch_size: Optional[int] = None,
-        reduce: bool = True,
-        dtype: np.dtype = np.float64,
+    x1: np.ndarray,
+    x2: np.ndarray,
+    kernel_fn: Callable[[np.ndarray, np.ndarray], np.ndarray],
+    n_bins: int,
+    grid_low: float,
+    grid_high: float,
+    batch_size: Optional[int] = None,
+    reduce: bool = True,
+    dtype: np.dtype = np.float64,
 ):
     """
     Calculates a kernel-density estimate, evaluated on a discrete 2d grid.
@@ -102,3 +105,32 @@ def kde_2d(
     # Normalize
     P = P_raw / np.sum(P_raw)
     return P
+
+
+def gaussian_kernel_fn(dx1, dx2, bandwidth: float = 1.0):
+    return np.exp(-(dx1 ** 2 + dx2 ** 2)) / (bandwidth ** 2)
+
+
+def kde_keops(
+    x1: Tensor,
+    xticks: Sequence[float],
+    yticks: Sequence[float],
+    device: str,
+    sigma: float,
+):
+    dtype = x1.dtype
+    x1 = x1.contiguous().to(device)
+    X, Y = np.meshgrid(xticks, yticks)
+    x2 = (
+        from_numpy(np.vstack((X.ravel(), Y.ravel())).T)
+        .contiguous()
+        .type(dtype)
+        .to(device)
+    )
+    sigma = Tensor([sigma]).type(dtype).to(device).contiguous()
+    gamma = 1.0 / sigma ** 2
+    b = ones_like(x2[:, 0]).type(dtype).to(device)
+    b = b.view(-1, 1).contiguous()
+    heatmap = (-Vi(x2).weightedsqdist(Vj(x1), Pm(gamma))).exp() @ b
+    heatmap = heatmap.view(len(xticks), len(yticks)).cpu().numpy()
+    return -heatmap
