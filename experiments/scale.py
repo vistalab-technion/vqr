@@ -12,7 +12,8 @@ from numpy import ndarray
 from vqr.api import VectorQuantileRegressor
 from vqr.data import generate_linear_x_y_mvn_data
 from experiments import EXPERIMENTS_OUT_DIR
-from experiments.utils import experiment_id, run_parallel_exp
+from experiments.utils.helpers import experiment_id
+from experiments.utils.parallel import run_parallel_exp
 
 _LOG = logging.getLogger(__name__)
 
