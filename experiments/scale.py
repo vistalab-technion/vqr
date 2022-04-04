@@ -141,7 +141,7 @@ def run_scale_exps(
                 gpu=gpu_enabled,
             ),
         )
-        for (N_, T_, d_, k_, bs_y_, bs_u_, eps_) in product(N, T, d, k, bs_y, bs_u)
+        for (N_, T_, d_, k_, bs_y_, bs_u_) in product(N, T, d, k, bs_y, bs_u)
     ]
 
     results_df = run_parallel_exp(
