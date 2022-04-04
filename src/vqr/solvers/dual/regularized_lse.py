@@ -225,7 +225,7 @@ class RegularizedDualVQRSolver(VQRSolver):
             # Finalize network: set eval mode, wrap with callable
             net.train(False)
             x_transform_fn = partial(
-                self._features_transform, net=net, dtype=self._dtype
+                self._features_transform, net=net.cpu(), dtype=self._dtype
             )
 
         total_time = time() - start_time
