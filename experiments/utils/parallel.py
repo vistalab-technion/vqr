@@ -23,6 +23,7 @@ from concurrent.futures import Future, ProcessPoolExecutor
 import torch
 import pandas as pd
 
+from experiments.logging import setup_logging
 from experiments.utils.helpers import sec_to_time
 
 _LOG = logging.getLogger(__name__)
@@ -256,6 +257,8 @@ def cuda_worker_init_fn(*args: Any) -> None:
     :param args: Arguments tuple which must be created by calling
         :obj:`cuda_worker_init_args`.
     """
+
+    setup_logging()
 
     gpu_device_queue: Optional[Queue]
     gpu_device_queue, *_ = args
