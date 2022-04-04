@@ -1,7 +1,10 @@
+import os
+import queue
 import logging
 import multiprocessing as mp
 import concurrent.futures
 from time import time
+from queue import Queue
 from typing import (
     Any,
     Dict,
@@ -17,6 +20,7 @@ from typing import (
 )
 from concurrent.futures import Future, ProcessPoolExecutor
 
+import torch
 import pandas as pd
 
 from experiments.utils.helpers import sec_to_time
@@ -41,6 +45,9 @@ def run_parallel_exp(
     exp_fn: Callable[[Any], Dict[str, Any]],
     exp_configs: Iterable[dict],
     max_workers: Optional[int] = None,
+    gpu_enabled: bool = False,
+    gpu_devices: Optional[Union[Sequence[int], str]] = None,
+    workers_per_device: int = 1,
 ) -> pd.DataFrame:
     """
     Runs multiple experiment configurations with parallel workers.
@@ -51,6 +58,9 @@ def run_parallel_exp(
     represented as dicts. Each such config dict will be passed as **kwargs to exp_fn.
     :param max_workers: Maximal number of parallel worker processes to use. None
     means use number of physical cores.
+    :param gpu_enabled: Whether to enable GPU support.
+    :param gpu_devices: Either a list of device IDs (ints) or a comma-separated string.
+    :param workers_per_device: Number of worker processes that may share a GPU.
     :return: A Dataframe with the results. Rows correspond to experiment
     configurations and columns correspond to keys in the results dicts (can be
     nested, in which case the columns will be e.g. key1.key2.key3 etc.)
@@ -58,11 +68,39 @@ def run_parallel_exp(
     exp_configs = tuple(exp_configs)
     n_exps = len(exp_configs)
 
+    if not max_workers:
+        max_workers = os.cpu_count()
+
+    if gpu_devices is None:
+        # Allow all devices
+        gpu_devices = tuple(range(torch.cuda.device_count()))
+    elif isinstance(gpu_devices, str):
+        # parse comma separated
+        gpu_devices = tuple(int(d) for d in str.split(",", gpu_devices))
+
+    if gpu_enabled:
+        if not torch.cuda.is_available():
+            _LOG.warning(f"Requested GPU, but CUDA is not available")
+            gpu_enabled = False
+        else:
+            assert len(gpu_devices) > 0
+            _LOG.info(f"GPU enabled, {gpu_devices=}")
+
+            # Limit number of workers based on effective number of devices
+            max_workers = min(max_workers, len(gpu_devices) * workers_per_device)
+
     _LOG.info(f"Starting experiment {exp_name} with {n_exps} configurations...")
     start_time = time()
 
     with ProcessPoolExecutor(
-        max_workers=max_workers, mp_context=mp.get_context("spawn")
+        max_workers=max_workers,
+        mp_context=mp.get_context("spawn"),
+        initargs=cuda_worker_init_args(
+            enable_cuda=gpu_enabled,
+            cuda_devices=gpu_devices,
+            workers_per_device=workers_per_device,
+        ),
+        initializer=cuda_worker_init_fn,
     ) as executor:
 
         futures = [
@@ -169,3 +207,71 @@ def yield_future_results(
             yield res_name, result
 
         retry_counts = retry_counts_next
+
+
+def cuda_worker_init_args(
+    enable_cuda: bool = None,
+    cuda_devices: Optional[Sequence[int]] = None,
+    workers_per_device: int = 1,
+) -> Tuple[Any, ...]:
+    """
+    Creates the init args which should be passed to :obj:`cuda_worker_init_fn` when it
+    runs on a worker process.
+
+    :param enable_cuda: Whether to enable CUDA on the workers. If None, the global
+        CudaState will be interrogated for this value.
+    :param cuda_devices: List of cuda device numbers to use.
+    :param workers_per_device: Number of workers which are allowed to share a device.
+    :return: A tuple containing the init args.
+    """
+
+    gpu_queue: Optional[Queue] = None
+
+    if enable_cuda:
+
+        if not cuda_devices:
+            n_devices = torch.cuda.device_count() or 0
+
+            # If we're using GPUs, create a queue of GPU device ids.
+            # Each device id is repeated n_workers_per_device times.
+            device_list = [*range(n_devices)] * workers_per_device
+        else:
+            device_list = [*cuda_devices] * workers_per_device
+
+        if device_list:
+            manager = mp.Manager()
+            gpu_queue = manager.Queue()
+
+            for device_id in device_list:
+                gpu_queue.put(device_id)
+
+    return (gpu_queue,)
+
+
+def cuda_worker_init_fn(*args: Any) -> None:
+    """
+    An initializer function to be run on workers. Sets the GPU state for a worker
+    process to use a worker-specific CUDA device.
+
+    :param args: Arguments tuple which must be created by calling
+        :obj:`cuda_worker_init_args`.
+    """
+
+    gpu_device_queue: Optional[Queue]
+    gpu_device_queue, *_ = args
+
+    pid = os.getpid()
+
+    if gpu_device_queue is None:
+        return
+
+    try:
+        # pull a unique device id from the queue - guarantees that different workers
+        # will get different device ids (as long a unique ids were placed into the
+        # queue).
+        device = gpu_device_queue.get(block=False)
+        _LOG.info(f"Obtained GPU {device=} for worker process {pid}")
+        os.environ["CUDA_VISIBLE_DEVICES"] = f"{device}"
+    except queue.Empty:
+        msg = f"Can't obtain a GPU device number for worker process {pid}."
+        raise ValueError(msg)
