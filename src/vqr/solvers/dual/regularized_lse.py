@@ -42,7 +42,7 @@ class RegularizedDualVQRSolver(VQRSolver):
         inference_batch_size: int = 1,
         full_precision: bool = False,
         gpu: bool = False,
-        device_num: int = 1,
+        device_num: Optional[int] = None,
     ):
         """
         :param epsilon: Regularization. The lower, the more exact the solution.
@@ -54,16 +54,17 @@ class RegularizedDualVQRSolver(VQRSolver):
         input features. Must be a callable that accepts a single int (the number of
         input features, k) and returns a torch.nn.Module which for an input of
         shape (N, k) produces an output of shape (N, k').
-        :param full_precision: Whether to use full precision (float64) or only
-        double precision (float32).
-        :param gpu: Whether to perform optimization on GPU. Outputs will in any case
-        be numpy arrays on CPU.
-        :param device_num: the GPU number on which to run, used if gpu=True.
         :param batchsize_u: The batch size of quantile levels during training.
         If set to None, full batch will be used.
         :param batchsize_y: Batch size of samples during training. If set to None,
         full batch will be used.
         :param inference_batch_size: Batch size to be used for inference. Default is 1.
+        :param full_precision: Whether to use full precision (float64) or only
+        double precision (float32).
+        :param gpu: Whether to perform optimization on GPU. Outputs will in any case
+        be numpy arrays on CPU.
+        :param device_num: the GPU number on which to run, used if gpu=True. If None,
+        then no device will be specified and torch will choose automatically.
         """
         super().__init__()
 
@@ -73,7 +74,9 @@ class RegularizedDualVQRSolver(VQRSolver):
         self._lr = learning_rate
         self._dtype = torch.float64 if full_precision else torch.float32
         self._device = (
-            torch.device(f"cuda:{device_num}") if gpu else torch.device("cpu")
+            torch.device("cuda" if device_num is None else f"cuda:{device_num}")
+            if gpu and torch.cuda.is_available()
+            else torch.device("cpu")
         )
         self._dtd = dict(dtype=self._dtype, device=self._device)
 
