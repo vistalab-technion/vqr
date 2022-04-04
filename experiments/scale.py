@@ -98,7 +98,9 @@ def single_scale_exp(
 @click.option("-k", type=int, multiple=True, default=[3])
 @click.option("--bs-y", type=int, multiple=True, default=[-1])
 @click.option("--bs-u", type=int, multiple=True, default=[-1])
-@click.option("--eps", type=float, multiple=True, default=[1e-6])
+@click.option("--epochs", type=int, default=1000)
+@click.option("--epsilon", type=float, default=1e-6)
+@click.option("--lr", "learning_rate", type=float, default=0.5)
 @click.option("--out-tag", type=str, default="")
 def run_scale_exps(
     ctx: click.Context,
@@ -108,13 +110,16 @@ def run_scale_exps(
     k: Sequence[int],
     bs_y: Sequence[Optional[int]],
     bs_u: Sequence[Optional[int]],
-    eps: Sequence[float],
+    epochs: int,
+    epsilon: float,
+    learning_rate: float,
     out_tag: str = None,
 ):
     # Get global options
     gpu_enabled: bool = ctx.parent.params["gpu"]
     gpu_devices: Optional[str] = ctx.parent.params["devices"]
     num_processes: int = ctx.parent.params["processes"]
+    ppd: int = ctx.parent.params["ppd"]
     out_dir: Path = ctx.parent.params["out_dir"]
 
     exp_id = experiment_id(name="scale", tag=out_tag)
@@ -128,15 +133,15 @@ def run_scale_exps(
             solver_type="regularized_dual",
             solver_opts=dict(
                 verbose=False,
-                epsilon=eps_,
-                learning_rate=0.5,
+                num_epochs=epochs,
+                epsilon=epsilon,
+                learning_rate=learning_rate,
                 batchsize_y=bs_y_ if bs_y_ > 0 else None,
                 batchsize_u=bs_u_ if bs_u_ > 0 else None,
                 gpu=gpu_enabled,
-                device_num=None,
             ),
         )
-        for (N_, T_, d_, k_, bs_y_, bs_u_, eps_) in product(N, T, d, k, bs_y, bs_u, eps)
+        for (N_, T_, d_, k_, bs_y_, bs_u_, eps_) in product(N, T, d, k, bs_y, bs_u)
     ]
 
     results_df = run_parallel_exp(
@@ -146,6 +151,7 @@ def run_scale_exps(
         max_workers=num_processes,
         gpu_enabled=gpu_enabled,
         gpu_devices=gpu_devices,
+        workers_per_device=ppd,
     )
 
     out_file_path = out_dir.joinpath(f"{exp_id}.csv")

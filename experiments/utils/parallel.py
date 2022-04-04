@@ -69,7 +69,7 @@ def run_parallel_exp(
     exp_configs = tuple(exp_configs)
     n_exps = len(exp_configs)
 
-    if not max_workers:
+    if not max_workers or max_workers < 0:
         max_workers = os.cpu_count()
 
     if gpu_devices is None:
@@ -90,7 +90,10 @@ def run_parallel_exp(
             # Limit number of workers based on effective number of devices
             max_workers = min(max_workers, len(gpu_devices) * workers_per_device)
 
-    _LOG.info(f"Starting experiment {exp_name} with {n_exps} configurations...")
+    _LOG.info(
+        f"Starting experiment {exp_name} with {n_exps} configurations and "
+        f"{max_workers} workers..."
+    )
     start_time = time()
 
     with ProcessPoolExecutor(
