@@ -91,6 +91,7 @@ def single_scale_exp(
 
 
 @click.command(name="scale-exp")
+@click.pass_context
 @click.option("-N", "N", type=int, multiple=True, default=[1000])
 @click.option("-T", "T", type=int, multiple=True, default=[20])
 @click.option("-d", type=int, multiple=True, default=[2])
@@ -98,11 +99,9 @@ def single_scale_exp(
 @click.option("--bs-y", type=int, multiple=True, default=[-1])
 @click.option("--bs-u", type=int, multiple=True, default=[-1])
 @click.option("--eps", type=float, multiple=True, default=[1e-6])
-@click.option("--gpu-device", type=int, default=0)
-@click.option("--processes", type=int, default=1)
 @click.option("--out-tag", type=str, default="")
-@click.option("--out-dir", type=Path, default=EXPERIMENTS_OUT_DIR)
 def run_scale_exps(
+    ctx: click.Context,
     N: Sequence[int],
     T: Sequence[int],
     d: Sequence[int],
@@ -110,11 +109,14 @@ def run_scale_exps(
     bs_y: Sequence[Optional[int]],
     bs_u: Sequence[Optional[int]],
     eps: Sequence[float],
-    gpu_device: int = 0,
-    processes: int = 1,
     out_tag: str = None,
-    out_dir: Path = EXPERIMENTS_OUT_DIR,
 ):
+    # Get global options
+    gpu_enabled: bool = ctx.parent.params["gpu"]
+    gpu_devices: Optional[str] = ctx.parent.params["devices"]
+    num_processes: int = ctx.parent.params["processes"]
+    out_dir: Path = ctx.parent.params["out_dir"]
+
     exp_id = experiment_id(name="scale", tag=out_tag)
 
     exp_configs = [
@@ -130,8 +132,8 @@ def run_scale_exps(
                 learning_rate=0.5,
                 batchsize_y=bs_y_ if bs_y_ > 0 else None,
                 batchsize_u=bs_u_ if bs_u_ > 0 else None,
-                gpu=torch.cuda.is_available(),
-                device_num=gpu_device,
+                gpu=gpu_enabled,
+                device_num=None,
             ),
         )
         for (N_, T_, d_, k_, bs_y_, bs_u_, eps_) in product(N, T, d, k, bs_y, bs_u, eps)
@@ -141,7 +143,9 @@ def run_scale_exps(
         exp_name=exp_id,
         exp_fn=single_scale_exp,
         exp_configs=exp_configs,
-        max_workers=processes,
+        max_workers=num_processes,
+        gpu_enabled=gpu_enabled,
+        gpu_devices=gpu_devices,
     )
 
     out_file_path = out_dir.joinpath(f"{exp_id}.csv")
