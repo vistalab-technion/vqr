@@ -2,11 +2,11 @@ import ot
 import torch
 from numpy import array, zeros
 from torch import tensor
-from geomloss import SamplesLoss  # See also ImagesLoss, VolumesLoss
 from matplotlib import pyplot as plt
 from numpy.random import randint
 
 from vqr.api import VectorQuantileRegressor
+from experiments.utils import w2_pot, w2_keops
 from experiments.data.nonlinear_data import get_k_dim_banana
 from vqr.solvers.dual.regularized_lse import (
     RegularizedDualVQRSolver,
@@ -18,16 +18,9 @@ GPU_DEVICE_NUM = 7
 
 def w2(Y_gt_, Y_est_, emd: bool = False):
     if emd:
-        return ot.emd2(
-            a=[], b=[], M=ot.dist(Y_gt_, Y_est_), numItermax=200_000, numThreads=32
-        )
+        return w2_pot(Y_gt_, Y_est_)
     else:
-        device = "cpu" if GPU_DEVICE_NUM is None else f"cuda:{GPU_DEVICE_NUM}"
-        loss = SamplesLoss(loss="sinkhorn", p=2, blur=0.05)(
-            tensor(Y_gt_, dtype=torch.float32, device=torch.device(device)),
-            tensor(Y_est_, dtype=torch.float32, device=torch.device(device)),
-        )
-        return loss
+        return w2_keops(Y_gt_, Y_est_, gpu_device=GPU_DEVICE_NUM)
 
 
 n = 1000000

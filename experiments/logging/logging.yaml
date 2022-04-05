@@ -10,10 +10,22 @@ handlers:
     formatter: simple
     stream: ext://sys.stdout
 loggers:
+
   vqr:
-    level: DEBUG
+    level: INFO
     handlers: [console]
     propagate: no
+
+  experiments:
+    level: INFO
+    handlers: [console]
+    propagate: no
+
+  __main__:
+    level: INFO
+    handlers: [console]
+    propagate: no
+
 root:
-  level: WARNING
+  level: INFO
   handlers: [console]
