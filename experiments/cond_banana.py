@@ -27,7 +27,7 @@ def get_kde(Y_: Tensor, sigma_: float):
     res = 100
     xticks = np.linspace(-3, 3, res + 1)[:-1] + 0.5 / res
     yticks = np.linspace(-0.5, 2.5, res + 1)[:-1] + 0.5 / res
-    kde_map = kde_keops(
+    kde_map = kde2d_keops(
         x1=Y_,
         xticks=xticks,
         yticks=yticks,
