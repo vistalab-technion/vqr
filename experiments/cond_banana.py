@@ -8,8 +8,7 @@ from matplotlib import pyplot as plt
 from numpy.random import randint
 
 from vqr.api import VectorQuantileRegressor
-from experiments.utils import w2_pot, w2_keops
-from experiments.utils import kde_keops
+from experiments.utils import w2_pot, w2_keops, kde2d_keops
 from experiments.data.nonlinear_data import get_k_dim_banana
 from vqr.solvers.dual.regularized_lse import (
     RegularizedDualVQRSolver,
@@ -39,7 +38,7 @@ def get_kde(Y_: Tensor, sigma_: float):
     return kde_map
 
 
-def plot_kde(kde_map_1, kde_map_2):
+def plot_kde(kde_map_1, kde_map_2, filename: str):
     fig, axes = plt.subplots(1, 2, figsize=(10, 5))
     axes[0].imshow(
         kde_map_1,
@@ -61,7 +60,7 @@ def plot_kde(kde_map_1, kde_map_2):
     )
     l1 = np.mean(np.abs(kde_map_1 - kde_map_2))
     plt.title(f"L1 distance: {l1}")
-    plt.show()
+    plt.savefig(f"{filename}.png")
 
 
 n = 100000
@@ -166,21 +165,21 @@ kde_15_orig = get_kde(torch.stack([Y_15_1, Y_15_2], dim=1), sigma_=sigma)
 kde_15_est = get_kde(
     torch.tensor(Y_nl_est_given_X15, dtype=torch.float32), sigma_=sigma
 )
-plot_kde(kde_15_orig, kde_15_est)
+plot_kde(kde_15_orig, kde_15_est, f"1.5_{linear=}")
 
 # Y | X = 2.0
 kde_20_orig = get_kde(torch.stack([Y_20_1, Y_20_2], dim=1), sigma_=sigma)
 kde_20_est = get_kde(
     torch.tensor(Y_nl_est_given_X20, dtype=torch.float32), sigma_=sigma
 )
-plot_kde(kde_20_orig, kde_20_est)
+plot_kde(kde_20_orig, kde_20_est, f"2.0_{linear=}")
 
 # Y | X = 2.5
 kde_25_orig = get_kde(torch.stack([Y_25_1, Y_25_2], dim=1), sigma_=sigma)
 kde_25_est = get_kde(
     torch.tensor(Y_nl_est_given_X25, dtype=torch.float32), sigma_=sigma
 )
-plot_kde(kde_25_orig, kde_25_est)
+plot_kde(kde_25_orig, kde_25_est, f"2.5_{linear=}")
 
 
 fig, axes = plt.subplots(1, 2, figsize=(10, 5))

@@ -111,7 +111,7 @@ def gaussian_kernel_fn(dx1, dx2, bandwidth: float = 1.0):
     return np.exp(-(dx1 ** 2 + dx2 ** 2)) / (bandwidth ** 2)
 
 
-def kde_keops(
+def kde2d_keops(
     x1: Tensor,
     xticks: Sequence[float],
     yticks: Sequence[float],
