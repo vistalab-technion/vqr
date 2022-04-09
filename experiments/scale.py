@@ -1,17 +1,14 @@
 import logging
-from time import time
 from typing import Optional, Sequence
 from pathlib import Path
 from itertools import product
 
 import click
 import numpy as np
-import torch.cuda
 from numpy import ndarray
 
 from vqr.api import VectorQuantileRegressor
-from vqr.data import generate_linear_x_y_mvn_data
-from experiments import EXPERIMENTS_OUT_DIR
+from experiments.data.mvn import LinearMVNDataProvider
 from experiments.utils.helpers import experiment_id
 from experiments.utils.parallel import run_parallel_exp
 
@@ -60,8 +57,8 @@ def single_scale_exp(
     seed: int = 42,
 ):
     # Generate data
-    X, Y = generate_linear_x_y_mvn_data(
-        n=int(N * (1 + validation_proportion)), d=d, k=k, seed=seed
+    X, Y = LinearMVNDataProvider(d=d, k=k, seed=seed).sample(
+        n=int(N * (1 + validation_proportion)),
     )
     X_valid, Y_valid = X[N:, :], Y[N:, :]
     X, Y = X[:N, :], Y[:N, :]

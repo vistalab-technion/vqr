@@ -1,5 +1,5 @@
 from vqr.api import ScalarQuantileEstimator
-from vqr.data import generate_mvn_data
+from experiments.data.mvn import IndependentDataProvider
 
 
 class TestScalarQuantileEstimator:
@@ -7,7 +7,7 @@ class TestScalarQuantileEstimator:
         n_levels = 50
         N = 100
         d = 2
-        _, Y = generate_mvn_data(N, d, k=1)
+        _, Y = IndependentDataProvider(d=d, k=1).sample(n=N)
 
         sq = ScalarQuantileEstimator(n_levels)
         fitted_sq = sq.fit(Y)

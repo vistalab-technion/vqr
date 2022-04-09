@@ -3,13 +3,10 @@ from typing import Dict
 from numpy import array, argsort
 
 from vqr.api import ScalarQuantileEstimator, VectorQuantileEstimator
-from vqr.data import (
-    generate_star,
-    generate_heart,
-    generate_mvn_data,
-    split_train_calib_test,
-)
 from vqr.coverage import measure_width, measure_coverage
+from experiments.data.mvn import IndependentDataProvider
+from experiments.data.shapes import generate_star, generate_heart
+from experiments.utils.split import split_train_calib_test
 
 
 def experiment(
@@ -111,7 +108,7 @@ if __name__ == "__main__":
 
     # Generate data
     if dataset_name == "mvn":
-        X, Y = generate_mvn_data(n=n, d=d_, k=0)
+        X, Y = IndependentDataProvider(d=d_, k=0).sample(n=n)
     elif dataset_name == "heart":
         X, Y = generate_heart()
     elif dataset_name == "star":

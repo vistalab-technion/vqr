@@ -9,7 +9,7 @@ from numpy.linalg import norm
 from sklearn.exceptions import NotFittedError
 
 from vqr import VectorQuantileEstimator, VectorQuantileRegressor
-from vqr.data import generate_mvn_data, generate_linear_x_y_mvn_data
+from experiments.data.mvn import LinearMVNDataProvider, IndependentDataProvider
 from vqr.solvers.dual.regularized_lse import (
     RegularizedDualVQRSolver,
     MLPRegularizedDualVQRSolver,
@@ -51,7 +51,7 @@ class TestVectorQuantileEstimator(object):
         params = request.param
         solver, solver_opts = vqr_solver_opts
         d, N, T = params["d"], params["N"], params["T"]
-        X, Y = generate_mvn_data(N, d, k=1)
+        X, Y = IndependentDataProvider(d=d, k=1).sample(n=N)
         vqe = VectorQuantileEstimator(
             n_levels=T,
             solver=solver,
@@ -113,7 +113,7 @@ class TestVectorQuantileEstimator(object):
         N = 1000
         d = 2
 
-        _, Y = generate_mvn_data(n=N, d=d, k=1)
+        _, Y = IndependentDataProvider(d=d, k=1).sample(n=N)
         vqe = VectorQuantileEstimator(
             n_levels=T, solver=solver, solver_opts=solver_opts
         )
@@ -178,7 +178,7 @@ class TestVectorQuantileRegressor(object):
     def vqr_fitted(self, request, vqr_solver):
         params = request.param
         N, d, k, T = params["N"], params["d"], params["k"], params["T"]
-        X, Y = generate_linear_x_y_mvn_data(N, d=d, k=k)
+        X, Y = LinearMVNDataProvider(d=d, k=k).sample(n=N)
 
         vqr = VectorQuantileRegressor(n_levels=T, solver=vqr_solver)
         vqr.fit(X, Y)
@@ -269,7 +269,7 @@ class TestVectorQuantileRegressor(object):
         d = 2
         k = 3
         T = 15
-        X, Y = generate_linear_x_y_mvn_data(n=N, d=d, k=k)
+        X, Y = LinearMVNDataProvider(d=d, k=k).sample(n=N)
 
         vqr = VectorQuantileRegressor(n_levels=T, solver=vqr_solver)
         vqr.fit(X, Y)
