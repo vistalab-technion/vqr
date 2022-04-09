@@ -78,14 +78,14 @@ def single_scale_exp(
     cov_valid = _measure_paired_coverage(X_valid, Y_valid, vqr, cov_n, cov_alpha, seed)
 
     # Estimate d distribution and compare it with the gt cond distribution
-    w2 = 0.0
-    for i in range(5):
-        _, Y_gt = data_provider.sample(n=1000, X=X_valid[i, :][None, :])
-        Y_est = vqr.sample(n=1000, x=X_valid[i, :][None, :])
-        w2 += w2_keops(Y_gt, Y_est).detach().cpu().item()
+    w2_dists = []
+    for i in range(int(cov_n // 10)):
+        _, Y_gt = data_provider.sample(n=1000, X=X_valid[[i], :])
+        Y_est = vqr.sample(n=1000, x=X_valid[[i], :])
+        w2_dists.append(w2_keops(Y_gt, Y_est).detach().cpu().item())
 
     # W2 metric
-    w2 /= 5.0
+    w2 = np.mean(w2_dists)
 
     return {
         "N": N,
