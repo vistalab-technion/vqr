@@ -56,13 +56,15 @@ class ConditionalBananaDataProvider(DataProvider):
             Y3 = np.sin(Z)
             Y4 = np.cos(np.sin(Z) + R * np.sin(phi) * np.cos(phi))
             Y = np.stack([Y1, Y2, Y3, Y4], axis=1)
+        else:
+            raise NotImplementedError("Cond banana is implemented only for d=2,3,4.")
+
         return X, Y
 
     def _make_beta(self) -> array:
         beta = self._rng.uniform(low=0, high=1, size=(self.k,))
         beta /= np.linalg.norm(beta, ord=1)
-        banana_beta = beta
-        return banana_beta
+        return beta
 
 
 def generate_x(dataset_name, n, k):
