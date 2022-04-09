@@ -46,7 +46,7 @@ class MLP(nn.Module):
     def __init__(
         self,
         in_dim: int,
-        hidden_dims: Sequence[int],
+        hidden_dims: Union[str, Sequence[int]],
         nl: Union[str, nn.Module] = "relu",
         skip: bool = False,
         batchnorm: bool = False,
@@ -55,7 +55,8 @@ class MLP(nn.Module):
         """
         :param in_dim: Input feature dimension.
         :param hidden_dims: Hidden dimensions. Will be converted to FC layers. Last
-        entry is the output dimension.
+        entry is the output dimension. If a string is provided, it will be parsed as
+        a comma-separated list of integer values, e.g. '12,34,46,7'.
         :param nl: Non-linearity to use between FC layers.
         :param skip: Whether to use a skip-connection (over all layers). This
         requires that in_dim==out_dim, thus if skip==True and hidden_dims[-1]!=in_dim
@@ -66,6 +67,15 @@ class MLP(nn.Module):
         Zero means no dropout, otherwise means dropout probability.
         """
         super().__init__()
+
+        if isinstance(hidden_dims, str):
+            try:
+                hidden_dims = tuple(map(int, hidden_dims.strip(", ").split(",")))
+            except (TypeError, ValueError) as e:
+                raise ValueError(
+                    "When hidden_dims is a string it must be a comma-separated "
+                    "sequence of integers, e.g. '11,22,34,45'"
+                ) from e
 
         if not hidden_dims:
             raise ValueError(f"got {hidden_dims=} but must have at least one")

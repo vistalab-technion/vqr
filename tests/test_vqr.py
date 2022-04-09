@@ -22,7 +22,7 @@ class TestVectorQuantileEstimator(object):
         params=[
             (
                 "regularized_dual",
-                {"verbose": True, "learning_rate": 0.1, "epsilon": 1e-6},
+                {"verbose": True, "lr": 0.1, "epsilon": 1e-6},
             ),
             ("cvx_primal", {"verbose": True}),
         ],
@@ -132,20 +132,20 @@ class TestVectorQuantileRegressor(object):
         params=[
             RegularizedDualVQRSolver(
                 verbose=True,
-                learning_rate=0.5,
+                lr=0.5,
                 epsilon=1e-9,
             ),
             RegularizedDualVQRSolver(
                 verbose=True,
-                learning_rate=0.5,
+                lr=0.5,
                 epsilon=1e-9,
                 batchsize_y=1000,
                 batchsize_u=100,
             ),
-            MLPRegularizedDualVQRSolver(verbose=True, learning_rate=0.5, epsilon=1e-9),
+            MLPRegularizedDualVQRSolver(verbose=True, lr=0.5, epsilon=1e-9),
             MLPRegularizedDualVQRSolver(
                 verbose=True,
-                learning_rate=0.5,
+                lr=0.5,
                 epsilon=1e-9,
                 hidden_layers=[2, 4],
                 skip=False,  # No skip, so output will have different k

@@ -276,8 +276,8 @@ def cuda_worker_init_fn(*args: Any) -> None:
         # will get different device ids (as long a unique ids were placed into the
         # queue).
         device = gpu_device_queue.get(block=False)
-        _LOG.info(f"Obtained GPU {device=} for worker process {pid}")
-        os.environ["CUDA_VISIBLE_DEVICES"] = f"{device}"
+        torch.cuda.set_device(device)
+        _LOG.info(f"Set GPU {device=} for worker process {pid}")
     except queue.Empty:
         msg = f"Can't obtain a GPU device number for worker process {pid}."
         raise ValueError(msg)

@@ -26,12 +26,15 @@ from vqr.solvers.dual.regularized_lse import (
 )
 
 SOLVER_TYPES: Dict[str, Type[VQRSolver]] = {
-    "cvx_primal": CVXVQRSolver,
-    "regularized_dual": RegularizedDualVQRSolver,
-    "regularized_dual_mlp": MLPRegularizedDualVQRSolver,
+    solver_class.solver_name(): solver_class
+    for solver_class in [
+        CVXVQRSolver,
+        RegularizedDualVQRSolver,
+        MLPRegularizedDualVQRSolver,
+    ]
 }
 
-DEFAULT_SOLVER = "regularized_dual"
+DEFAULT_SOLVER_NAME = RegularizedDualVQRSolver.solver_name()
 
 
 class VectorQuantileBase(BaseEstimator, ABC):
@@ -43,7 +46,7 @@ class VectorQuantileBase(BaseEstimator, ABC):
     def __init__(
         self,
         n_levels: int = 50,
-        solver: Union[str, VQRSolver] = DEFAULT_SOLVER,
+        solver: Union[str, VQRSolver] = DEFAULT_SOLVER_NAME,
         solver_opts: Optional[Dict[str, Any]] = None,
     ):
         """
@@ -175,7 +178,7 @@ class VectorQuantileEstimator(VectorQuantileBase):
     def __init__(
         self,
         n_levels: int = 50,
-        solver: Union[str, VQRSolver] = DEFAULT_SOLVER,
+        solver: Union[str, VQRSolver] = DEFAULT_SOLVER_NAME,
         solver_opts: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(n_levels, solver, solver_opts)
@@ -264,7 +267,7 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
     def __init__(
         self,
         n_levels: int = 50,
-        solver: Union[str, VQRSolver] = DEFAULT_SOLVER,
+        solver: Union[str, VQRSolver] = DEFAULT_SOLVER_NAME,
         solver_opts: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(n_levels, solver, solver_opts)

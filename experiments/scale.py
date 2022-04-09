@@ -12,6 +12,10 @@ from experiments.data.mvn import LinearMVNDataProvider
 from experiments.utils.helpers import experiment_id
 from experiments.utils.metrics import w2_keops
 from experiments.utils.parallel import run_parallel_exp
+from vqr.solvers.dual.regularized_lse import (
+    RegularizedDualVQRSolver,
+    MLPRegularizedDualVQRSolver,
+)
 
 _LOG = logging.getLogger(__name__)
 
@@ -50,7 +54,7 @@ def single_scale_exp(
     T: int,
     d: int,
     k: int,
-    solver_type: str,
+    solver_name: str,
     solver_opts: dict,
     cov_n: int = 1000,
     cov_alpha: float = 0.05,
@@ -69,7 +73,7 @@ def single_scale_exp(
 
     # Solve
     vqr = VectorQuantileRegressor(
-        n_levels=T, solver=solver_type, solver_opts=solver_opts
+        n_levels=T, solver=solver_name, solver_opts=solver_opts
     )
     vqr.fit(X, Y)
 
@@ -92,7 +96,7 @@ def single_scale_exp(
         "T": T,
         "d": d,
         "k": k,
-        "solver_type": solver_type,
+        "solver_type": solver_name,
         "solver": solver_opts,  # note: non-consistent key name on purpose
         "train_coverage": cov_train,
         "valid_coverage": cov_valid,
@@ -111,9 +115,19 @@ def single_scale_exp(
 @click.option("--bs-u", type=int, multiple=True, default=[-1])
 @click.option("--epochs", type=int, default=1000)
 @click.option("--epsilon", type=float, default=1e-6)
-@click.option("--lr", "learning_rate", type=float, default=0.5)
+@click.option("--lr", type=float, default=0.5)
+@click.option("--lr-max-steps", type=int, default=10)
+@click.option("--lr-factor", type=float, default=0.9)
+@click.option("--lr-patience", type=int, default=500)
+@click.option("--lr-threshold", type=float, default=0.01 * 5)
+@click.option("--mlp/--no-mlp", type=bool, default=False, help="NL-VQR with MLP")
+@click.option("--mlp-layers", type=str, default="32,32", help="comma-separated ints")
+@click.option("--mlp-skip/--no-mlp-skip", type=bool, default=False)
+@click.option("--mlp-activation", type=str, default="relu")
+@click.option("--mlp-batchnorm/--no-mlp-batchnorm", type=bool, default=False)
+@click.option("--mlp-dropout", type=float, default=0.0)
 @click.option("--out-tag", type=str, default="")
-def run_scale_exps(
+def scale_exp(
     ctx: click.Context,
     N: Sequence[int],
     T: Sequence[int],
@@ -123,9 +137,21 @@ def run_scale_exps(
     bs_u: Sequence[Optional[int]],
     epochs: int,
     epsilon: float,
-    learning_rate: float,
+    lr: float,
+    lr_max_steps: int,
+    lr_factor: float,
+    lr_patience: int,
+    lr_threshold: float,
+    mlp: bool,
+    mlp_layers: Optional[str],
+    mlp_skip: Optional[bool],
+    mlp_activation: Optional[str],
+    mlp_batchnorm: Optional[bool],
+    mlp_dropout: Optional[float],
     out_tag: str = None,
 ):
+    exp_id = experiment_id(name="scale", tag=out_tag)
+
     # Get global options
     gpu_enabled: bool = ctx.parent.params["gpu"]
     gpu_devices: Optional[str] = ctx.parent.params["devices"]
@@ -133,7 +159,22 @@ def run_scale_exps(
     ppd: int = ctx.parent.params["ppd"]
     out_dir: Path = ctx.parent.params["out_dir"]
 
-    exp_id = experiment_id(name="scale", tag=out_tag)
+    # parse mlp options
+    mlp_opts = dict(
+        hidden_layers=mlp_layers,
+        activation=mlp_activation,
+        skip=mlp_skip,
+        batchnorm=mlp_batchnorm,
+        dropout=mlp_dropout,
+    )
+    # Filter out defaults and remove everything if mlp==False.
+    mlp_opts = {k: v for k, v in mlp_opts.items() if v is not None and mlp}
+
+    solver_name = (
+        MLPRegularizedDualVQRSolver.solver_name()
+        if mlp
+        else RegularizedDualVQRSolver.solver_name()
+    )
 
     exp_configs = [
         dict(
@@ -141,15 +182,20 @@ def run_scale_exps(
             T=T_,
             d=d_,
             k=k_,
-            solver_type="regularized_dual",
+            solver_name=solver_name,
             solver_opts=dict(
                 verbose=False,
                 num_epochs=epochs,
                 epsilon=epsilon,
-                learning_rate=learning_rate,
+                lr=lr,
+                lr_max_steps=lr_max_steps,
+                lr_factor=lr_factor,
+                lr_patience=lr_patience,
+                lr_threshold=lr_threshold,
                 batchsize_y=bs_y_ if bs_y_ > 0 else None,
                 batchsize_u=bs_u_ if bs_u_ > 0 else None,
                 gpu=gpu_enabled,
+                **mlp_opts,
             ),
         )
         for (N_, T_, d_, k_, bs_y_, bs_u_) in product(N, T, d, k, bs_y, bs_u)

@@ -30,11 +30,19 @@ class RegularizedDualVQRSolver(VQRSolver):
     as a learnable non-linear transformation of the input features.
     """
 
+    @classmethod
+    def solver_name(cls) -> str:
+        return "regularized_dual"
+
     def __init__(
         self,
         epsilon: float = 1e-3,
         num_epochs: int = 1000,
-        learning_rate: float = 0.9,
+        lr: float = 0.9,
+        lr_max_steps: int = 10,
+        lr_factor: float = 0.5,
+        lr_patience: int = 100,
+        lr_threshold: float = 5 * 0.01,
         verbose: bool = False,
         nn_init: Optional[Callable[[int], torch.nn.Module]] = None,
         batchsize_y: Optional[int] = None,
@@ -48,7 +56,14 @@ class RegularizedDualVQRSolver(VQRSolver):
         :param epsilon: Regularization. The lower, the more exact the solution.
         :param num_epochs: Number of epochs (full iterations over all data) to
         optimize for.
-        :param learning_rate: Optimizer learning rate.
+        :param lr: Optimizer learning rate.
+        :param lr_max_steps: Maximum number of times lr will be adjusted using
+        :class:`ReduceLROnPlateau` scheduler. Value of 0 (default) disables scheduling.
+        :param lr_factor: Factor for adjusting lr using :class:`ReduceLROnPlateau`
+        scheduler. Must be in (0, 1).
+        :param lr_patience: patience of :class:`ReduceLROnPlateau`.
+        :param lr_threshold: threshold of :class:`ReduceLROnPlateau` (using relative
+        mode).
         :param verbose: Whether to print verbose output.
         :param nn_init: Function that initializes a neural net given the number of
         input features. Must be a callable that accepts a single int (the number of
@@ -68,10 +83,35 @@ class RegularizedDualVQRSolver(VQRSolver):
         """
         super().__init__()
 
+        if not 0 < epsilon < 1:
+            raise ValueError(f"invalid {epsilon=}, must be in (0, 1)")
+        if not num_epochs > 0:
+            raise ValueError(f"invalid {num_epochs=}, must be > 0")
+
+        if not lr > 0:
+            raise ValueError(f"invalid {lr=}, must be > 0")
+        if not 0 < lr_factor < 1.0:
+            raise ValueError(f"invalid {lr_factor=}, must be in (0, 1)")
+        if not lr_patience > 0:
+            raise ValueError(f"invalid {lr_patience=}, must be > 0")
+        if not 0 <= lr_threshold <= 1:
+            raise ValueError(f"invalid {lr_threshold=}, must be in [0,1]")
+        if not lr_max_steps >= 0:
+            raise ValueError(f"invalid {lr_max_steps=}, must be >= 0")
+
+        if (batchsize_y and not batchsize_y > 0) or (
+            batchsize_u and not batchsize_u > 0
+        ):
+            raise ValueError(f"invalid {batchsize_y=} or {batchsize_u}, must be > 0")
+
         self._verbose = verbose
         self._epsilon = epsilon
         self._num_epochs = num_epochs
-        self._lr = learning_rate
+        self._lr = lr
+        self._lr_factor = lr_factor
+        self._lr_patience = lr_patience
+        self._lr_threshold = lr_threshold
+        self._lr_max_steps = lr_max_steps
         self._dtype = torch.float64 if full_precision else torch.float32
         self._device = (
             torch.device("cuda" if device_num is None else f"cuda:{device_num}")
@@ -172,11 +212,14 @@ class RegularizedDualVQRSolver(VQRSolver):
         scheduler = ReduceLROnPlateau(
             optimizer=optimizer,
             mode="min",
-            factor=0.5,
-            patience=100,
-            threshold=5 * 0.01,  # loss needs to decrease by x% every patience epochs
+            factor=self._lr_factor,
+            # loss needs to decrease by factor of 1-threshold every patience epochs
+            # in min+rel mode: dynamic_threshold = best_loss * ( 1 - threshold )
+            patience=self._lr_patience,
+            threshold=self._lr_threshold,
             threshold_mode="rel",
-            min_lr=self._lr * 0.5**10,
+            # when lr_max_steps==0, min_lr==lr so it will not be reduced.
+            min_lr=self._lr * self._lr_factor**self._lr_max_steps,
             verbose=False,
         )
 
@@ -468,9 +511,13 @@ class MLPRegularizedDualVQRSolver(RegularizedDualVQRSolver):
     learnable non-linear feature transformation.
     """
 
+    @classmethod
+    def solver_name(cls) -> str:
+        return "regularized_dual_mlp"
+
     def __init__(
         self,
-        hidden_layers: Sequence[int] = (32,),
+        hidden_layers: Union[str, Sequence[int]] = (32,),
         activation: Union[str, torch.nn.Module] = "relu",
         skip: bool = True,
         batchnorm: bool = False,

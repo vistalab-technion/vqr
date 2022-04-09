@@ -86,7 +86,7 @@ if linear:
         verbose=True,
         num_epochs=num_epochs,
         epsilon=epsilon,
-        learning_rate=2.9,
+        lr=2.9,
         gpu=True,
         full_precision=False,
         device_num=GPU_DEVICE_NUM,

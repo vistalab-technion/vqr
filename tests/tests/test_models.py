@@ -16,11 +16,13 @@ class TestMLP(object):
             [3, [5, 10], "relu", False, True, 0.1],
             [3, [5, 10, 3], "relu", True, True, 0.1],
             [3, [5, 10, 5], "relu", True, True, 0.1],
+            [3, "5, 10,5", "relu", True, True, 0.1],
             #
             [3, [5], "relu", False, True, 0],
             [3, [5, 10], "relu", False, True, 0],
             [3, [5, 10, 3], "relu", True, True, 0],
             [3, [5, 10, 5], "relu", True, True, 0],
+            [3, ",5,10, 5 ", "relu", True, True, 0],
             #
             [3, [5], "tanh", False, False, 0.1],
             [3, [5, 10], "tanh", False, False, 0.1],
@@ -31,6 +33,7 @@ class TestMLP(object):
             [3, [5, 10], "tanh", False, False, 0],
             [3, [5, 10, 3], "tanh", True, False, 0],
             [3, [5, 10, 5], "tanh", True, False, 0],
+            [3, "5,10,5", "tanh", True, False, 0],
         ],
     )
     def test_mlp(self, in_dim, hidden_dims, nl, skip, batchnorm, dropout):
@@ -60,6 +63,10 @@ class TestMLP(object):
             # no hidden dims
             [3, [], "relu", False, True, 0.1, "hidden_dims="],
             [3, None, "relu", False, True, 0.1, "hidden_dims="],
+            # invalid hidden dims
+            [3, "", "relu", False, True, 0.1, "hidden_dims is a string"],
+            [3, ",", "relu", False, True, 0.1, "hidden_dims is a string"],
+            [3, "1,2,a,3", "relu", False, True, 0.1, "hidden_dims is a string"],
             # unknown nl
             [3, [5], "wtf", False, True, 0.1, "nl="],
             # invalid dropout
