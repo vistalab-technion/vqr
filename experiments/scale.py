@@ -80,7 +80,6 @@ def single_scale_exp(
     # Estimate d distribution and compare it with the gt cond distribution
     w2 = 0.0
     for i in range(5):
-        _LOG.info(f"{X_valid[i, :].shape=}")
         _, Y_gt = data_provider.sample(n=1000, X=X_valid[i, :][None, :])
         Y_est = vqr.sample(n=1000, x=X_valid[i, :][None, :])
         w2 += w2_keops(Y_gt, Y_est).detach().cpu().item()
