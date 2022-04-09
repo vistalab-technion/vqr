@@ -1,18 +1,16 @@
 import logging
-from time import time
 from typing import Optional, Sequence
 from pathlib import Path
 from itertools import product
 
 import click
 import numpy as np
-import torch.cuda
 from numpy import ndarray
 
 from vqr.api import VectorQuantileRegressor
-from vqr.data import generate_linear_x_y_mvn_data
-from experiments import EXPERIMENTS_OUT_DIR
+from experiments.data.mvn import LinearMVNDataProvider
 from experiments.utils.helpers import experiment_id
+from experiments.utils.metrics import w2_keops
 from experiments.utils.parallel import run_parallel_exp
 
 _LOG = logging.getLogger(__name__)
@@ -59,9 +57,12 @@ def single_scale_exp(
     validation_proportion: float = 0.25,
     seed: int = 42,
 ):
+    # Data provider
+    data_provider = LinearMVNDataProvider(d=d, k=k, seed=seed)
+
     # Generate data
-    X, Y = generate_linear_x_y_mvn_data(
-        n=int(N * (1 + validation_proportion)), d=d, k=k, seed=seed
+    X, Y = data_provider.sample(
+        n=int(N * (1 + validation_proportion)),
     )
     X_valid, Y_valid = X[N:, :], Y[N:, :]
     X, Y = X[:N, :], Y[:N, :]
@@ -76,6 +77,16 @@ def single_scale_exp(
     cov_train = _measure_paired_coverage(X, Y, vqr, cov_n, cov_alpha, seed)
     cov_valid = _measure_paired_coverage(X_valid, Y_valid, vqr, cov_n, cov_alpha, seed)
 
+    # Estimate d distribution and compare it with the gt cond distribution
+    w2_dists = []
+    for i in range(int(cov_n // 10)):
+        _, Y_gt = data_provider.sample(n=1000, X=X_valid[[i], :])
+        Y_est = vqr.sample(n=1000, x=X_valid[[i], :])
+        w2_dists.append(w2_keops(Y_gt, Y_est).detach().cpu().item())
+
+    # W2 metric
+    w2 = np.mean(w2_dists)
+
     return {
         "N": N,
         "T": T,
@@ -85,7 +96,7 @@ def single_scale_exp(
         "solver": solver_opts,  # note: non-consistent key name on purpose
         "train_coverage": cov_train,
         "valid_coverage": cov_valid,
-        "w2": None,  # TODO: for this we need to generate data given X=x
+        "w2": w2,
         **vqr.solution_metrics,
     }
 

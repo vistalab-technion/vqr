@@ -1,5 +1,70 @@
+from typing import Optional, Sequence
+
 import numpy as np
 import torch
+from numpy import array
+
+from experiments.data.base import DataProvider
+
+
+class ConditionalBananaDataProvider(DataProvider):
+    def __init__(
+        self, k: int, d: int, seed: Optional[int] = 42, nonlinear: bool = False
+    ):
+        assert d in [2, 3, 4]
+        assert k > 0
+        self._d = d
+        self._k = k
+        self._rng = np.random.default_rng(seed)
+        self._beta = self._make_beta()
+        self._nonlinear = nonlinear
+
+    @property
+    def k(self) -> int:
+        return self._k
+
+    @property
+    def d(self) -> int:
+        return self._d
+
+    def sample(self, n: int, X: Optional[array] = None) -> Sequence[array]:
+        if X is None:
+            X = self._rng.uniform(low=0.8, high=3.2, size=(n, self.k))
+        else:
+            assert len(X.shape) == 2
+            assert X.shape[0] == 1
+            X = np.concatenate([X for _ in range(n)], axis=0)
+
+        Z = (self._rng.uniform(size=(n,)) - 0.5) * 2
+        one_dim_X = self._beta @ X.T
+        Z = Z * np.pi / one_dim_X
+
+        phi = (self._rng.uniform(size=(n,))) * (2 * np.pi)
+        R = 0.1 * (self._rng.uniform(size=(n,)) - 0.5) * 2
+        Y1 = Z + R * np.cos(phi)
+        Y2 = (-np.cos(one_dim_X * Z) + 1) / 2 + R * np.sin(phi)
+
+        if self._nonlinear:
+            Y2 += np.sin(X.mean(axis=1))
+
+        if self._d == 2:
+            Y = np.stack([Y1, Y2], axis=1)
+        elif self._d == 3:
+            Y3 = np.sin(Z)
+            Y = np.stack([Y1, Y2, Y3], axis=1)
+        elif self._d == 4:
+            Y3 = np.sin(Z)
+            Y4 = np.cos(np.sin(Z) + R * np.sin(phi) * np.cos(phi))
+            Y = np.stack([Y1, Y2, Y3, Y4], axis=1)
+        else:
+            raise NotImplementedError("Cond banana is implemented only for d=2,3,4.")
+
+        return X, Y
+
+    def _make_beta(self) -> array:
+        beta = self._rng.uniform(low=0, high=1, size=(self.k,))
+        beta /= np.linalg.norm(beta, ord=1)
+        return beta
 
 
 def generate_x(dataset_name, n, k):

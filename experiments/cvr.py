@@ -1,4 +1,3 @@
-from math import sqrt
 from typing import Dict
 
 from numpy import array, argsort
@@ -6,8 +5,9 @@ from numpy.linalg import pinv
 
 from vqr import VectorQuantileEstimator
 from vqr.api import ScalarQuantileEstimator
-from vqr.data import split_train_calib_test, generate_linear_x_y_mvn_data
 from vqr.coverage import measure_width, measure_coverage
+from experiments.data.mvn import LinearMVNDataProvider
+from experiments.utils.split import split_train_calib_test
 
 
 def experiment(
@@ -120,7 +120,7 @@ if __name__ == "__main__":
     alpha_low = 0.05
     alpha_high = 0.95
     n_levels = 40
-    X, Y = generate_linear_x_y_mvn_data(n=n, d=d, k=k, seed=42)
+    X, Y = LinearMVNDataProvider(d=d, k=k, seed=42).sample(n=n)
 
     vq_coverages = []
     vq_widths = []
