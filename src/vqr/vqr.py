@@ -180,6 +180,14 @@ class VQRSolver(ABC):
         Empirical Econometrics, 2020.
     """
 
+    @classmethod
+    @abstractmethod
+    def solver_name(cls) -> str:
+        """
+        :return: An identifier for this solver.
+        """
+        pass
+
     @abstractmethod
     def solve_vqr(
         self,

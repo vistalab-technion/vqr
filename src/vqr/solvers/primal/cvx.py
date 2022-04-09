@@ -24,6 +24,10 @@ class CVXVQRSolver(VQRSolver):
         Annals of Statistics, 2016
     """
 
+    @classmethod
+    def solver_name(cls) -> str:
+        return "cvx_primal"
+
     def __init__(self, verbose: bool = False, **cvx_solver_opts):
         super().__init__()
         self._verbose = verbose

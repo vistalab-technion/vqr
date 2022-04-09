@@ -30,6 +30,10 @@ class RegularizedDualVQRSolver(VQRSolver):
     as a learnable non-linear transformation of the input features.
     """
 
+    @classmethod
+    def solver_name(cls) -> str:
+        return "regularized_dual"
+
     def __init__(
         self,
         epsilon: float = 1e-3,
@@ -467,6 +471,10 @@ class MLPRegularizedDualVQRSolver(RegularizedDualVQRSolver):
     Same as RegularizedDualVQRSolver, but with a general-purpose MLP as a
     learnable non-linear feature transformation.
     """
+
+    @classmethod
+    def solver_name(cls) -> str:
+        return "regularized_dual_mlp"
 
     def __init__(
         self,
