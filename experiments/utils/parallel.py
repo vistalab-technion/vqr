@@ -77,7 +77,7 @@ def run_parallel_exp(
         gpu_devices = tuple(range(torch.cuda.device_count()))
     elif isinstance(gpu_devices, str):
         # parse comma separated
-        gpu_devices = tuple(int(d) for d in str.split(",", gpu_devices))
+        gpu_devices = tuple(int(d) for d in gpu_devices.split(","))
 
     if gpu_enabled:
         if not torch.cuda.is_available():
