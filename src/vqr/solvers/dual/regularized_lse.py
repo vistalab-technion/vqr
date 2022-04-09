@@ -38,7 +38,7 @@ class RegularizedDualVQRSolver(VQRSolver):
         self,
         epsilon: float = 1e-3,
         num_epochs: int = 1000,
-        learning_rate: float = 0.9,
+        lr: float = 0.9,
         verbose: bool = False,
         nn_init: Optional[Callable[[int], torch.nn.Module]] = None,
         batchsize_y: Optional[int] = None,
@@ -52,7 +52,7 @@ class RegularizedDualVQRSolver(VQRSolver):
         :param epsilon: Regularization. The lower, the more exact the solution.
         :param num_epochs: Number of epochs (full iterations over all data) to
         optimize for.
-        :param learning_rate: Optimizer learning rate.
+        :param lr: Optimizer learning rate.
         :param verbose: Whether to print verbose output.
         :param nn_init: Function that initializes a neural net given the number of
         input features. Must be a callable that accepts a single int (the number of
@@ -75,7 +75,7 @@ class RegularizedDualVQRSolver(VQRSolver):
         self._verbose = verbose
         self._epsilon = epsilon
         self._num_epochs = num_epochs
-        self._lr = learning_rate
+        self._lr = lr
         self._dtype = torch.float64 if full_precision else torch.float32
         self._device = (
             torch.device("cuda" if device_num is None else f"cuda:{device_num}")
@@ -478,7 +478,7 @@ class MLPRegularizedDualVQRSolver(RegularizedDualVQRSolver):
 
     def __init__(
         self,
-        hidden_layers: Sequence[int] = (32,),
+        hidden_layers: Union[str, Sequence[int]] = (32,),
         activation: Union[str, torch.nn.Module] = "relu",
         skip: bool = True,
         batchnorm: bool = False,
