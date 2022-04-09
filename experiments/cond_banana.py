@@ -8,7 +8,7 @@ from numpy.random import randint
 
 from vqr.api import VectorQuantileRegressor
 from experiments.utils.metrics import w2_pot, w2_keops, kde2d_keops
-from experiments.data.nonlinear_data import get_k_dim_banana
+from experiments.data.cond_banana import get_k_dim_banana
 from vqr.solvers.dual.regularized_lse import (
     RegularizedDualVQRSolver,
     MLPRegularizedDualVQRSolver,
