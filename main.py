@@ -5,7 +5,7 @@ from functools import wraps, partial
 import click
 
 from experiments import EXPERIMENTS_OUT_DIR
-from experiments.scale import XExperiment, scale_exp
+from experiments.scale import scale_exp
 from experiments.logging import setup_logging
 
 _LOG = logging.getLogger(__name__)

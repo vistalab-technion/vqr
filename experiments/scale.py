@@ -115,7 +115,11 @@ def single_scale_exp(
 @click.option("--bs-u", type=int, multiple=True, default=[-1])
 @click.option("--epochs", type=int, default=1000)
 @click.option("--epsilon", type=float, default=1e-6)
-@click.option("--lr", "learning_rate", type=float, default=0.5)
+@click.option("--lr", type=float, default=0.5)
+@click.option("--lr-max-steps", type=int, default=10)
+@click.option("--lr-factor", type=float, default=0.9)
+@click.option("--lr-patience", type=int, default=500)
+@click.option("--lr-threshold", type=float, default=0.01 * 5)
 @click.option("--mlp/--no-mlp", type=bool, default=False, help="NL-VQR with MLP")
 @click.option("--mlp-layers", type=str, default="32,32", help="comma-separated ints")
 @click.option("--mlp-skip/--no-mlp-skip", type=bool, default=False)
@@ -133,7 +137,11 @@ def scale_exp(
     bs_u: Sequence[Optional[int]],
     epochs: int,
     epsilon: float,
-    learning_rate: float,
+    lr: float,
+    lr_max_steps: int,
+    lr_factor: float,
+    lr_patience: int,
+    lr_threshold: float,
     mlp: bool,
     mlp_layers: Optional[str],
     mlp_skip: Optional[bool],
@@ -179,7 +187,11 @@ def scale_exp(
                 verbose=False,
                 num_epochs=epochs,
                 epsilon=epsilon,
-                learning_rate=learning_rate,
+                lr=lr,
+                lr_max_steps=lr_max_steps,
+                lr_factor=lr_factor,
+                lr_patience=lr_patience,
+                lr_threshold=lr_threshold,
                 batchsize_y=bs_y_ if bs_y_ > 0 else None,
                 batchsize_u=bs_u_ if bs_u_ > 0 else None,
                 gpu=gpu_enabled,
