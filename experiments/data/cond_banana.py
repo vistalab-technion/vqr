@@ -1,5 +1,23 @@
+from typing import Optional, Sequence
+
 import numpy as np
 import torch
+from numpy import array
+
+from experiments.data.base import DataProvider
+
+
+class ConditionalBananaDataProvider(DataProvider):
+    @property
+    def k(self) -> int:
+        pass
+
+    @property
+    def d(self) -> int:
+        pass
+
+    def sample(self, n: int, X: Optional[array] = None) -> Sequence[array]:
+        pass
 
 
 def generate_x(dataset_name, n, k):
