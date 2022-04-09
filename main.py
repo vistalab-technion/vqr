@@ -5,6 +5,7 @@ import click
 
 from experiments import EXPERIMENTS_OUT_DIR
 from experiments.scale import run_scale_exps
+from experiments.rr_vqr import rr_exp
 from experiments.logging import setup_logging
 
 _LOG = logging.getLogger(__name__)
@@ -32,4 +33,5 @@ def main(
 
 if __name__ == "__main__":
     main.add_command(run_scale_exps)
+    main.add_command(rr_exp)
     main()
