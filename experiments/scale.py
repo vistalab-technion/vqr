@@ -10,6 +10,7 @@ from numpy import ndarray
 from vqr.api import VectorQuantileRegressor
 from experiments.data.mvn import LinearMVNDataProvider
 from experiments.utils.helpers import experiment_id
+from experiments.utils.metrics import w2_keops
 from experiments.utils.parallel import run_parallel_exp
 
 _LOG = logging.getLogger(__name__)
@@ -56,8 +57,11 @@ def single_scale_exp(
     validation_proportion: float = 0.25,
     seed: int = 42,
 ):
+    # Data provider
+    data_provider = LinearMVNDataProvider(d=d, k=k, seed=seed)
+
     # Generate data
-    X, Y = LinearMVNDataProvider(d=d, k=k, seed=seed).sample(
+    X, Y = data_provider.sample(
         n=int(N * (1 + validation_proportion)),
     )
     X_valid, Y_valid = X[N:, :], Y[N:, :]
@@ -73,6 +77,17 @@ def single_scale_exp(
     cov_train = _measure_paired_coverage(X, Y, vqr, cov_n, cov_alpha, seed)
     cov_valid = _measure_paired_coverage(X_valid, Y_valid, vqr, cov_n, cov_alpha, seed)
 
+    # Estimate d distribution and compare it with the gt cond distribution
+    w2 = 0.0
+    for i in range(5):
+        _LOG.info(f"{X_valid[i, :].shape=}")
+        _, Y_gt = data_provider.sample(n=1000, X=X_valid[i, :][None, :])
+        Y_est = vqr.sample(n=1000, x=X_valid[i, :][None, :])
+        w2 += w2_keops(Y_gt, Y_est).detach().cpu().item()
+
+    # W2 metric
+    w2 /= 5.0
+
     return {
         "N": N,
         "T": T,
@@ -82,7 +97,7 @@ def single_scale_exp(
         "solver": solver_opts,  # note: non-consistent key name on purpose
         "train_coverage": cov_train,
         "valid_coverage": cov_valid,
-        "w2": None,  # TODO: for this we need to generate data given X=x
+        "w2": w2,
         **vqr.solution_metrics,
     }
 
