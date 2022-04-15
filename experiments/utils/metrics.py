@@ -13,8 +13,8 @@ _LOG = logging.getLogger(__name__)
 
 
 def w2_keops(
-    Y_gt: Optional[array, Tensor],
-    Y_est: Optional[array, Tensor],
+    Y_gt,
+    Y_est,
     dtype=torch.float32,
     gpu_device: Optional[int] = None,
 ):
