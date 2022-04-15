@@ -30,6 +30,7 @@ NLS = {
     "sigmoid": nn.Sigmoid,
     "softmax": nn.Softmax,
     "logsoftmax": nn.LogSoftmax,
+    "silu": nn.SiLU,
 }
 
 
@@ -47,7 +48,7 @@ class MLP(nn.Module):
         self,
         in_dim: int,
         hidden_dims: Union[str, Sequence[int]],
-        nl: Union[str, nn.Module] = "relu",
+        nl: Union[str, nn.Module] = "silu",
         skip: bool = False,
         batchnorm: bool = False,
         dropout: float = 0,
