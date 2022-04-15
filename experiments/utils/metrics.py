@@ -4,6 +4,7 @@ from typing import Optional, Sequence
 import ot
 import numpy as np
 import torch
+from numpy import array
 from torch import Tensor, ones_like, from_numpy
 from geomloss import SamplesLoss
 from pykeops.torch import Pm, Vi, Vj, LazyTensor
@@ -11,11 +12,20 @@ from pykeops.torch import Pm, Vi, Vj, LazyTensor
 _LOG = logging.getLogger(__name__)
 
 
-def w2_keops(Y_gt, Y_est, dtype=torch.float32, gpu_device: Optional[int] = None):
+def w2_keops(
+    Y_gt: Optional[array, Tensor],
+    Y_est: Optional[array, Tensor],
+    dtype=torch.float32,
+    gpu_device: Optional[int] = None,
+):
     device = torch.device("cpu" if gpu_device is None else f"cuda:{gpu_device}")
+    if isinstance(Y_gt, Tensor):
+        Y_gt = Y_gt.clone().detach().numpy()
+    if isinstance(Y_est, Tensor):
+        Y_est = Y_est.clone().detach().numpy()
     return SamplesLoss(loss="sinkhorn", p=2, blur=0.05)(
-        torch.tensor(Y_gt.clone().detach().numpy(), dtype=dtype, device=device),
-        torch.tensor(Y_est.clone().detach().numpy(), dtype=dtype, device=device),
+        torch.tensor(Y_gt, dtype=dtype, device=device),
+        torch.tensor(Y_est, dtype=dtype, device=device),
     )
 
 
