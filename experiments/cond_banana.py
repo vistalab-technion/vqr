@@ -20,7 +20,7 @@ def plot_kde(kde_map_1, kde_map_2, l1_distance: float, filename: str):
         interpolation="bilinear",
         origin="lower",
         cmap=cm.RdPu,
-        # extent=(0, 1, 0, 1),
+        extent=(0, 1, 0, 1),
     )
     axes[1].imshow(
         kde_map_2,
@@ -30,15 +30,15 @@ def plot_kde(kde_map_1, kde_map_2, l1_distance: float, filename: str):
         extent=(0, 1, 0, 1),
     )
     plt.title(f"L1 distance: {l1_distance}")
-    plt.show()  # f"{filename}.png")
+    plt.savefig(f"{filename}.png")
 
 
-n = 10000
+n = 20000
 d = 2
 k = 1
 T = 50
 num_epochs = 20000
-linear = False
+linear = True
 sigma = 0.1
 GPU_DEVICE_NUM = 5
 device = f"cuda:{GPU_DEVICE_NUM}" if GPU_DEVICE_NUM is not None else "cpu"
@@ -69,11 +69,11 @@ else:
         verbose=True,
         num_epochs=num_epochs,
         epsilon=epsilon,
-        lr=0.2,
+        lr=0.4,
         gpu=True,
         skip=False,
         batchnorm=False,
-        hidden_layers=(1, 5, 10),
+        hidden_layers=(2, 10, 20),
         device_num=GPU_DEVICE_NUM,
         batchsize_y=100000,
         batchsize_u=2500,
@@ -89,9 +89,26 @@ vqr_est.fit(X, Y)
 
 # Generate conditional distributions for the below X's
 Xs = [
+    tensor(array([[1.0] * k]), dtype=dtype),
+    tensor(array([[1.1] * k]), dtype=dtype),
+    tensor(array([[1.2] * k]), dtype=dtype),
+    tensor(array([[1.3] * k]), dtype=dtype),
+    tensor(array([[1.4] * k]), dtype=dtype),
     tensor(array([[1.5] * k]), dtype=dtype),
+    tensor(array([[1.6] * k]), dtype=dtype),
+    tensor(array([[1.7] * k]), dtype=dtype),
+    tensor(array([[1.8] * k]), dtype=dtype),
+    tensor(array([[1.9] * k]), dtype=dtype),
     tensor(array([[2.0] * k]), dtype=dtype),
+    tensor(array([[2.1] * k]), dtype=dtype),
+    tensor(array([[2.2] * k]), dtype=dtype),
+    tensor(array([[2.3] * k]), dtype=dtype),
+    tensor(array([[2.4] * k]), dtype=dtype),
     tensor(array([[2.5] * k]), dtype=dtype),
+    tensor(array([[2.6] * k]), dtype=dtype),
+    tensor(array([[2.7] * k]), dtype=dtype),
+    tensor(array([[2.8] * k]), dtype=dtype),
+    tensor(array([[2.9] * k]), dtype=dtype),
 ]
 
 
@@ -108,22 +125,27 @@ for cond_X in Xs:
     # Estimate KDEs
     kde_orig = kde(
         cond_Y_gt,
-        grid_resolution=T,
+        grid_resolution=T * 2,
         device=device,
         sigma=sigma,
     )
 
     kde_est = kde(
         cond_Y_est,
-        grid_resolution=T,
+        grid_resolution=T * 2,
         device=device,
         sigma=sigma,
     )
 
     # Calculate KDE-L1 distance
     kde_l1_dist = kde_l1(
-        cond_Y_gt, cond_Y_est, grid_resolution=T, device=device, sigma=sigma
+        cond_Y_gt, cond_Y_est, grid_resolution=T * 2, device=device, sigma=sigma
     )
 
     # Plot KDEs
-    plot_kde(kde_orig.T, kde_est.T, kde_l1_dist, f"{cond_X=}_{linear=}")
+    plot_kde(
+        kde_orig.T,
+        kde_est.T,
+        kde_l1_dist,
+        f"Y_given_X={cond_X.squeeze().item():.1f}_{linear=}",
+    )
