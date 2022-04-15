@@ -27,13 +27,13 @@ class ConditionalBananaDataProvider(DataProvider):
     def d(self) -> int:
         return self._d
 
-    def sample(self, n: int, X: Optional[array] = None) -> Sequence[array]:
-        if X is None:
+    def sample(self, n: int, x: Optional[array] = None) -> Sequence[array]:
+        if x is None:
             X = self._rng.uniform(low=0.8, high=3.2, size=(n, self.k))
         else:
-            assert len(X.shape) == 2
-            assert X.shape[0] == 1
-            X = np.concatenate([X for _ in range(n)], axis=0)
+            assert len(x.shape) == 2
+            assert x.shape[0] == 1
+            X = np.concatenate([x for _ in range(n)], axis=0)
 
         Z = (self._rng.uniform(size=(n,)) - 0.5) * 2
         one_dim_X = self._beta @ X.T

@@ -16,5 +16,5 @@ class DataProvider(ABC):
         pass
 
     @abstractmethod
-    def sample(self, n: int, X: Optional[array] = None) -> Sequence[array]:
+    def sample(self, n: int, x: Optional[array] = None) -> Sequence[array]:
         pass

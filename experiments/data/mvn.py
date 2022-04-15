@@ -45,22 +45,22 @@ class LinearMVNDataProvider(DataProvider):
     def d(self) -> int:
         return self._d
 
-    def sample(self, n: int, X: Optional[array] = None) -> Sequence[array]:
+    def sample(self, n: int, x: Optional[array] = None) -> Sequence[array]:
         """
         :param n: Number of samples.
-        :param X: Features whose conditional distribution needs to be sampled.
+        :param x: Features whose conditional distribution needs to be sampled.
         :return: A tuple (X, Y), where X is of shape (n, k) and contains the features
         and Y is of shape (n, d) and contains the responses.
         """
 
-        if X is None:
+        if x is None:
             X = self._rng.uniform(size=(n, self.k))
             X -= np.mean(X, axis=0)
         else:
-            assert len(X.shape) == 2
-            assert X.shape[1] == self._k
-            assert X.shape[0] == 1
-            X = np.concatenate([X for _ in range(n)], axis=0)
+            assert len(x.shape) == 2
+            assert x.shape[1] == self._k
+            assert x.shape[0] == 1
+            X = np.concatenate([x for _ in range(n)], axis=0)
 
         N = self._noise_generator.sample(n)
         Y = X @ self._A + N

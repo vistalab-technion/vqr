@@ -84,7 +84,7 @@ def single_scale_exp(
     # Estimate d distribution and compare it with the gt cond distribution
     w2_dists = []
     for i in range(int(cov_n // 10)):
-        _, Y_gt = data_provider.sample(n=1000, X=X_valid[[i], :])
+        _, Y_gt = data_provider.sample(n=1000, x=X_valid[[i], :])
         Y_est = vqr.sample(n=1000, x=X_valid[[i], :])
         w2_dists.append(w2_keops(Y_gt, Y_est).detach().cpu().item())
 
