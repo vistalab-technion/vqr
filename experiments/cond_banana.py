@@ -93,7 +93,7 @@ Xs = [tensor(array([[x] * k]), dtype=dtype) for x in np.linspace(1.0, 3.0, 20)]
 
 
 for cond_X in Xs:
-    _, cond_Y_gt = data_provider.sample(n=n, X=cond_X.numpy())
+    _, cond_Y_gt = data_provider.sample(n=n, x=cond_X.numpy())
     cond_Y_gt = tensor(cond_Y_gt, dtype=dtype)
 
     cond_Y_est = vqr_est.sample(n=n, x=cond_X.numpy())
