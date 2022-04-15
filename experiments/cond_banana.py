@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 from numpy import array, zeros
 from torch import Tensor, tensor
@@ -88,28 +89,7 @@ vqr_est = VectorQuantileRegressor(n_levels=T, solver=solver)
 vqr_est.fit(X, Y)
 
 # Generate conditional distributions for the below X's
-Xs = [
-    tensor(array([[1.0] * k]), dtype=dtype),
-    tensor(array([[1.1] * k]), dtype=dtype),
-    tensor(array([[1.2] * k]), dtype=dtype),
-    tensor(array([[1.3] * k]), dtype=dtype),
-    tensor(array([[1.4] * k]), dtype=dtype),
-    tensor(array([[1.5] * k]), dtype=dtype),
-    tensor(array([[1.6] * k]), dtype=dtype),
-    tensor(array([[1.7] * k]), dtype=dtype),
-    tensor(array([[1.8] * k]), dtype=dtype),
-    tensor(array([[1.9] * k]), dtype=dtype),
-    tensor(array([[2.0] * k]), dtype=dtype),
-    tensor(array([[2.1] * k]), dtype=dtype),
-    tensor(array([[2.2] * k]), dtype=dtype),
-    tensor(array([[2.3] * k]), dtype=dtype),
-    tensor(array([[2.4] * k]), dtype=dtype),
-    tensor(array([[2.5] * k]), dtype=dtype),
-    tensor(array([[2.6] * k]), dtype=dtype),
-    tensor(array([[2.7] * k]), dtype=dtype),
-    tensor(array([[2.8] * k]), dtype=dtype),
-    tensor(array([[2.9] * k]), dtype=dtype),
-]
+Xs = [tensor(array([[x] * k]), dtype=dtype) for x in np.linspace(1.0, 3.0, 20)]
 
 
 for cond_X in Xs:
