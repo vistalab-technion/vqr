@@ -37,10 +37,10 @@ n = 10000
 d = 2
 k = 1
 T = 50
-num_epochs = 200
-linear = True
+num_epochs = 20000
+linear = False
 sigma = 0.1
-GPU_DEVICE_NUM = 4
+GPU_DEVICE_NUM = 5
 device = f"cuda:{GPU_DEVICE_NUM}" if GPU_DEVICE_NUM is not None else "cpu"
 dtype = torch.float32
 epsilon = 1e-9
@@ -61,7 +61,7 @@ if linear:
         batchsize_u=2500,
         inference_batch_size=100,
         lr_factor=0.9,
-        lr_patience=300,
+        lr_patience=500,
         lr_threshold=0.5 * 0.01,
     )
 else:
@@ -69,11 +69,11 @@ else:
         verbose=True,
         num_epochs=num_epochs,
         epsilon=epsilon,
-        learning_rate=2.9,
+        lr=0.2,
         gpu=True,
-        skip=True,
-        batchnorm=True,
-        hidden_layers=(1000, 1000, 1000),
+        skip=False,
+        batchnorm=False,
+        hidden_layers=(1, 5, 10),
         device_num=GPU_DEVICE_NUM,
         batchsize_y=100000,
         batchsize_u=2500,
