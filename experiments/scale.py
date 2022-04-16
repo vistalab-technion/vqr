@@ -5,12 +5,14 @@ from itertools import product
 
 import click
 import numpy as np
+import torch
 from numpy import ndarray
+from torch import tensor
 
 from vqr.api import VectorQuantileRegressor
 from experiments.data.mvn import LinearMVNDataProvider
 from experiments.utils.helpers import experiment_id
-from experiments.utils.metrics import w2_keops
+from experiments.utils.metrics import kde_l1, w2_keops
 from experiments.utils.parallel import run_parallel_exp
 from vqr.solvers.dual.regularized_lse import (
     RegularizedDualVQRSolver,
@@ -83,13 +85,23 @@ def single_scale_exp(
 
     # Estimate d distribution and compare it with the gt cond distribution
     w2_dists = []
+    kde_l1_dists = []
     for i in range(int(cov_n // 10)):
         _, Y_gt = data_provider.sample(n=1000, x=X_valid[[i], :])
         Y_est = vqr.sample(n=1000, x=X_valid[[i], :])
         w2_dists.append(w2_keops(Y_gt, Y_est).detach().cpu().item())
+        kde_l1_dist = kde_l1(
+            tensor(Y_gt, dtype=torch.float32),
+            tensor(Y_est, dtype=torch.float32),
+            T,
+            "cuda" if solver_opts["gpu"] else "cpu",
+            sigma=0.1,
+        )
+        kde_l1_dists.append(kde_l1_dist)
 
     # W2 metric
-    w2 = np.mean(w2_dists)
+    w2_avg = np.mean(w2_dists)
+    kde_l1_avg = np.mean(kde_l1_dists)
 
     return {
         "N": N,
@@ -100,7 +112,8 @@ def single_scale_exp(
         "solver": solver_opts,  # note: non-consistent key name on purpose
         "train_coverage": cov_train,
         "valid_coverage": cov_valid,
-        "w2": w2,
+        "w2": w2_avg,
+        "kde_l1": kde_l1_avg,
         **vqr.solution_metrics,
     }
 
