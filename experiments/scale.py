@@ -86,9 +86,9 @@ def single_scale_exp(
     # Estimate d distribution and compare it with the gt cond distribution
     w2_dists = []
     kde_l1_dists = []
-    for i in range(int(cov_n // 10)):
-        _, Y_gt = data_provider.sample(n=1000, x=X_valid[[i], :])
-        Y_est = vqr.sample(n=1000, x=X_valid[[i], :])
+    for i in range(int(cov_n)):
+        _, Y_gt = data_provider.sample(n=T**d, x=X_valid[[i], :])
+        Y_est = vqr.sample(n=T**d, x=X_valid[[i], :])
         w2_dists.append(w2_keops(Y_gt, Y_est).detach().cpu().item())
         kde_l1_dist = kde_l1(
             tensor(Y_gt, dtype=torch.float32),
