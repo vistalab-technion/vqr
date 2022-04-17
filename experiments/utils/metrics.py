@@ -11,6 +11,8 @@ from pykeops.torch import Pm, Vi, Vj, LazyTensor
 
 _LOG = logging.getLogger(__name__)
 
+# TODO: add tests for metrics
+
 
 def w2_keops(
     Y_gt,
@@ -119,9 +121,14 @@ def kde_keops(
     """
     assert grid.shape[0] == np.prod(grid_shape)
     assert grid.shape[1] == len(grid_shape)
+    d = len(grid_shape)
+
     dtype = Y.dtype
     Y = Y.contiguous().to(device)
     grid = grid.contiguous().type(dtype).to(device)
+
+    # The distance scales proportional to d, so we need to scale sigma by sqrt(d) to
+    # make KDE values computed on different dimensional comparable.
     sigma = Tensor([sigma]).type(dtype).to(device).contiguous()
     gamma = 1.0 / sigma**2
     b = ones_like(Y[:, 0]).type(dtype).to(device)
