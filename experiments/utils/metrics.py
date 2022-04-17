@@ -129,7 +129,7 @@ def kde_keops(
 
     # The distance scales proportional to d, so we need to scale sigma by sqrt(d) to
     # make KDE values computed on different dimensional comparable.
-    sigma = Tensor([sigma]).type(dtype).to(device).contiguous()
+    sigma = Tensor([sigma * np.sqrt(d)]).type(dtype).to(device).contiguous()
     gamma = 1.0 / sigma**2
     b = ones_like(Y[:, 0]).type(dtype).to(device)
     b = b.view(-1, 1).contiguous()
