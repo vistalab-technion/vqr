@@ -51,6 +51,7 @@ class RegularizedDualVQRSolver(VQRSolver):
         full_precision: bool = False,
         gpu: bool = False,
         device_num: Optional[int] = None,
+        post_iter_callback: Optional[Callable[[Any], None]] = None,
     ):
         """
         :param epsilon: Regularization. The lower, the more exact the solution.
@@ -80,6 +81,11 @@ class RegularizedDualVQRSolver(VQRSolver):
         be numpy arrays on CPU.
         :param device_num: the GPU number on which to run, used if gpu=True. If None,
         then no device will be specified and torch will choose automatically.
+        :param post_iter_callback: Optional Callback to invoke after each
+        optimization iteration (after each epoch if not using batches,
+        or otherwise after each batch). It should accept kwargs.
+        It will be passed the following kwargs:
+        (phi, b, batch_loss, epoch_loss, epoch_idx, batch_idx, num_epochs, num_batches).
         """
         super().__init__()
 
@@ -128,6 +134,7 @@ class RegularizedDualVQRSolver(VQRSolver):
         self._batchsize_y = batchsize_y
         self._batchsize_u = batchsize_u
         self._inference_batch_size = inference_batch_size
+        self._callback = post_iter_callback or (lambda *a, **k: None)
 
     def solve_vqr(self, T: int, Y: Array, X: Optional[Array] = None) -> VectorQuantiles:
         start_time = time()
@@ -339,6 +346,18 @@ class RegularizedDualVQRSolver(VQRSolver):
                 refresh=False,
             )
 
+            # Invoke callback
+            self._callback(
+                phi=phi,
+                b=b,
+                batch_loss=None,
+                epoch_loss=objective.item(),
+                epoch_idx=epoch_idx,
+                batch_idx=None,
+                num_epochs=self._num_epochs,
+                num_batches=None,
+            )
+
         return objective.item()
 
     def _train_minibatch(
@@ -410,6 +429,18 @@ class RegularizedDualVQRSolver(VQRSolver):
                 optimizer.step()
 
                 total_objective = total_objective + objective
+
+                # Invoke callback
+                self._callback(
+                    phi=phi_batch,
+                    b=b_batch,
+                    batch_loss=objective.item(),
+                    epoch_loss=total_objective.item(),
+                    epoch_idx=epoch_idx,
+                    batch_idx=batch_idx,
+                    num_epochs=self._num_epochs,
+                    num_batches=total_batches,
+                )
 
             total_objective /= total_batches
             scheduler.step(total_objective)
