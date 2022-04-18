@@ -282,6 +282,35 @@ class TestVectorQuantileRegressor(object):
             T=vqr.n_levels,
         )
 
+    @pytest.mark.parametrize("with_batches", [False, True])
+    def test_callback(self, with_batches):
+
+        callback_kwargs = []
+
+        def _callback(*args, **kwargs):
+            callback_kwargs.append(kwargs)
+
+        N = 1000
+        num_epochs = 100
+        batchsize_y = (N // 5) if with_batches else None
+        num_batches = np.ceil(N / batchsize_y) if with_batches else 1
+
+        X, Y = LinearMVNDataProvider(d=2, k=3).sample(n=N)
+        solver = RegularizedDualVQRSolver(
+            verbose=False,
+            num_epochs=num_epochs,
+            batchsize_y=batchsize_y,
+            post_iter_callback=_callback,
+        )
+        vqr = VectorQuantileRegressor(n_levels=15, solver=solver)
+        vqr.fit(X, Y)
+
+        assert len(callback_kwargs) == num_epochs * num_batches
+        for kw in callback_kwargs:
+            assert kw.keys() == callback_kwargs[0].keys()
+            assert kw["phi"].requires_grad == False
+            assert kw["b"].requires_grad == False
+
 
 def _test_monotonicity(
     Us: Sequence[np.ndarray],
