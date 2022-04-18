@@ -31,6 +31,7 @@ NLS = {
     "softmax": nn.Softmax,
     "logsoftmax": nn.LogSoftmax,
     "silu": nn.SiLU,
+    "lrelu": nn.LeakyReLU,
 }
 
 
