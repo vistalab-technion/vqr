@@ -3,7 +3,7 @@ from __future__ import annotations
 import sys
 import logging
 from time import time
-from typing import Any, Union, Callable, Optional, Sequence
+from typing import Any, Dict, Union, Callable, Optional, Sequence
 from functools import partial
 
 import numpy as np
@@ -134,7 +134,7 @@ class RegularizedDualVQRSolver(VQRSolver):
         self._batchsize_y = batchsize_y
         self._batchsize_u = batchsize_u
         self._inference_batch_size = inference_batch_size
-        self._callback = post_iter_callback or (lambda *a, **k: None)
+        self._callback: Optional[Callable] = post_iter_callback
 
     def solve_vqr(self, T: int, Y: Array, X: Optional[Array] = None) -> VectorQuantiles:
         start_time = time()
@@ -347,16 +347,17 @@ class RegularizedDualVQRSolver(VQRSolver):
             )
 
             # Invoke callback
-            self._callback(
-                phi=phi,
-                b=b,
-                batch_loss=None,
-                epoch_loss=objective.item(),
-                epoch_idx=epoch_idx,
-                batch_idx=None,
-                num_epochs=self._num_epochs,
-                num_batches=None,
-            )
+            if self._callback:
+                self._callback(
+                    phi=phi.detach().cpu(),
+                    b=b.detach().cpu(),
+                    batch_loss=None,
+                    epoch_loss=objective.item(),
+                    epoch_idx=epoch_idx,
+                    batch_idx=None,
+                    num_epochs=self._num_epochs,
+                    num_batches=None,
+                )
 
         return objective.item()
 
@@ -431,16 +432,17 @@ class RegularizedDualVQRSolver(VQRSolver):
                 total_objective = total_objective + objective
 
                 # Invoke callback
-                self._callback(
-                    phi=phi_batch,
-                    b=b_batch,
-                    batch_loss=objective.item(),
-                    epoch_loss=total_objective.item(),
-                    epoch_idx=epoch_idx,
-                    batch_idx=batch_idx,
-                    num_epochs=self._num_epochs,
-                    num_batches=total_batches,
-                )
+                if self._callback:
+                    self._callback(
+                        phi=phi_batch.detach().cpu(),
+                        b=b_batch.detach().cpu(),
+                        batch_loss=objective.item(),
+                        epoch_loss=total_objective.item(),
+                        epoch_idx=epoch_idx,
+                        batch_idx=batch_idx,
+                        num_epochs=self._num_epochs,
+                        num_batches=total_batches,
+                    )
 
             total_objective /= total_batches
             scheduler.step(total_objective)
