@@ -1,13 +1,15 @@
 import logging
-from typing import Optional, Sequence
+from typing import Union, Optional, Sequence
 
 import ot
 import numpy as np
 import torch
-from numpy import array
-from torch import Tensor, ones_like, from_numpy
+from numpy import ndarray
+from torch import Tensor, ones_like
 from geomloss import SamplesLoss
-from pykeops.torch import Pm, Vi, Vj, LazyTensor
+from pykeops.torch import Pm, Vi, Vj
+
+from experiments.utils.tensors import ensure_numpy, ensure_torch
 
 _LOG = logging.getLogger(__name__)
 
@@ -15,23 +17,45 @@ _LOG = logging.getLogger(__name__)
 
 
 def w2_keops(
-    Y_gt,
-    Y_est,
+    Y_gt: Union[ndarray, Tensor],
+    Y_est: Union[ndarray, Tensor],
     dtype=torch.float32,
-    gpu_device: Optional[int] = None,
-):
-    device = torch.device("cpu" if gpu_device is None else f"cuda:{gpu_device}")
-    if isinstance(Y_gt, Tensor):
-        Y_gt = Y_gt.clone().detach().numpy()
-    if isinstance(Y_est, Tensor):
-        Y_est = Y_est.clone().detach().numpy()
-    return SamplesLoss(loss="sinkhorn", p=2, blur=0.05)(
-        torch.tensor(Y_gt, dtype=dtype, device=device),
-        torch.tensor(Y_est, dtype=dtype, device=device),
-    )
+    device: Optional[str] = None,
+) -> float:
+    """
+    Calculates the Wasserstein-2 distance between two distributions, based on their
+    samples. Uses pytorch+keops backend.
+
+    :param Y_gt: Ground truth / first distribution's samples.
+    :param Y_est: Estimated / second distribution's samples.
+    :param dtype: Data type to use for calculation.
+    :param device: Device to use for calculation.
+    :return: The w2 distance.
+    """
+    Y_gt = ensure_torch(Y_gt, dtype=dtype, device=device)
+    Y_est = ensure_torch(Y_est, dtype=dtype, device=device)
+
+    sample_loss = SamplesLoss(loss="sinkhorn", p=2, blur=0.05)
+    w2: Tensor = sample_loss(Y_gt, Y_est)
+
+    return w2.detach().cpu().item()
 
 
-def w2_pot(Y_gt, Y_est, num_iter_max=200_000, num_threads=32):
+def w2_pot(Y_gt, Y_est, num_iter_max=200_000, num_threads=32) -> float:
+    """
+    Calculates the Wasserstein-2 distance between two distributions, based on their
+    samples. Uses POT backend with Sinkhorn's algorithm.
+
+    :param Y_gt: Ground truth / first distribution's samples.
+    :param Y_est: Estimated / second distribution's samples.
+    :param num_iter_max: Maximum iterations for Sinkhorn.
+    :param num_threads: Number of threads for solver.
+    :return: The w2 distance.
+    """
+
+    Y_gt = ensure_numpy(Y_gt)
+    Y_est = ensure_numpy(Y_est)
+
     return ot.emd2(
         a=[],
         b=[],
