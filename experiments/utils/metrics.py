@@ -13,8 +13,6 @@ from experiments.utils.tensors import ensure_numpy, ensure_torch
 
 _LOG = logging.getLogger(__name__)
 
-# TODO: add tests for metrics
-
 
 def w2_keops(
     Y_gt: Union[ndarray, Tensor],
