@@ -56,7 +56,7 @@ def get_grid_points(Y: Tensor, grid_resolution: int) -> Tensor:
         torch.linspace(y_i_min.item(), y_i_max.item(), grid_resolution)
         for y_i_min, y_i_max in zip(Y_min, Y_max)
     ]
-    grids = torch.meshgrid(axes)
+    grids = torch.meshgrid(axes, indexing="ij")
     grid_points = torch.stack([g.ravel() for g in grids], dim=1)
     return grid_points
 
