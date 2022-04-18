@@ -86,16 +86,17 @@ def single_scale_exp(
     # Estimate d distribution and compare it with the gt cond distribution
     w2_dists = []
     kde_l1_dists = []
-    for i in range(int(cov_n)):
+    for i in range(min(cov_n, len(Y_valid))):
         _, Y_gt = data_provider.sample(n=T**d, x=X_valid[[i], :])
         Y_est = vqr.sample(n=T**d, x=X_valid[[i], :])
-        w2_dists.append(w2_keops(Y_gt, Y_est).detach().cpu().item())
+        w2_dists.append(w2_keops(Y_gt, Y_est))
         kde_l1_dist = kde_l1(
-            tensor(Y_gt, dtype=torch.float32),
-            tensor(Y_est, dtype=torch.float32),
-            T,
-            "cuda" if solver_opts["gpu"] else "cpu",
+            Y_gt,
+            Y_est,
+            grid_resolution=T,
             sigma=0.1,
+            dtype=torch.float32,
+            device="cuda" if solver_opts["gpu"] else "cpu",
         )
         kde_l1_dists.append(kde_l1_dist)
 
