@@ -39,7 +39,12 @@ def w2_keops(
     return w2.detach().cpu().item()
 
 
-def w2_pot(Y_gt, Y_est, num_iter_max=200_000, num_threads=32) -> float:
+def w2_pot(
+    Y_gt: Union[ndarray, Tensor],
+    Y_est: Union[ndarray, Tensor],
+    num_iter_max=200_000,
+    num_threads=32,
+) -> float:
     """
     Calculates the Wasserstein-2 distance between two distributions, based on their
     samples. Uses POT backend with Sinkhorn's algorithm.
@@ -84,7 +89,12 @@ def get_grid_points(Y: Tensor, grid_resolution: int) -> Tensor:
 
 
 def kde_l1(
-    Y_gt: Tensor, Y_est: Tensor, grid_resolution: int, device: str, sigma: float
+    Y_gt: Union[ndarray, Tensor],
+    Y_est: Union[ndarray, Tensor],
+    grid_resolution: int,
+    sigma: float,
+    dtype: Optional[torch.dtype] = None,
+    device: Optional[str] = None,
 ) -> float:
     """
     Measures L1 distance between the KDEs of two sample distributions.
@@ -92,10 +102,14 @@ def kde_l1(
     :param Y_gt: Samples from the ground-truth distribution
     :param Y_est: Samples from the estimated distribution
     :param grid_resolution: Number of grid points per dimension
-    :param device: Device on which to execute the metric
     :param sigma: the bandwidth for the kernel in KDE
+    :param dtype: Data type to use for calculation.
+    :param device: Device on which to execute the metric.
     :return: KDE L1 distance per grid point.
     """
+    Y_gt = ensure_torch(Y_gt, dtype=dtype, device=device)
+    Y_est = ensure_torch(Y_est, dtype=dtype, device=device)
+
     assert Y_gt.shape[1] == Y_est.shape[1]  # same dimensions
     grid_shape = [grid_resolution for _ in range(Y_gt.shape[1])]
     grid_points = get_grid_points(Y_gt, grid_resolution)
