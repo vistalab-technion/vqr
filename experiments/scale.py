@@ -7,12 +7,7 @@ import torch
 from numpy import ndarray
 
 from vqr.api import VectorQuantileRegressor
-from experiments.base import (
-    parse_gpu_options,
-    parse_vqr_options,
-    parse_output_options,
-    click_common_vqr_solver_options,
-)
+from experiments.base import GPUOptions, VQROptions, OutputOptions
 from experiments.data.mvn import LinearMVNDataProvider
 from experiments.utils.helpers import experiment_id
 from experiments.utils.metrics import kde_l1, w2_keops
@@ -120,16 +115,16 @@ def single_scale_exp(
 
 @click.command(name="scale-exp")
 @click.pass_context
-@click_common_vqr_solver_options
+@VQROptions.cli
 def scale_exp(
     ctx: click.Context,
     **kw,
 ):
-    output_opts = parse_output_options(ctx)
-    gpu_opts = parse_gpu_options(ctx)
+    output_opts = OutputOptions.parse(ctx)
+    gpu_opts = GPUOptions.parse(ctx)
     exp_id = experiment_id(name="scale", tag=output_opts.out_tag)
 
-    exp_configs = parse_vqr_options(ctx)
+    exp_configs = VQROptions.parse(ctx)
 
     results_df = run_parallel_exp(
         exp_name=exp_id,
