@@ -121,36 +121,36 @@ def single_scale_exp(
 
 @click.command(name="scale-exp")
 @click.pass_context
-@click.option("-N", "N", type=int, multiple=True, default=[1000])
-@click.option("-T", "T", type=int, multiple=True, default=[20])
-@click.option("-d", type=int, multiple=True, default=[2])
-@click.option("-k", type=int, multiple=True, default=[3])
-@click.option("--bs-y", type=int, multiple=True, default=[-1])
-@click.option("--bs-u", type=int, multiple=True, default=[-1])
-@click.option("--epochs", type=int, default=1000)
-@click.option("--epsilon", type=float, default=1e-6)
-@click.option("--lr", type=float, default=0.5)
-@click.option("--lr-max-steps", type=int, default=10)
-@click.option("--lr-factor", type=float, default=0.9)
-@click.option("--lr-patience", type=int, default=500)
-@click.option("--lr-threshold", type=float, default=0.01 * 5)
+@click.option("-N", "ns", type=int, multiple=True, default=[1000], help="Samples")
+@click.option("-T", "ts", type=int, multiple=True, default=[20], help="Quantile levels")
+@click.option("-d", "ds", type=int, multiple=True, default=[2], help="Y dimension")
+@click.option("-k", "ks", type=int, multiple=True, default=[3], help="X dimension")
+@click.option("-E", "epsilons", type=float, multiple=True, default=[1e-6], help="eps")
+@click.option("--bs-y", "bys", type=int, multiple=True, default=[-1], help="Batch Y")
+@click.option("--bs-u", "bus", type=int, multiple=True, default=[-1], help="Batch U")
+@click.option("--epochs", type=int, default=1000, help="epochs")
+@click.option("--lr", type=float, default=0.5, help="Learning rate")
+@click.option("--lr-max-steps", type=int, default=10, help="LR sched. steps")
+@click.option("--lr-factor", type=float, default=0.9, help="LR sched. factor")
+@click.option("--lr-patience", type=int, default=500, help="LR sched. patience")
+@click.option("--lr-threshold", type=float, default=0.01 * 5, help="LR sched. thresh.")
 @click.option("--mlp/--no-mlp", type=bool, default=False, help="NL-VQR with MLP")
 @click.option("--mlp-layers", type=str, default="32,32", help="comma-separated ints")
-@click.option("--mlp-skip/--no-mlp-skip", type=bool, default=False)
-@click.option("--mlp-activation", type=str, default="relu")
+@click.option("--mlp-skip/--no-mlp-skip", type=bool, default=False, help="MLP residual")
+@click.option("--mlp-activation", type=str, default="relu", help="MLP activation")
 @click.option("--mlp-batchnorm/--no-mlp-batchnorm", type=bool, default=False)
 @click.option("--mlp-dropout", type=float, default=0.0)
 @click.option("--out-tag", type=str, default="")
 def scale_exp(
     ctx: click.Context,
-    N: Sequence[int],
-    T: Sequence[int],
-    d: Sequence[int],
-    k: Sequence[int],
-    bs_y: Sequence[Optional[int]],
-    bs_u: Sequence[Optional[int]],
+    ns: Sequence[int],
+    ts: Sequence[int],
+    ds: Sequence[int],
+    ks: Sequence[int],
+    epsilons: Sequence[float],
+    bys: Sequence[Optional[int]],
+    bus: Sequence[Optional[int]],
     epochs: int,
-    epsilon: float,
     lr: float,
     lr_max_steps: int,
     lr_factor: float,
@@ -200,7 +200,7 @@ def scale_exp(
             solver_opts=dict(
                 verbose=False,
                 num_epochs=epochs,
-                epsilon=epsilon,
+                epsilon=eps_,
                 lr=lr,
                 lr_max_steps=lr_max_steps,
                 lr_factor=lr_factor,
@@ -212,7 +212,9 @@ def scale_exp(
                 **mlp_opts,
             ),
         )
-        for (N_, T_, d_, k_, bs_y_, bs_u_) in product(N, T, d, k, bs_y, bs_u)
+        for (N_, T_, d_, k_, eps_, bs_y_, bs_u_) in product(
+            ns, ts, ds, ks, epsilons, bys, bus
+        )
     ]
 
     results_df = run_parallel_exp(
