@@ -11,7 +11,7 @@ class TestMetrics:
         # Y1 & Y2 are from the same dist, Y3 is not
         Y1 = np.random.randn(N, d).astype(dtype)
         Y2 = np.random.randn(N, d).astype(dtype)
-        Y3 = np.random.randn(N, d).astype(dtype) + 1.0
+        Y3 = np.random.randn(N, d).astype(dtype) + 1.0 + (d - 1) * 0.1
 
         return Y1, Y2, Y3
 
