@@ -49,7 +49,7 @@ def run_parallel_exp(
     gpu_enabled: bool = False,
     gpu_devices: Optional[Union[Sequence[int], str]] = None,
     workers_per_device: int = 1,
-) -> Sequence[Any]:
+) -> Sequence[Dict[str, Any]]:
     """
     Runs multiple experiment configurations with parallel workers.
     :param exp_name: Name of experiment (for logging only).

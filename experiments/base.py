@@ -1,19 +1,26 @@
 from __future__ import annotations
 
+import logging
 import functools
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Callable, Optional, Sequence
+from time import strftime
+from typing import Any, Dict, List, Callable, Optional, Sequence
 from pathlib import Path
 from itertools import product
 
 import click
+import pandas as pd
+from _socket import gethostname
 
 from experiments import EXPERIMENTS_OUT_DIR
 from experiments.utils.helpers import stable_hash
+from experiments.utils.parallel import run_parallel_exp
 from vqr.solvers.dual.regularized_lse import (
     RegularizedDualVQRSolver,
     MLPRegularizedDualVQRSolver,
 )
+
+_LOG = logging.getLogger(__name__)
 
 
 def _click_decorator(fn: Callable, options: Sequence[click.Option]):
@@ -354,3 +361,64 @@ class VQROptions(_CLIOptions):
         ]
 
         return vqr_options
+
+
+def experiment_id(name: str, tag: str):
+    """
+    Creates a unique id for an experiment based on hostname, timestamp and a
+    user-specified tag.
+    :param name: An experiment name.
+    :param tag: A user tag.
+    :return: The experiment id.
+    """
+    hostname = gethostname()
+    if hostname:
+        hostname = hostname.split(".")[0].strip()
+    else:
+        hostname = "localhost"
+
+    name = f"{name}-" if name else ""
+    tag = f"-{tag}" if tag else ""
+    timestamp = strftime(f"%Y%m%d_%H%M%S")
+    exp_id = strftime(f"{name}{timestamp}-{hostname}{tag}")
+    return exp_id
+
+
+def run_exp_context(
+    ctx: click.Context,
+    exp_fn: Callable[[Any], Dict[str, Any]],
+    exp_configs: Dict[str, dict],
+    write_csv: bool = True,
+) -> pd.DataFrame:
+    """
+    Runs multiple experiment configs based on common CLI arguments from the context.
+    :param ctx: Click context.
+    :param exp_fn: Callable which runs a single experiment. Should return a dict of
+    results.
+    :param exp_configs:  A mapping from an experiment name/identifier to a dict with
+    configuration which will be passed to the exp_fn.
+    :return: A pandas DataFrame with the collected results. Each row is a result,
+    columns correspond to dict keys in the output of exp_fn.
+    """
+    output_opts = OutputOptions.parse(ctx)
+    gpu_opts = GPUOptions.parse(ctx)
+    exp_id = experiment_id(name=ctx.command.name, tag=output_opts.out_tag)
+
+    results: Sequence[Dict[str, Any]] = run_parallel_exp(
+        exp_name=exp_id,
+        exp_fn=exp_fn,
+        exp_configs=exp_configs,
+        max_workers=gpu_opts.num_processes,
+        gpu_enabled=gpu_opts.gpu_enabled,
+        gpu_devices=gpu_opts.gpu_devices,
+        workers_per_device=gpu_opts.ppd,
+    )
+
+    results_df = pd.json_normalize(list(results))
+
+    if write_csv:
+        out_file_path = output_opts.out_dir.joinpath(f"{exp_id}.csv")
+        results_df.to_csv(out_file_path, index=False)
+        _LOG.info(f"Wrote output file: {out_file_path.absolute()!s}")
+
+    return results_df

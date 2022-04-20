@@ -8,9 +8,8 @@ import pandas as pd
 from numpy import ndarray
 
 from vqr.api import VectorQuantileRegressor
-from experiments.base import GPUOptions, VQROptions, OutputOptions
+from experiments.base import GPUOptions, VQROptions, OutputOptions, run_exp_context
 from experiments.data.mvn import LinearMVNDataProvider
-from experiments.utils.helpers import experiment_id
 from experiments.utils.metrics import kde_l1, w2_keops
 from experiments.utils.parallel import run_parallel_exp
 
@@ -121,24 +120,11 @@ def scale_exp(
     ctx: click.Context,
     **kw,
 ):
-    output_opts = OutputOptions.parse(ctx)
-    gpu_opts = GPUOptions.parse(ctx)
-    exp_id = experiment_id(name="scale", tag=output_opts.out_tag)
 
+    # Generate experiment configs from CLI
     vqr_options = VQROptions.parse(ctx)
+    exp_configs = {e.key(): e.to_dict() for e in vqr_options}
 
-    results = run_parallel_exp(
-        exp_name=exp_id,
-        exp_fn=single_scale_exp,
-        exp_configs={e.key(): e.to_dict() for e in vqr_options},
-        max_workers=gpu_opts.num_processes,
-        gpu_enabled=gpu_opts.gpu_enabled,
-        gpu_devices=gpu_opts.gpu_devices,
-        workers_per_device=gpu_opts.ppd,
+    return run_exp_context(
+        ctx, exp_fn=single_scale_exp, exp_configs=exp_configs, write_csv=True
     )
-
-    results_df = pd.json_normalize(list(results))
-    out_file_path = output_opts.out_dir.joinpath(f"{exp_id}.csv")
-    results_df.to_csv(out_file_path, index=False)
-    _LOG.info(f"Wrote output file: {out_file_path.absolute()!s}")
-    return results_df
