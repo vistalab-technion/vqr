@@ -1,9 +1,10 @@
 import logging
-from typing import Optional
+from typing import Dict, Callable, Optional
 
 import click
 import numpy as np
 import torch
+import pandas as pd
 from numpy import ndarray
 
 from vqr.api import VectorQuantileRegressor
@@ -124,18 +125,19 @@ def scale_exp(
     gpu_opts = GPUOptions.parse(ctx)
     exp_id = experiment_id(name="scale", tag=output_opts.out_tag)
 
-    exp_configs = VQROptions.parse(ctx)
+    vqr_options = VQROptions.parse(ctx)
 
-    results_df = run_parallel_exp(
+    results = run_parallel_exp(
         exp_name=exp_id,
         exp_fn=single_scale_exp,
-        exp_configs=tuple(e.to_dict() for e in exp_configs),
+        exp_configs={e.key(): e.to_dict() for e in vqr_options},
         max_workers=gpu_opts.num_processes,
         gpu_enabled=gpu_opts.gpu_enabled,
         gpu_devices=gpu_opts.gpu_devices,
         workers_per_device=gpu_opts.ppd,
     )
 
+    results_df = pd.json_normalize(list(results))
     out_file_path = output_opts.out_dir.joinpath(f"{exp_id}.csv")
     results_df.to_csv(out_file_path, index=False)
     _LOG.info(f"Wrote output file: {out_file_path.absolute()!s}")

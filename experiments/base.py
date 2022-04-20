@@ -5,11 +5,11 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, Callable, Optional, Sequence
 from pathlib import Path
 from itertools import product
-from dataclasses import dataclass
 
 import click
 
 from experiments import EXPERIMENTS_OUT_DIR
+from experiments.utils.helpers import stable_hash
 from vqr.solvers.dual.regularized_lse import (
     RegularizedDualVQRSolver,
     MLPRegularizedDualVQRSolver,
@@ -62,6 +62,15 @@ class _CLIOptions(ABC):
         :return: An instance of this class, initialized based on parsing the context.
         """
         pass
+
+    def key(self) -> str:
+        """
+        :return: A string which uniquely represents the current instance's options.
+        """
+        return stable_hash(self.__dict__)
+
+    def __hash___(self):
+        return hash(self.key())
 
 
 class GPUOptions(_CLIOptions):

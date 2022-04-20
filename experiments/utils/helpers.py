@@ -1,10 +1,21 @@
+import pickle
 import logging
 from time import strftime
-from typing import NamedTuple
+from typing import Any, NamedTuple
+from hashlib import blake2b
 
 from _socket import gethostname
 
 _LOG = logging.getLogger(__name__)
+
+
+def stable_hash(obj: Any, hash_len: int = 8) -> str:
+    """
+    :param obj: An object to hash.
+    :param hash_len: Desired length of output string.
+    :return: A unique and repeatable hash of the given object.
+    """
+    return blake2b(pickle.dumps(obj), digest_size=hash_len // 2).hexdigest()
 
 
 def experiment_id(name: str, tag: str):
