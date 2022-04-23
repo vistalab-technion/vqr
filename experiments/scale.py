@@ -1,17 +1,15 @@
 import logging
-from typing import Dict, Callable, Optional
+from typing import Optional
 
 import click
 import numpy as np
 import torch
-import pandas as pd
 from numpy import ndarray
 
 from vqr.api import VectorQuantileRegressor
-from experiments.base import GPUOptions, VQROptions, OutputOptions, run_exp_context
+from experiments.base import VQROptions, run_exp_context
 from experiments.data.mvn import LinearMVNDataProvider
 from experiments.utils.metrics import kde_l1, w2_keops
-from experiments.utils.parallel import run_parallel_exp
 
 _LOG = logging.getLogger(__name__)
 
@@ -52,9 +50,10 @@ def single_scale_exp(
     k: int,
     solver_name: str,
     solver_opts: dict,
+    validation_proportion: float = 0.25,
     cov_n: int = 1000,
     cov_alpha: float = 0.05,
-    validation_proportion: float = 0.25,
+    dist_n: int = 1000,
     seed: int = 42,
 ):
     # Data provider
@@ -77,12 +76,13 @@ def single_scale_exp(
     cov_train = _measure_paired_coverage(X, Y, vqr, cov_n, cov_alpha, seed)
     cov_valid = _measure_paired_coverage(X_valid, Y_valid, vqr, cov_n, cov_alpha, seed)
 
-    # Estimate d distribution and compare it with the gt cond distribution
+    # Estimate cond distribution and compare it with the gt cond distribution
     w2_dists = []
     kde_l1_dists = []
-    for i in range(min(cov_n, len(Y_valid))):
-        _, Y_gt = data_provider.sample(n=T**d, x=X_valid[[i], :])
-        Y_est = vqr.sample(n=T**d, x=X_valid[[i], :])
+    for i in range(min(dist_n, len(Y_valid))):
+        x = X_valid[[i], :]
+        _, Y_gt = data_provider.sample(n=T**d, x=x)
+        Y_est = vqr.sample(n=T**d, x=x)
         w2_dists.append(w2_keops(Y_gt, Y_est))
         kde_l1_dist = kde_l1(
             Y_gt,
@@ -116,14 +116,62 @@ def single_scale_exp(
 @click.command(name="scale-exp")
 @click.pass_context
 @VQROptions.cli
+@click.option(
+    "--validation-proportion",
+    type=float,
+    default=0.25,
+    help="Proportion of between validation set and training set.",
+)
+@click.option(
+    "--cov-n",
+    type=int,
+    default=1000,
+    help="Number of validation-set samples to use for coverage calculation",
+)
+@click.option(
+    "--cov-alpha",
+    type=float,
+    default=0.05,
+    help="Quantile level for coverage calculation.",
+)
+@click.option(
+    "--dist-n",
+    type=int,
+    default=1000,
+    help=(
+        "Number of validation-set samples to use for conditional distribution "
+        "estimation"
+    ),
+)
+@click.option(
+    "--seed",
+    type=int,
+    default=42,
+    help="Seed for data generation",
+)
 def scale_exp(
     ctx: click.Context,
+    validation_proportion: float,
+    cov_n: int,
+    cov_alpha: float,
+    dist_n: int,
+    seed: int,
     **kw,
 ):
 
     # Generate experiment configs from CLI
     vqr_options = VQROptions.parse(ctx)
-    exp_configs = {e.key(): e.to_dict() for e in vqr_options}
+    exp_configs = {
+        vqr_option.key(): dict(
+            cov_n=cov_n,
+            cov_alpha=cov_alpha,
+            dist_n=dist_n,
+            validation_proportion=validation_proportion,
+            seed=seed,
+            **vqr_option.to_dict(),
+        )
+        for vqr_option in vqr_options
+    }
 
     return run_exp_context(
         ctx, exp_fn=single_scale_exp, exp_configs=exp_configs, write_csv=True

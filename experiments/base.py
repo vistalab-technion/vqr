@@ -397,6 +397,7 @@ def run_exp_context(
     results.
     :param exp_configs:  A mapping from an experiment name/identifier to a dict with
     configuration which will be passed to the exp_fn.
+    :param write_csv: Whether to write the results to a CSV.
     :return: A pandas DataFrame with the collected results. Each row is a result,
     columns correspond to dict keys in the output of exp_fn.
     """
