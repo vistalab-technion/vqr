@@ -2,9 +2,8 @@ from typing import Tuple, Optional, Sequence
 
 import numpy as np
 from numpy.random import Generator
-from numpy.typing import ArrayLike as Array
 
-from experiments.data.base import DataProvider
+from experiments.data.base import Array, DataProvider
 
 
 class LinearMVNDataProvider(DataProvider):
@@ -45,21 +44,17 @@ class LinearMVNDataProvider(DataProvider):
     def d(self) -> int:
         return self._d
 
-    def sample(self, n: int, x: Optional[Array] = None) -> Tuple[Array, Array]:
-        """
-        :param n: Number of samples.
-        :param x: Features whose conditional distribution needs to be sampled.
-        :return: A tuple (X, Y), where X is of shape (n, k) and contains the features
-        and Y is of shape (n, d) and contains the responses.
-        """
+    def sample_x(self, n: int) -> Array:
+        X = self._rng.uniform(size=(n, self.k))
+        X -= np.mean(X, axis=0)
+        return X
 
+    def sample(self, n: int, x: Optional[Array] = None) -> Tuple[Array, Array]:
         if x is None:
-            X = self._rng.uniform(size=(n, self.k))
-            X -= np.mean(X, axis=0)
+            X = self.sample_x(n=n)
         else:
-            assert len(x.shape) == 2
-            assert x.shape[1] == self._k
-            assert x.shape[0] == 1
+            x = np.reshape(x, (1, -1))
+            assert x.shape[1] == self.k
             X = np.concatenate([x for _ in range(n)], axis=0)
 
         N = self._noise_generator.sample(n)

@@ -2,9 +2,8 @@ from typing import Tuple, Optional, Sequence
 
 import numpy as np
 import torch
-from numpy.typing import ArrayLike as Array
 
-from experiments.data.base import DataProvider
+from experiments.data.base import Array, DataProvider
 
 
 class ConditionalBananaDataProvider(DataProvider):
@@ -27,9 +26,13 @@ class ConditionalBananaDataProvider(DataProvider):
     def d(self) -> int:
         return self._d
 
+    def sample_x(self, n: int) -> Array:
+        X = self._rng.uniform(low=0.8, high=3.2, size=(n, self.k))
+        return X
+
     def sample(self, n: int, x: Optional[Array] = None) -> Tuple[Array, Array]:
         if x is None:
-            X = self._rng.uniform(low=0.8, high=3.2, size=(n, self.k))
+            X = self.sample_x(n=n)
         else:
             assert len(x.shape) == 2
             assert x.shape[0] == 1

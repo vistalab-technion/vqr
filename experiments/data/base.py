@@ -1,13 +1,14 @@
 from abc import ABC, abstractmethod
 from typing import Tuple, Optional, Sequence
 
-from numpy.typing import ArrayLike as Array
+from numpy import ndarray as Array
 
 
 class DataProvider(ABC):
     """
     Base class for DataProviders which represent a possibly conditional distribution
-    of Y|X where Y is d-dimensional and X is k-dimensional.
+    of Y|X where Y is d-dimensional and X is k-dimensional. Models the distributions
+    of  X, Y|X and the joint (X,Y).
     """
 
     @property
@@ -27,11 +28,26 @@ class DataProvider(ABC):
         pass
 
     @abstractmethod
+    def sample_x(self, n: int) -> Array:
+        """
+        Samples feature vectors X.
+        :param n: Number of samples required.
+        :return: An array of shape (n, k) with the samples.
+        """
+        pass
+
+    @abstractmethod
     def sample(self, n: int, x: Optional[Array] = None) -> Tuple[Array, Array]:
         """
+        Samples either (x,y) pairs from the joint distribution or multiple y values
+        from Y|X=x.
         :param n: Number of samples to draw.
-        :param x: The feature vector to condition on. If not provided, will be sampled.
-        :return: A tuple (X, Y) containing n samples from Y|X=x if x was provided,
-        otherwise n samples from Y where a different X was sampled each time.
+        :param x: The feature vector to condition on. Should be of shape (1, k).
+        If not provided, will be sampled n times.
+        :return: A tuple (X, Y) containing n samples from Y|X=x if x was provided (X
+        will contain the same sample n times), otherwise n samples from Y where a
+        different X was sampled each time, representing samples from the joint
+        distribution of (X,Y).
+        In all cases, X will be of shape (n, k) and Y will be of shape (n, d).
         """
         pass
