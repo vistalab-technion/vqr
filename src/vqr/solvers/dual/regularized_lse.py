@@ -127,7 +127,7 @@ class RegularizedDualVQRSolver(VQRSolver):
         self._dtd = dict(dtype=self._dtype, device=self._device)
 
         if nn_init is None:
-            self._nn_init = lambda k: torch.nn.Identity()
+            self._nn_init = self._default_nn_init
         else:
             self._nn_init = nn_init
 
@@ -533,6 +533,12 @@ class RegularizedDualVQRSolver(VQRSolver):
                 phi_full[batch_slice] = phi
 
         return phi_full.reshape(-1, 1)
+
+    def _default_nn_init(self, *args, **kwargs):
+        """
+        Default neural-net init function. For internal use.
+        """
+        return torch.nn.Identity()
 
     def __repr__(self):
         return f"{self.__class__.__name__}(eps={self._epsilon:.0e})"
