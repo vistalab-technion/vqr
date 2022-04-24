@@ -1,8 +1,8 @@
 from typing import Tuple, Optional, Sequence
 
 import numpy as np
-from numpy import array
 from numpy.random import Generator
+from numpy.typing import ArrayLike as Array
 
 from experiments.data.base import DataProvider
 
@@ -19,7 +19,7 @@ class LinearMVNDataProvider(DataProvider):
     """
 
     def __init__(
-        self, k: int, d: int, A: Optional[array] = None, seed: Optional[int] = 42
+        self, k: int, d: int, A: Optional[Array] = None, seed: Optional[int] = 42
     ):
         """
         :param d: Dimension of targets.
@@ -45,7 +45,7 @@ class LinearMVNDataProvider(DataProvider):
     def d(self) -> int:
         return self._d
 
-    def sample(self, n: int, x: Optional[array] = None) -> Sequence[array]:
+    def sample(self, n: int, x: Optional[Array] = None) -> Tuple[Array, Array]:
         """
         :param n: Number of samples.
         :param x: Features whose conditional distribution needs to be sampled.
@@ -66,7 +66,7 @@ class LinearMVNDataProvider(DataProvider):
         Y = X @ self._A + N
         return X, Y
 
-    def _make_A(self) -> array:
+    def _make_A(self) -> Array:
         return self._rng.random(size=(self.k, self.d))
 
 
@@ -98,13 +98,13 @@ class MVNNoiseGenerator:
         self._Sigma = self._make_Sigma(random_cov)
         self._mu = self._make_mu()
 
-    def sample(self, n: int) -> array:
+    def sample(self, n: int) -> Array:
         return self._rng.multivariate_normal(mean=self._mu, cov=self._Sigma, size=(n,))
 
-    def _make_mu(self) -> array:
+    def _make_mu(self) -> Array:
         return np.zeros(self._d)
 
-    def _make_Sigma(self, random_cov: bool = False) -> array:
+    def _make_Sigma(self, random_cov: bool = False) -> Array:
         if (not random_cov) and self._d == 2:
             S = np.array([[1.0, -0.7], [-0.7, 1.0]])
 

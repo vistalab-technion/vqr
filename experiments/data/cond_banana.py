@@ -1,8 +1,8 @@
-from typing import Optional, Sequence
+from typing import Tuple, Optional, Sequence
 
 import numpy as np
 import torch
-from numpy import array
+from numpy.typing import ArrayLike as Array
 
 from experiments.data.base import DataProvider
 
@@ -27,7 +27,7 @@ class ConditionalBananaDataProvider(DataProvider):
     def d(self) -> int:
         return self._d
 
-    def sample(self, n: int, x: Optional[array] = None) -> Sequence[array]:
+    def sample(self, n: int, x: Optional[Array] = None) -> Tuple[Array, Array]:
         if x is None:
             X = self._rng.uniform(low=0.8, high=3.2, size=(n, self.k))
         else:
@@ -61,7 +61,7 @@ class ConditionalBananaDataProvider(DataProvider):
 
         return X, Y
 
-    def _make_beta(self) -> array:
+    def _make_beta(self) -> Array:
         beta = self._rng.uniform(low=0, high=1, size=(self.k,))
         beta /= np.linalg.norm(beta, ord=1)
         return beta
