@@ -21,6 +21,7 @@ from vqr.vqr import (
 from vqr.plot import plot_quantiles, plot_quantiles_3d
 from vqr.coverage import measure_coverage
 from vqr.solvers.primal.cvx import CVXVQRSolver
+from vqr.solvers.primal.pot import POTVQESolver
 from vqr.solvers.dual.regularized_lse import (
     RegularizedDualVQRSolver,
     MLPRegularizedDualVQRSolver,
@@ -32,6 +33,7 @@ SOLVER_TYPES: Dict[str, Type[VQRSolver]] = {
         CVXVQRSolver,
         RegularizedDualVQRSolver,
         MLPRegularizedDualVQRSolver,
+        POTVQESolver,
     ]
 }
 
