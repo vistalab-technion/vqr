@@ -13,6 +13,23 @@ from vqr.vqr import quantile_levels
 SIMILARITY_FN_INNER_PROD = lambda x, y: np.dot(x, y)
 
 
+def grid_points(grid_resolution: int, d: int) -> Array:
+    """
+    Returns a point sampled from an n-dimensional grid with a specified resolution.
+
+    :param grid_resolution: Grid resolution (i.e. number of points to sample along
+    each dimension)
+    :param d: The dimension of the grid.
+    :return: An array of points sampled on this grid.
+    """
+    u: Array = quantile_levels(grid_resolution)
+    # Quantile levels grid: list of grid coordinate matrices, one per dimension
+    U_grids: Sequence[Array] = np.meshgrid(*([u] * d))  # d arrays of shape (T,..., T)
+    # Stack all nd-grid coordinates into one long matrix, of shape (T**d, d)
+    U: Array = np.stack([U_grid.reshape(-1) for U_grid in U_grids], axis=1)
+    return U
+
+
 class CVXVQRSolver(VQRSolver):
     """
     Solves the Optimal Transport formulation of Vector Quantile Regression using
@@ -52,14 +69,8 @@ class CVXVQRSolver(VQRSolver):
 
         # All quantile levels
         Td: int = T**d
-        u: Array = quantile_levels(T)
 
-        # Quantile levels grid: list of grid coordinate matrices, one per dimension
-        U_grids: Sequence[Array] = np.meshgrid(
-            *([u] * d)
-        )  # d arrays of shape (T,..., T)
-        # Stack all nd-grid coordinates into one long matrix, of shape (T**d, d)
-        U: Array = np.stack([U_grid.reshape(-1) for U_grid in U_grids], axis=1)
+        U = grid_points(T, d)
         assert U.shape == (Td, d)
 
         # Pairwise distances (similarity)
