@@ -1,14 +1,12 @@
 import random
-import itertools as it
-from typing import Sequence
 
 import numpy as np
 import pytest
 import matplotlib.pyplot as plt
-from numpy.linalg import norm
 from sklearn.exceptions import NotFittedError
 
 from vqr import VectorQuantileEstimator, VectorQuantileRegressor
+from tests.conftest import _test_monotonicity
 from experiments.data.mvn import LinearMVNDataProvider, IndependentDataProvider
 from vqr.solvers.dual.regularized_lse import (
     RegularizedDualVQRSolver,
