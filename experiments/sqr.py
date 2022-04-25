@@ -76,14 +76,22 @@ Y_est = np.concatenate(
     [vqr_est.sample(n=1, x=np.array([X[i]])[:, None])[0] for i in range(n)]
 )
 
-plt.figure()
-plt.plot(X, Y_est, ".")
+fig, ax = plt.subplots(1, 2, figsize=(10, 5))
+ax[0].plot(X, Y, ".", label="GT Y|X")
+ax[0].set_ylabel("y")
+ax[0].set_xlabel("x")
+ax[0].set_title("GT")
+ax[0].legend()
+ax[1].plot(X, Y_est, ".", label="samples of Y|X")
 for quantile_level in np.linspace(0.1, 0.90, 10):
-    plt.plot(X, quantiles[:, int(quantile_level * T)], label=f"{quantile_level:.2f}")
-plt.legend()
+    ax[1].plot(X, quantiles[:, int(quantile_level * T)], label=f"{quantile_level:.2f}")
+ax[1].legend()
+ax[1].set_ylabel("y")
+ax[1].set_xlabel("x")
+ax[1].set_title("Non-linear QR")
+plt.suptitle("Simultaneous scalar QR", fontsize="x-large")
+plt.tight_layout()
 plt.savefig(f"quantile_levels_{linear=}.png")
 
 with open(f"quantiles_{linear=}.pkl", "wb") as f:
     pickle.dump({"quantiles": quantiles}, f)
-
-exit(0)
