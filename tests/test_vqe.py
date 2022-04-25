@@ -36,8 +36,8 @@ class TestPOTVQE:
         quantiles = POTVQESolver().solve_vqr(T=T, Y=Y, X=None).vector_quantiles()[0]
         assert len(quantiles) == d
 
-    @pytest.mark.parametrize("N", [1001, 2001])
-    @pytest.mark.parametrize("T", [5, 10, 25, 50])
+    @pytest.mark.parametrize("N", [1001, 2001, 3001])
+    @pytest.mark.parametrize("T", [5, 10, 20, 25, 30])
     def test_comonotonicity(self, N, T):
         Y = np.random.randn(N, 2)
         vqe_soln = POTVQESolver().solve_vqr(T=T, Y=Y, X=None)
