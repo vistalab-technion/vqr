@@ -15,7 +15,7 @@ SIMILARITY_FN_INNER_PROD = lambda x, y: np.dot(x, y)
 
 def grid_points(grid_resolution: int, d: int) -> Array:
     """
-    Returns a point sampled from an n-dimensional grid with a specified resolution.
+    Get grid points sampled on a d-dimensional with a specified resolution.
 
     :param grid_resolution: Grid resolution (i.e. number of points to sample along
     each dimension)
