@@ -296,11 +296,15 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
 
         return self
 
-    def vector_quantiles(self, X: Optional[Array] = None) -> Sequence[Sequence[Array]]:
+    def vector_quantiles(
+        self, X: Optional[Array] = None, refine: bool = False
+    ) -> Sequence[Sequence[Array]]:
         """
         :param X: Covariates, of shape (N, k). Should be None if the fitted solution
             was for a VQE (un conditional quantiles).
-        :return: A sequence of sequence of arrays.
+        :param refine: Refine the conditional quantile function using vector monotone
+        rearrangement.
+        :return: A sequence of, sequence of arrays.
         The outer sequence corresponds to the number of samples, and it's length is N.
         The inner sequences contain the vector-quantile values.
         Each inner sequence is of length d, where d is the dimension of the target
@@ -315,7 +319,18 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
             # Scale X with the fitted transformation before predicting
             X = self._scaler.transform(X)
 
-        return self._fitted_solution.vector_quantiles(X)
+        # Get the conditional quantiles
+        cqfs = self._fitted_solution.vector_quantiles(X)
+        if refine:
+            refined_cqfs = []
+            for cqf in cqfs:
+                vqe = VectorQuantileEstimator(n_levels=self.n_levels, solver="vqe_pot")
+                samples = np.stack(cqf, axis=0).reshape(-1, len(cqf))
+                vqe.fit(samples)
+                refined_cqfs.append(vqe.vector_quantiles())
+            return tuple(refined_cqfs)
+        else:
+            return cqfs
 
     def predict(self, X: Array) -> Array:
         """
