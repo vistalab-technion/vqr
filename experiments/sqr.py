@@ -62,14 +62,9 @@ vqr_est = VectorQuantileRegressor(n_levels=T, solver=solver)
 
 vqr_est.fit(X.reshape(-1, 1), Y.reshape(-1, 1))
 levels = vqr_est.quantile_levels
-quantiles = []
-for i in range(n):
-    X_i = np.array([X[i]])[:, None]
-    quantile_est = vqr_est.vector_quantiles(X=X_i)[0][0]
-    cost = -SIMILARITY_FN_INNER_PROD(levels[:, None], quantile_est[None, :])
-    pi = ot.emd([], [], cost)
-    refined_quantiles = T * pi @ quantile_est
-    quantiles.append(refined_quantiles)
+quantiles = [
+    vqr_est.vector_quantiles(X=np.array([X[i]]), refine=True)[0][0] for i in range(n)
+]
 
 quantiles = np.stack(quantiles, axis=0)
 Y_est = np.concatenate(
