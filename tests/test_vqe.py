@@ -16,8 +16,8 @@ class TestPOTVQE:
         sorted_Y = np.sort(Y.squeeze())[:: int(N / T)]
         assert np.allclose(est_quantiles[1:], sorted_Y[1:-1])
 
-    @pytest.mark.parametrize("N", [101, 201, 301, 501])
-    @pytest.mark.parametrize("T", [10, 20])
+    @pytest.mark.parametrize("N", [101, 201, 301])
+    @pytest.mark.parametrize("T", [5, 10])
     @pytest.mark.parametrize("d", [1, 2, 3])
     def test_pot_quantile_vs_sorted_Y_2d(self, N, T, d):
         Y = np.random.randn(N, d)
