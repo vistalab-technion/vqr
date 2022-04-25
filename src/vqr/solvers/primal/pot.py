@@ -3,7 +3,6 @@ from typing import Optional, Sequence
 import ot
 import numpy as np
 from numpy.typing import ArrayLike as Array
-from scipy.spatial.distance import cdist
 
 from vqr import VectorQuantiles
 from vqr.vqr import VQRSolver, quantile_levels
@@ -39,7 +38,7 @@ class POTVQESolver(VQRSolver):
         assert U.shape == (Td, d)
 
         # Pairwise distances (similarity)
-        S: Array = cdist(U, Y, SIMILARITY_FN_INNER_PROD)  # (Td, d) and (N, d)
+        S: Array = SIMILARITY_FN_INNER_PROD(U, Y.T)  # (Td, d) and (N, d)
         _, log = ot.emd2(
             M=-S,
             a=np.ones([Td]) / Td,
