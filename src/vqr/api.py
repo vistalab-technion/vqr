@@ -136,6 +136,15 @@ class VectorQuantileBase(BaseEstimator, ABC):
         check_is_fitted(self)
         return self._fitted_solution.metrics
 
+    @property
+    def fitted_solution(self) -> VectorQuantiles:
+        """
+        :return: The low-level VQR solution object.
+        Usually it is recommended to use the high level API on this class instead.
+        """
+        check_is_fitted(self)
+        return self._fitted_solution
+
     def plot_quantiles(
         self, surf_2d: bool = False, figsize: Optional[Tuple[int, int]] = None
     ) -> Figure:
