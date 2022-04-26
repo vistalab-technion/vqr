@@ -1,7 +1,7 @@
 import os
 import shutil
 import itertools as it
-from typing import Sequence
+from typing import Tuple, Sequence
 from pathlib import Path
 
 import numpy as np
@@ -72,22 +72,39 @@ def _test_monotonicity(
     projection_tolerance: float = 0.0,
     offending_proportion_limit: float = 0.005,
 ):
+    offending_projections, projections = monotonicity_offending_projections(
+        Qs, Us, T, projection_tolerance
+    )
+    n_c, n = len(offending_projections), len(projections)
+
+    offending_proportion = n_c / n
+    if offending_projections:
+        q = [0.01, 0.1, 0.25, 0.5, 0.75, 0.9, 0.99]
+        print(f"err quantiles: {np.quantile(offending_projections, q=q)}")
+        print(f"all quantiles: {np.quantile(projections, q=q)}")
+        print(f"{n=}, {n_c=}, {n_c/n=}")
+
+    assert offending_proportion < offending_proportion_limit
+
+
+def monotonicity_offending_projections(
+    Qs: Sequence[np.ndarray],
+    Us: Sequence[np.ndarray],
+    T: int,
+    projection_tolerance: float,
+) -> Tuple[Sequence[float], Sequence[float]]:
     # Only supports 2d for now.
     U1, U2 = Us
     Q1, Q2 = Qs
-
     ii = jj = tuple(range(1, T))
-
-    n, n_c = 0, 0
     projections = []
     offending_projections = []
+
     for i0, j0 in it.product(ii, jj):
         u0 = np.array([U1[i0, j0], U2[i0, j0]])
         q0 = np.array([Q1[i0, j0], Q2[i0, j0]])
 
         for i1, j1 in it.product(ii, jj):
-            n += 1
-
             u1 = np.array([U1[i1, j1], U2[i1, j1]])
             q1 = np.array([Q1[i1, j1], Q2[i1, j1]])
             du = u1 - u0
@@ -102,15 +119,7 @@ def _test_monotonicity(
             assert not np.isnan(projection)
             if projection < -projection_tolerance:
                 offending_projections.append(projection.item())
-                n_c += 1
 
             projections.append(projection)
 
-    offending_proportion = n_c / n
-    if offending_projections:
-        q = [0.01, 0.1, 0.25, 0.5, 0.75, 0.9, 0.99]
-        print(f"err quantiles: {np.quantile(offending_projections, q=q)}")
-        print(f"all quantiles: {np.quantile(projections, q=q)}")
-        print(f"{n=}, {n_c=}, {n_c/n=}")
-
-    assert offending_proportion < offending_proportion_limit
+    return offending_projections, projections
