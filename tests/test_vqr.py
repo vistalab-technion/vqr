@@ -98,8 +98,11 @@ class TestVectorQuantileEstimator(object):
         print(f"{cov=}")
         assert cov > (0.7 if d < 3 else 0.25)
 
-    def test_not_fitted(self):
-        vq = VectorQuantileEstimator(n_levels=100)
+    def test_not_fitted(self, vqr_solver_opts):
+        solver, solver_opts = vqr_solver_opts
+        vq = VectorQuantileEstimator(
+            n_levels=100, solver=solver, solver_opts=solver_opts
+        )
         with pytest.raises(NotFittedError):
             _ = vq.quantile_grid
         with pytest.raises(NotFittedError):
@@ -197,8 +200,8 @@ class TestVectorQuantileRegressor(object):
         assert all(q.shape == (T,) * d for q in vqr.quantile_grid)
         assert vqr.solution_metrics is not None
 
-        for X_ in [None, X]:
-            N_ = N if X_ is not None else 1
+        for X_ in [X[[0], :], X[0:, :]]:  # Single and multiple X should be valid
+            N_ = len(X_)
 
             vq_samples = vqr.vector_quantiles(X=X_)
 
@@ -217,10 +220,6 @@ class TestVectorQuantileRegressor(object):
         T = vqr.n_levels
 
         n = 1000
-
-        Y_samp = vqr.sample(n, x=None)
-        assert Y_samp.shape == (n, d)
-
         xs = []
         YXs = []
         for i in range(5):
@@ -233,7 +232,6 @@ class TestVectorQuantileRegressor(object):
         if d == 2:
             fig, ax = plt.subplots(1, 1, figsize=(10, 10))
             ax.scatter(Y[:, 0], Y[:, 1], c="k", label="Y (GT)")
-            ax.scatter(Y_samp[:, 0], Y_samp[:, 1], c="C0", label="Y")
             for i, (x, YX_samp) in enumerate(zip(xs, YXs)):
                 ax.scatter(
                     YX_samp[:, 0],
@@ -255,7 +253,7 @@ class TestVectorQuantileRegressor(object):
         cov = np.mean(
             [
                 # Coverage for each single data point is just 0 or 1
-                vqr.coverage(y.reshape(1, d), alpha=0.05, x=x)
+                vqr.coverage(y.reshape(1, d), x=x, alpha=0.05)
                 for (x, y) in zip(X, Y)
             ]
         )
@@ -310,6 +308,27 @@ class TestVectorQuantileRegressor(object):
             assert kw.keys() == callback_kwargs[0].keys()
             assert kw["phi"].requires_grad == False
             assert kw["b"].requires_grad == False
+
+    def test_not_fitted(self, vqr_solver):
+        X, Y = LinearMVNDataProvider(d=2, k=3).sample(n=100)
+        vq = VectorQuantileRegressor(
+            n_levels=100,
+            solver=vqr_solver,
+        )
+        with pytest.raises(NotFittedError):
+            _ = vq.quantile_grid
+        with pytest.raises(NotFittedError):
+            _ = vq.vector_quantiles(X)
+
+    def test_no_x(self, vqr_fitted):
+        X, Y, vqr = vqr_fitted
+        error_message = "Must provide covariates "
+        with pytest.raises(ValueError, match=error_message):
+            vqr.sample(n=100, x=None)
+        with pytest.raises(ValueError, match=error_message):
+            vqr.coverage(Y, x=None)
+        with pytest.raises(ValueError, match=error_message):
+            vqr.vector_quantiles(X=None)
 
 
 def _test_monotonicity(
