@@ -14,7 +14,7 @@ from tqdm.auto import tqdm
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
-from vqr import VQRSolver, VectorQuantiles
+from vqr import VQRSolver, VQRSolution
 from vqr.vqr import quantile_levels
 from vqr.models import MLP
 
@@ -86,7 +86,7 @@ class RegularizedDualVQRSolver(VQRSolver):
         or otherwise after each batch). It should accept kwargs.
         It will be passed the following kwargs:
         (solution, batch_loss, epoch_loss, epoch_idx, batch_idx, num_epochs,
-        num_batches). The solution is a VectorQuantiles object containing the
+        num_batches). The solution is a VQRSolution object containing the
         intermetiate solution for the iteration on which the callback is invoked.
         """
         super().__init__()
@@ -138,7 +138,7 @@ class RegularizedDualVQRSolver(VQRSolver):
         self._inference_batch_size = inference_batch_size
         self._callback: Optional[Callable] = post_iter_callback
 
-    def solve_vqr(self, T: int, Y: Array, X: Optional[Array] = None) -> VectorQuantiles:
+    def solve_vqr(self, T: int, Y: Array, X: Optional[Array] = None) -> VQRSolution:
         start_time = time()
         log_level = logging.INFO if self._verbose else logging.NOTSET
 
@@ -293,7 +293,7 @@ class RegularizedDualVQRSolver(VQRSolver):
 
     def _create_solution(
         self, T, d, k, U, phi, b, net, solution_metrics: dict = None
-    ) -> VectorQuantiles:
+    ) -> VQRSolution:
 
         A = phi.detach().cpu().numpy()
 
@@ -305,7 +305,7 @@ class RegularizedDualVQRSolver(VQRSolver):
                 self._features_transform, net=net.cpu(), dtype=self._dtype
             )
 
-        return VectorQuantiles(
+        return VQRSolution(
             T,
             d,
             U,

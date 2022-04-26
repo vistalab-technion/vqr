@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 from numpy.linalg import norm
 from sklearn.exceptions import NotFittedError
 
-from vqr import VectorQuantiles, VectorQuantileEstimator, VectorQuantileRegressor
+from vqr import VQRSolution, VectorQuantileEstimator, VectorQuantileRegressor
 from experiments.data.mvn import LinearMVNDataProvider, IndependentDataProvider
 from vqr.solvers.dual.regularized_lse import (
     RegularizedDualVQRSolver,
@@ -307,7 +307,7 @@ class TestVectorQuantileRegressor(object):
         for kw in callback_kwargs:
             assert kw.keys() == callback_kwargs[0].keys()
             solution = kw["solution"]
-            assert isinstance(solution, VectorQuantiles)
+            assert isinstance(solution, VQRSolution)
 
     def test_not_fitted(self, vqr_solver):
         X, Y = LinearMVNDataProvider(d=2, k=3).sample(n=100)

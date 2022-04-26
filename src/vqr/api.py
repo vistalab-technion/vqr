@@ -12,7 +12,7 @@ from sklearn.utils.validation import check_is_fitted
 
 from vqr.vqr import (
     VQRSolver,
-    VectorQuantiles,
+    VQRSolution,
     quantile_levels,
     quantile_contour,
     inversion_sampling,
@@ -80,7 +80,7 @@ class VectorQuantileBase(BaseEstimator, ABC):
         self.solver_opts = solver_opts
         self.solver = solver_instance
         self._n_levels = n_levels
-        self._fitted_solution: Optional[VectorQuantiles] = None
+        self._fitted_solution: Optional[VQRSolution] = None
 
     def __sklearn_is_fitted__(self):
         return self._fitted_solution is not None
@@ -137,7 +137,7 @@ class VectorQuantileBase(BaseEstimator, ABC):
         return self._fitted_solution.metrics
 
     @property
-    def fitted_solution(self) -> VectorQuantiles:
+    def fitted_solution(self) -> VQRSolution:
         """
         :return: The low-level VQR solution object.
         Usually it is recommended to use the high level API on this class instead.

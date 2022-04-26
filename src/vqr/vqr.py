@@ -8,7 +8,7 @@ from numpy import ndarray as Array
 from sklearn.utils import check_array
 
 
-class VectorQuantiles:
+class VQRSolution:
     """
     Encapsulates the solution to a VQR problem. Contains the vector quantiles and
     regression coefficients of the solution, and provides useful methods for
@@ -197,7 +197,7 @@ class VQRSolver(ABC):
         T: int,
         Y: Array,
         X: Optional[Array] = None,
-    ) -> VectorQuantiles:
+    ) -> VQRSolution:
         """
         Solves the provided VQR problem in an implementation-specific way.
 
