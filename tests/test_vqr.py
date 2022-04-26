@@ -315,6 +315,46 @@ class TestVectorQuantileRegressor(object):
             T=vqr.n_levels,
         )
 
+    @pytest.mark.flaky(reruns=1)
+    def test_vector_monotone_rearrangement(self, vqr_solver):
+        N = 1000
+        d = 2
+        k = 3
+        T = 15
+        X, Y = LinearMVNDataProvider(d=d, k=k, seed=42).sample(n=N)
+
+        vqr = VectorQuantileRegressor(n_levels=T, solver=vqr_solver)
+        vqr.fit(X, Y)
+
+        all_off_projs_refined = []
+        all_off_projs = []
+
+        for _ in range(25):
+            i = random.randrange(0, N)
+            off_projs, all_projs = monotonicity_offending_projections(
+                Us=vqr.quantile_grid,
+                Qs=vqr.vector_quantiles(X=X[[i]], refine=False)[0],
+                T=vqr.n_levels,
+                projection_tolerance=0.0,
+            )
+
+            off_projs_refined, all_projs_refined = monotonicity_offending_projections(
+                Us=vqr.quantile_grid,
+                Qs=vqr.vector_quantiles(X=X[[i]], refine=True)[0],
+                T=vqr.n_levels,
+                projection_tolerance=0.0,
+            )
+            all_off_projs.append(len(off_projs) / len(all_projs))
+            all_off_projs_refined.append(
+                len(off_projs_refined) / len(all_projs_refined)
+            )
+
+        print(np.mean(all_off_projs_refined), np.mean(all_off_projs))
+        print(np.median(all_off_projs_refined), np.median(all_off_projs))
+        assert (np.median(all_off_projs_refined) <= np.median(all_off_projs)) or (
+            (np.mean(all_off_projs_refined) <= np.mean(all_off_projs))
+        )
+
     @pytest.mark.parametrize("with_batches", [False, True])
     def test_callback(self, with_batches):
 
