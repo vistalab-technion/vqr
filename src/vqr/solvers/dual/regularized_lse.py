@@ -540,6 +540,12 @@ class RegularizedDualVQRSolver(VQRSolver):
         """
         return torch.nn.Identity()
 
+    def __getstate__(self):
+        # Prevent serialization of callback if the solver is serialized.
+        state = self.__dict__.copy()
+        state["_callback"] = None
+        return state
+
     def __repr__(self):
         return f"{self.__class__.__name__}(eps={self._epsilon:.0e})"
 
