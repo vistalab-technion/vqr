@@ -93,12 +93,16 @@ class VectorQuantiles:
         the j-th variable in Y given the other variables of Y.
         It is of shape (T, T, ... T).
         """
-        if X is not None and not self.is_conditional:
-            raise ValueError(f"VQR not conditional but covariates were supplied")
 
-        if not self.is_conditional or X is None:
+        if not self.is_conditional:
+            if X is not None:
+                raise ValueError(f"VQE was fitted but covariates were supplied")
+
             Y_hats = [self._A]
         else:
+            if X is None:
+                raise ValueError(f"VQR was fitted but no covariates were supplied")
+
             check_array(X, ensure_2d=True, allow_nd=False)
 
             if self._X_transform is not None:

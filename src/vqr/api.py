@@ -360,9 +360,7 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
         # Sample from the quantile function
         return inversion_sampling(T=self.n_levels, d=self.dim_y, n=n, Qs=Qs)
 
-    def coverage(
-        self, Y: Array, alpha: float = 0.05, x: Optional[Array] = None
-    ) -> float:
+    def coverage(self, Y: Array, x: Array, alpha: float = 0.05) -> float:
         """
         Calculates the conditional coverage of given data points using the quantiles
         fitted by this model, conditioned on X=x.
@@ -373,9 +371,9 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
         contained within this contour is calculated.
 
         :param Y: Points to measure coverage for. Shape should be (N, d).
-        :param alpha: Confidence level for the contour.
         :param x: One sample of covariates on which to condition Y.
         Should have shape  (k,) or (1, k).
+        :param alpha: Confidence level for the contour.
         :return: The coverage level, between zero and one.
         """
         check_is_fitted(self)
@@ -400,23 +398,23 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
         :param single: Whether to validate that n=1.
         :return: X after reshaping to (n,k).
         """
-        if X is not None:
-            error_msg = (
-                f"X must be (k,) or ({'1' if single else 'n'}, k), got {X.shape=}"
-            )
-            if np.ndim(X) == 1 and len(X) == self.dim_x:
-                # reshape to (1 ,k)
-                X = np.reshape(X, (1, -1))
+        if X is None:
+            raise ValueError("Must provide covariates (X) for VQR")
 
-            elif np.ndim(X) != 2:
-                raise ValueError(error_msg)
+        error_msg = f"X must be (k,) or ({'1' if single else 'n'}, k), got {X.shape=}"
+        if np.ndim(X) == 1 and len(X) == self.dim_x:
+            # reshape to (1 ,k)
+            X = np.reshape(X, (1, -1))
 
-            if X.shape[1] != self.dim_x:
-                raise ValueError(error_msg)
+        elif np.ndim(X) != 2:
+            raise ValueError(error_msg)
 
-            if single and X.shape[0] != 1:
-                # Only a single x is supported by this method
-                raise ValueError(error_msg)
+        if X.shape[1] != self.dim_x:
+            raise ValueError(error_msg)
+
+        if single and X.shape[0] != 1:
+            # Only a single x is supported by this method
+            raise ValueError(error_msg)
 
         return X
 
