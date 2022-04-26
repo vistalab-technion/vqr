@@ -5,6 +5,7 @@ import click
 from experiments.base import GPUOptions, OutputOptions, LoggingOptions
 from experiments.scale import scale_exp
 from experiments.logging import setup_logging
+from experiments.optimization import optim_exp
 
 _LOG = logging.getLogger(__name__)
 
@@ -21,4 +22,5 @@ def main(ctx: click.Context, **kw):
 
 if __name__ == "__main__":
     main.add_command(scale_exp)
+    main.add_command(optim_exp)
     main()
