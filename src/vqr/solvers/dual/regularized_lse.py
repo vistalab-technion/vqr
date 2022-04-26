@@ -8,10 +8,10 @@ from functools import partial
 
 import numpy as np
 import torch
+from numpy import ndarray as Array
 from torch import Tensor, tensor
 from tqdm.auto import tqdm
 from torch.optim import Optimizer
-from numpy.typing import ArrayLike as Array
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 from vqr import VQRSolver, VectorQuantiles

@@ -2,8 +2,8 @@ from abc import ABC
 from typing import Any, Dict, Type, Tuple, Union, Optional, Sequence
 
 import numpy as np
-from numpy import ndarray, quantile
-from numpy.typing import ArrayLike as Array
+from numpy import ndarray as Array
+from numpy import quantile
 from sklearn.base import BaseEstimator, RegressorMixin
 from sklearn.utils import check_X_y
 from matplotlib.figure import Figure
@@ -207,7 +207,7 @@ class VectorQuantileEstimator(VectorQuantileBase):
 
         # Input validation.
         N = len(X)
-        Y: ndarray = np.reshape(X, (N, -1))
+        Y: Array = np.reshape(X, (N, -1))
 
         self._fitted_solution = self.solver.solve_vqr(T=self.n_levels, Y=Y, X=None)
 
@@ -285,7 +285,7 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
         # Input validation.
         X, y = check_X_y(X, y, multi_output=True, ensure_2d=True)
         N = len(X)
-        Y: ndarray = np.reshape(y, (N, -1))
+        Y: Array = np.reshape(y, (N, -1))
 
         # Scale features to zero-mean
         X_scaled = self._scaler.fit_transform(X)
@@ -294,7 +294,7 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
 
         return self
 
-    def vector_quantiles(self, X: Optional[Array] = None) -> Sequence[Sequence[Array]]:
+    def vector_quantiles(self, X: Array) -> Sequence[Sequence[Array]]:
         """
         :param X: Covariates, of shape (N, k). Should be None if the fitted solution
             was for a VQE (un conditional quantiles).
@@ -338,7 +338,7 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
         assert vqs.shape == (N, self.dim_y, *[self.n_levels] * self.dim_y)
         return vqs
 
-    def sample(self, n: int, x: Optional[Array] = None) -> Array:
+    def sample(self, n: int, x: Array) -> Array:
         """
         Sample from Y|X=x based on the fitted vector quantile function Q(u;x).
         Uses the approach of Inverse transform sampling.
@@ -431,7 +431,7 @@ class ScalarQuantileEstimator:
 
         self.n_levels = n_levels
 
-    def fit(self, X: ndarray):
+    def fit(self, X: Array):
         N = len(X)
         Y = np.reshape(X, (N, -1))
         q = quantile(Y, q=quantile_levels(self.n_levels), axis=0)
@@ -441,17 +441,17 @@ class ScalarQuantileEstimator:
         return self
 
     @property
-    def sqr_A(self) -> ndarray:
+    def sqr_A(self) -> Array:
         return self._alpha
 
     @property
-    def quantile_levels(self) -> ndarray:
+    def quantile_levels(self) -> Array:
         """
-        :return: An ndarray containing the levels at which the vector quantiles were
+        :return: An array containing the levels at which the vector quantiles were
             estimated along each target dimension.
         """
         return quantile_levels(self.n_levels)
 
     @property
-    def quantile_values(self) -> ndarray:
+    def quantile_values(self) -> Array:
         return self.sqr_A

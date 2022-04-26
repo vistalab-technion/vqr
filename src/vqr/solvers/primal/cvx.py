@@ -4,7 +4,7 @@ from typing import Optional, Sequence
 
 import cvxpy as cp
 import numpy as np
-from numpy.typing import ArrayLike as Array
+from numpy import ndarray as Array
 from scipy.spatial.distance import cdist
 
 from vqr import VQRSolver, VectorQuantiles

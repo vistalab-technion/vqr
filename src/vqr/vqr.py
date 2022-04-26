@@ -4,8 +4,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Union, Callable, Optional, Sequence
 
 import numpy as np
-from numpy import ndarray
-from numpy.typing import ArrayLike as Array
+from numpy import ndarray as Array
 from sklearn.utils import check_array
 
 
@@ -140,7 +139,7 @@ class VectorQuantiles:
     @property
     def quantile_levels(self) -> Array:
         """
-        :return: An ndarray containing the levels at which the vector quantiles were
+        :return: An array containing the levels at which the vector quantiles were
             estimated along each target dimension.
         """
         return quantile_levels(self._T)
@@ -212,16 +211,16 @@ class VQRSolver(ABC):
         pass
 
 
-def quantile_levels(T: int) -> ndarray:
+def quantile_levels(T: int) -> Array:
     """
     Creates a vector of evenly-spaced quantile levels between zero and one.
     :param T: Number of levels to create.
-    :return: An ndarray of shape (T,).
+    :return: An array of shape (T,).
     """
     return (np.arange(T) + 1) * (1 / T)
 
 
-def decode_quantile_values(T: int, d: int, Y_hat: ndarray) -> Sequence[ndarray]:
+def decode_quantile_values(T: int, d: int, Y_hat: Array) -> Sequence[Array]:
     """
     Decodes the regression coefficients of a VQR solution into vector quantile values.
     :param T: The number of quantile levels that was used for solving the problem.
@@ -235,7 +234,7 @@ def decode_quantile_values(T: int, d: int, Y_hat: ndarray) -> Sequence[ndarray]:
     """
     Q = np.reshape(Y_hat, newshape=(T,) * d)
 
-    Q_functions: List[ndarray] = [np.array([np.nan])] * d
+    Q_functions: List[Array] = [np.array([np.nan])] * d
     for axis in reversed(range(d)):
         # Calculate derivative along this axis
         dQ_du = (1 / T) * np.diff(Q, axis=axis)
@@ -252,7 +251,7 @@ def decode_quantile_values(T: int, d: int, Y_hat: ndarray) -> Sequence[ndarray]:
     return tuple(Q_functions)
 
 
-def decode_quantile_grid(T: int, d: int, U: ndarray) -> Sequence[ndarray]:
+def decode_quantile_grid(T: int, d: int, U: Array) -> Sequence[Array]:
     """
     Decodes the U variable of a VQR solution into the grid of the
     evaluation points for the vector quantile functions.
@@ -260,7 +259,7 @@ def decode_quantile_grid(T: int, d: int, U: ndarray) -> Sequence[ndarray]:
     :param d: The dimension of the target data (Y) that was used for solving the
     problem.
     :param U: The encoded grid U, of shape (T**d, d).
-    :return: A sequence length d. Each ndarray in the sequence is a d-dimensional
+    :return: A sequence length d. Each array in the sequence is a d-dimensional
     array of shape (T, T, ..., T), which together represent the d-dimentional grid
     on which the vector quantiles were evaluated.
     """
