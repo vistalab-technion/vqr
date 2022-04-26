@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from sklearn.exceptions import NotFittedError
 
 from vqr import VectorQuantileEstimator, VectorQuantileRegressor
-from tests.conftest import _test_monotonicity
+from tests.conftest import _test_monotonicity, monotonicity_offending_projections
 from experiments.data.mvn import LinearMVNDataProvider, IndependentDataProvider
 from vqr.solvers.dual.regularized_lse import (
     RegularizedDualVQRSolver,
@@ -147,7 +147,7 @@ class TestVectorQuantileRegressor(object):
                 epsilon=1e-9,
                 hidden_layers=[2, 4],
                 skip=False,  # No skip, so output will have different k
-                num_epochs=1500,
+                num_epochs=2500,
             ),
         ],
         ids=[
