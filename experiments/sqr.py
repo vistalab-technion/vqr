@@ -83,7 +83,7 @@ for quantile_level in np.linspace(0.1, 0.90, 10):
 ax[1].legend()
 ax[1].set_ylabel("y")
 ax[1].set_xlabel("x")
-ax[1].set_title("Non-linear QR")
+ax[1].set_title("Non-linear QR" if not linear else "Linear")
 plt.suptitle("Simultaneous scalar QR", fontsize="x-large")
 plt.tight_layout()
 plt.savefig(f"quantile_levels_{linear=}.png")
