@@ -14,8 +14,7 @@ from tqdm.auto import tqdm
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
-from vqr import VQRSolver, VQRSolution
-from vqr.vqr import quantile_levels
+from vqr.vqr import VQRSolver, VQRSolution, quantile_levels
 from vqr.models import MLP
 
 _LOG = logging.getLogger(__name__)
@@ -591,7 +590,7 @@ class MLPRegularizedDualVQRSolver(RegularizedDualVQRSolver):
     def __init__(
         self,
         hidden_layers: Union[str, Sequence[int]] = (32,),
-        activation: Union[str, torch.nn.Module] = "relu",
+        activation: Union[str, torch.nn.Module] = "silu",
         skip: bool = True,
         batchnorm: bool = False,
         dropout: float = 0,
