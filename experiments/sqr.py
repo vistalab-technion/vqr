@@ -16,17 +16,18 @@ from vqr.solvers.dual.regularized_lse import (
 )
 from experiments.data.synthetic_glasses import SyntheticGlassesDataProvider
 
-n = 5000
+n = 10000
 d = 1
 k = 1
 T = 100
 num_epochs = 40000
-linear = False
+linear = True
+refine = True
 sigma = 0.1
 GPU_DEVICE_NUM = 1
 device = f"cuda:{GPU_DEVICE_NUM}" if GPU_DEVICE_NUM is not None else "cpu"
 dtype = torch.float32
-epsilon = 1e-3
+epsilon = 5e-3
 X, Y = SyntheticGlassesDataProvider().sample(n)
 
 
@@ -63,7 +64,7 @@ vqr_est = VectorQuantileRegressor(n_levels=T, solver=solver)
 vqr_est.fit(X.reshape(-1, 1), Y.reshape(-1, 1))
 levels = vqr_est.quantile_levels
 quantiles = [
-    vqr_est.vector_quantiles(X=np.array([X[i]]), refine=True)[0][0] for i in range(n)
+    vqr_est.vector_quantiles(X=np.array([X[i]]), refine=refine)[0][0] for i in range(n)
 ]
 
 quantiles = np.stack(quantiles, axis=0)
@@ -78,15 +79,17 @@ ax[0].set_xlabel("x")
 ax[0].set_title("GT")
 ax[0].legend()
 ax[1].plot(X, Y_est, ".", label="samples of Y|X")
-for quantile_level in np.linspace(0.1, 0.90, 10):
-    ax[1].plot(X, quantiles[:, int(quantile_level * T)], label=f"{quantile_level:.2f}")
-ax[1].legend()
+for quantile_level in np.linspace(0.02, 0.98, 20):
+    ax[1].plot(
+        X,
+        quantiles[:, int(quantile_level * T)],
+        label=f"{quantile_level:.2f}",
+        c="r",
+    )
+# ax[1].legend()
 ax[1].set_ylabel("y")
 ax[1].set_xlabel("x")
 ax[1].set_title("Non-linear QR" if not linear else "Linear")
 plt.suptitle("Simultaneous scalar QR", fontsize="x-large")
 plt.tight_layout()
-plt.savefig(f"quantile_levels_{linear=}.png")
-
-with open(f"quantiles_{linear=}.pkl", "wb") as f:
-    pickle.dump({"quantiles": quantiles}, f)
+plt.savefig(f"quantile_levels_{linear=}_{refine=}.png")
