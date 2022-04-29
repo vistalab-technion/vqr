@@ -5,6 +5,7 @@ import pytest
 from tests import TESTS_OUT_DIR
 from experiments.data.mvn import LinearMVNDataProvider, IndependentDataProvider
 from experiments.data.quantile import QuantileFunctionDataProviderWrapper
+from experiments.data.cond_banana import ConditionalBananaDataProvider
 
 
 class TestMVNData(object):
@@ -12,7 +13,21 @@ class TestMVNData(object):
     @pytest.mark.parametrize("d", [1, 2, 10])
     @pytest.mark.parametrize("n", [1000, 5000, 10000])
     def test_shapes(self, n, d, k):
-        X, Y = IndependentDataProvider(k, d).sample(n=n)
+        X, Y = IndependentDataProvider(k, d, seed=1023).sample(n=n)
+
+        assert X.shape == (n, k)
+        assert Y.shape == (n, d)
+
+
+class TestCondBanana(object):
+    @pytest.mark.parametrize("k", [1, 20, 100])
+    @pytest.mark.parametrize("d", [2, 3, 4])
+    @pytest.mark.parametrize("n", [1000, 5000, 10000])
+    @pytest.mark.parametrize("nonlinear", [True, False])
+    def test_shapes(self, n, d, k, nonlinear):
+        X, Y = ConditionalBananaDataProvider(
+            k=k, d=d, nonlinear=nonlinear, seed=63
+        ).sample(n)
 
         assert X.shape == (n, k)
         assert Y.shape == (n, d)
@@ -26,7 +41,7 @@ class TestQuantileFunctionDataProviderWrapper:
 
     @pytest.fixture(autouse=True, scope="class")
     def providers(self, test_out_dir_class_pid):
-        wrapped_provider = LinearMVNDataProvider(k=3, d=1)
+        wrapped_provider = LinearMVNDataProvider(k=3, d=1, seed=5040)
         cache_dir = test_out_dir_class_pid
 
         vqr_n_levels = 25
