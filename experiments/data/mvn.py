@@ -3,7 +3,7 @@ from typing import Tuple, Optional, Sequence
 import numpy as np
 from numpy.random import Generator
 
-from experiments.data.base import Array, DataProvider
+from experiments.data.base import Array, DataProvider, SerializableRandomDataGenerator
 
 
 class LinearMVNDataProvider(DataProvider):
@@ -25,16 +25,17 @@ class LinearMVNDataProvider(DataProvider):
         :param k: Dimension of features.
         :param seed: Random seed to use for generation. None means don't set.
         """
+        super().__init__(seed=seed)
         assert d > 0
         assert k >= 0
         self._d = d
         self._k = k
-        self._rng = np.random.default_rng(seed)
+
         if A is not None:
             assert k == A.shape[0]
             assert d == A.shape[1]
         self._A = self._make_A() if A is None else A
-        self._noise_generator = MVNNoiseGenerator(d=d, rng=self._rng, random_cov=True)
+        self._noise_generator = MVNNoiseGenerator(d=d, seed=self._seed, random_cov=True)
 
     @property
     def k(self) -> int:
@@ -65,7 +66,7 @@ class LinearMVNDataProvider(DataProvider):
         return self._rng.random(size=(self.k, self.d))
 
 
-class MVNNoiseGenerator:
+class MVNNoiseGenerator(SerializableRandomDataGenerator):
     """
     Generates multivariate normal distribution.
     """
@@ -73,14 +74,12 @@ class MVNNoiseGenerator:
     def __init__(
         self,
         d: int,
-        rng: Optional[Generator] = None,
         seed: int = 42,
         random_cov: bool = False,
     ):
         """
 
         :param d: dimension of the distribution
-        :param rng: a numpy random number generator
         :param seed: Random seed to use for generation. If a random number generator
         is provided, this seed will be ignored.
         :param random_cov: Whether to use a random covariance. If set to False, a
@@ -88,8 +87,8 @@ class MVNNoiseGenerator:
         only when d=2).
         """
         assert d > 0
+        super().__init__(seed=seed)
         self._d = d
-        self._rng = np.random.default_rng(seed) if rng is None else rng
         self._Sigma = self._make_Sigma(random_cov)
         self._mu = self._make_mu()
 

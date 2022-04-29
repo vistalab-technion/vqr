@@ -1,10 +1,36 @@
 from abc import ABC, abstractmethod
 from typing import Tuple, Optional, Sequence
 
+import numpy as np
 from numpy import ndarray as Array
 
 
-class DataProvider(ABC):
+class SerializableRandomDataGenerator(ABC):
+    """
+    A wrapper for a numpy number generator which allows serialization and
+    de-serialization without maintaining the state of the generator.
+    This is useful when persistent hashes need to be generated from the provider's
+    state.
+    """
+
+    def __init__(self, seed: int = 42):
+        self._seed = seed
+        self._rng = self._create_rng()
+
+    def _create_rng(self) -> np.random.Generator:
+        return np.random.default_rng(self._seed)
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state["_rng"] = None
+        return state
+
+    def __setstate__(self, state: dict):
+        self.__dict__.update(state)
+        self._rng = self._create_rng()
+
+
+class DataProvider(SerializableRandomDataGenerator):
     """
     Base class for DataProviders which represent a possibly conditional distribution
     of Y|X where Y is d-dimensional and X is k-dimensional. Models the distributions

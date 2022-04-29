@@ -37,23 +37,25 @@ class QuantileFunctionDataProviderWrapper(DataProvider):
         seed: Optional[int] = 42,
     ):
         """
-
-        :param wrapped_provider:
-        :param vqr_n_levels:
-        :param vqr_fit_n:
-        :param vqr_solver_name:
-        :param vqr_solver_opts:
-        :param cache_dir:
-        :param seed:
+        :param wrapped_provider: The data provider which will be used to draw samples
+        on which a VQR model will be fitted.
+        :param vqr_n_levels: Number of quantile levels to fit the VQR model with.
+        :param vqr_fit_n: Number of samples from the wrapped provider to fit the VQR
+        model with.
+        :param vqr_solver_name: VQR solver name.
+        :param vqr_solver_opts: VQR solver options.
+        :param cache_dir: Override for the default cache directory. Set None for no
+        caching.
+        :param seed: Random seed.
         """
-        self.wrapped_provider = wrapped_provider
+        super().__init__(seed=seed)
 
+        self.wrapped_provider = wrapped_provider
         self._vqr_n_levels = vqr_n_levels
         self._vqr_fit_n = vqr_fit_n
         self._vqr_solver_name = vqr_solver_name
         self._vqr_solver_opts = vqr_solver_opts
         self._cache_dir = Path(cache_dir) if cache_dir else None
-        self._seed = seed
 
         if not self._cache_dir:
             self.vqr = self._fit_vqr()
@@ -78,6 +80,7 @@ class QuantileFunctionDataProviderWrapper(DataProvider):
         os.makedirs(self._cache_dir, exist_ok=True)
 
         cache_args = [
+            self.wrapped_provider,
             self._vqr_fit_n,
             self._vqr_n_levels,
             self._vqr_solver_name,

@@ -12,9 +12,9 @@ class ConditionalBananaDataProvider(DataProvider):
     ):
         assert d in [2, 3, 4]
         assert k > 0
+        super().__init__(seed=seed)
         self._d = d
         self._k = k
-        self._rng = np.random.default_rng(seed)
         self._beta = self._make_beta()
         self._nonlinear = nonlinear
 
