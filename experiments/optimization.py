@@ -3,6 +3,7 @@ from typing import Any, Dict, Optional, Sequence
 
 import click
 import numpy as np
+from matplotlib import pyplot as plt
 
 from vqr import QuantileFunction, VectorQuantileRegressor
 from experiments.base import VQROptions, run_exp_context
@@ -101,6 +102,19 @@ def single_optim_exp(
 
     # Remove callback so that it doesn't get serialized
     solver_opts.pop("post_iter_callback")
+
+    if plot := False:
+        x = np.arange(len(optimization_dists))
+        y = np.mean(optimization_dists, axis=1)
+        yerr_min = np.min(optimization_dists, axis=1)
+        yerr_max = np.max(optimization_dists, axis=1)
+
+        fig, ax = plt.subplots(1, 1, figsize=(10, 5))
+        ax.plot(x, y, "k-")
+        ax.fill_between(x, y - yerr_min, y + yerr_max, alpha=0.5)
+        ax.set_xlabel("epoch")
+        ax.set_ylabel(r"$\frac{||Q^{*}(u)-\hat{Q}(u)||_{2}}{||Q^{*}(u)||_{2}}$")
+        plt.savefig("optim-exp.png", tight_layout=True)
 
     return dict(
         N=N,
