@@ -1,6 +1,7 @@
 from abc import ABC
 from typing import Any, Dict, Type, Tuple, Union, Optional, Sequence
 
+import ot
 import numpy as np
 from numpy import ndarray as Array
 from numpy import quantile
@@ -325,12 +326,22 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
         # Get the conditional quantiles
         cqfs = self._fitted_solution.vector_quantiles(X)
         if refine:
+            U = np.stack([q.ravel() for q in self.quantile_grid], axis=-1)
             refined_cqfs = []
             for cqf in cqfs:
-                vqe = VectorQuantileEstimator(n_levels=self.n_levels, solver="vqe_pot")
-                samples = np.stack(cqf, axis=0).reshape(-1, len(cqf))
-                vqe.fit(samples)
-                refined_cqfs.append(vqe.vector_quantiles())
+                pre_samples = np.stack([qv.ravel() for qv in cqf], axis=-1)
+                pi = ot.emd(
+                    M=-U @ pre_samples.T,
+                    a=[],
+                    b=[],
+                )
+                post_samples = pre_samples.shape[0] * pi @ pre_samples
+                refined_cqfs.append(
+                    [
+                        post_samples[:, i].reshape(self.n_levels, self.n_levels)
+                        for i in range(len(cqf))
+                    ]
+                )
             return tuple(refined_cqfs)
         else:
             return cqfs
