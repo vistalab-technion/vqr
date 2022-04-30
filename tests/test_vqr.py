@@ -146,20 +146,20 @@ class TestVectorQuantileRegressor(object):
             RegularizedDualVQRSolver(
                 verbose=True,
                 lr=0.5,
-                epsilon=1e-9,
+                epsilon=1e-2,
             ),
             RegularizedDualVQRSolver(
                 verbose=True,
                 lr=0.5,
-                epsilon=1e-9,
+                epsilon=1e-2,
                 batchsize_y=1000,
                 batchsize_u=100,
             ),
-            MLPRegularizedDualVQRSolver(verbose=True, lr=0.5, epsilon=1e-9),
+            MLPRegularizedDualVQRSolver(verbose=True, lr=0.5, epsilon=1e-2),
             MLPRegularizedDualVQRSolver(
                 verbose=True,
                 lr=0.5,
-                epsilon=1e-9,
+                epsilon=1e-2,
                 hidden_layers=[2, 4],
                 skip=False,  # No skip, so output will have different k
                 num_epochs=1500,
