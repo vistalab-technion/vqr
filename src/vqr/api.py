@@ -338,7 +338,7 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
                 post_samples = pre_samples.shape[0] * pi @ pre_samples
                 refined_cqfs.append(
                     [
-                        post_samples[:, i].reshape(self.n_levels, self.n_levels)
+                        post_samples[:, i].reshape((self.n_levels,) * len(cqf))
                         for i in range(len(cqf))
                     ]
                 )
