@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sys
 import logging
-from copy import copy
+from copy import deepcopy
 from time import time
 from typing import Any, Union, Callable, Optional, Sequence
 from functools import partial
@@ -292,13 +292,9 @@ class RegularizedDualVQRSolver(VQRSolver):
     ) -> VQRSolution:
 
         # Create a copy of the network on CPU, without moving the original net to CPU
-        # Note: we don't use deepcopy to prevent duplicating GPU memory
-        # First we create a shallow copy, then we set it's state_dict from the
-        # original state dict but with each element copied to CPU. If net is already
-        # on CPU, no copy will happen.
-        net_copy: torch.nn.Module = copy(net)
-        net_state_cpu = {k: v.cpu() for k, v in net.state_dict().items()}
-        net_copy.load_state_dict(net_state_cpu)
+        # Note: deepcopy seems to create a copy of all tensors on cpu, but calling
+        # cpu() to make sure.
+        net_copy: torch.nn.Module = deepcopy(net).cpu()
 
         A = phi.detach().cpu().numpy()
         B = None
