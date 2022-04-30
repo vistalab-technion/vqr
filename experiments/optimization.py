@@ -90,7 +90,7 @@ def single_optim_exp(
     solver_opts["post_iter_callback"] = _post_iter_callback
 
     ###
-    solver_opts["verbose"] = True
+    solver_opts["verbose"] = False
 
     # Solve
     vqr = VectorQuantileRegressor(
@@ -116,14 +116,9 @@ def single_optim_exp(
 @click.command(name="optim-exp")
 @click.pass_context
 @VQROptions.cli
+@VQROptions.cli(prefix="dp")
 @click.option(
-    "--dp-vqr-n",
-    type=int,
-    default=10000,
-    help="Number of samples to use for fitting the data provider's VQR model",
-)
-@click.option(
-    "--dp-t-factor",
+    "--t-factor",
     type=int,
     default=100,
     help=(
@@ -139,20 +134,22 @@ def single_optim_exp(
 )
 def optim_exp(
     ctx: click.Context,
-    dp_vqr_n: int,
-    dp_t_factor: int,
+    t_factor: int,
     n_eval_x: int,
     **kw,
 ):
+
+    # We don't support multiple DP options, only first is used
+    vqr_options_dp = VQROptions.parse(ctx, prefix="dp")
 
     # Generate experiment configs from CLI
     vqr_options = VQROptions.parse_multiple(ctx)
     exp_configs = {
         vqr_option.key(): dict(
-            dp_vqr_n=dp_vqr_n,
-            dp_vqr_t_factor=dp_t_factor,
             n_eval_x=n_eval_x,
-            dp_vqr_solver_opts=dict(epsilon=5e-3),
+            dp_vqr_n=vqr_options_dp.N,
+            dp_vqr_t_factor=t_factor,
+            dp_vqr_solver_opts=vqr_options_dp.solver_opts,
             **vqr_option.to_dict(),
         )
         for vqr_option in vqr_options
