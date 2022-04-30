@@ -43,45 +43,91 @@ class _CLIOptions(ABC):
 
     @classmethod
     @abstractmethod
-    def _cli_options(cls) -> Sequence[click.Option]:
+    def _cli_options(cls, prefix: str = "") -> Sequence[click.Option]:
         """
+        :param prefix: A prefix to add to each argument name.
         :return: A list of click.Option decorators which can be applied to a
         click.Command.
         """
         pass
 
     @classmethod
-    def cli(cls, fn: Callable) -> Callable:
+    def cli(cls, fn: Callable = None, *, prefix: str = None) -> Callable:
         """
         A decorator which can be applied to a click.Command. Adds the options defined in
         the _cli_options method.
-        :param fn:
-        :return:
+        :param fn: The function to decorate, should be a click command or group.
+        :param prefix: A prefix which will be applied to all CLI options.
+        :return: A decorator which adds click options to the given command/group.
         """
-        return _click_decorator(fn, cls._cli_options())
+
+        prefix = prefix or ""
+
+        # This is to support the usage as a parametrized decorator, i.e. @cli(k=v)
+        if fn is None:
+            return functools.partial(cls.cli, prefix=prefix)
+
+        return _click_decorator(fn, cls._cli_options(prefix=prefix))
 
     @classmethod
-    def parse(cls, ctx: click.Context) -> _CLIOptions:
+    def parse(cls, ctx: click.Context, prefix: str = "") -> _CLIOptions:
         """
         Parses a click.Context into a _CLIOptions instance.
         If there are multiple option values, returns the first one.
         :param ctx: The click.Context.
+        :param prefix: The prefix which was applied to all CLI options.
         :return: An instance of this class, initialized based on parsing the context.
         """
-        return cls.parse_multiple(ctx)[0]
+        multi_opts = cls.parse_multiple(ctx, prefix=prefix)
+        n_opts = len(multi_opts)
+        if n_opts != 1:
+            raise ValueError(f"Expected single value of parsed options, got {n_opts}")
+
+        return multi_opts[0]
 
     @classmethod
     @abstractmethod
-    def parse_multiple(cls, ctx: click.Context) -> Sequence[_CLIOptions]:
+    def parse_multiple(
+        cls,
+        ctx: click.Context,
+        prefix: str = "",
+    ) -> Sequence[_CLIOptions]:
         """
         Parses a click.Context, which may contain some options with multiple
         values, into a sequence of _CLIOptions instance, generated as a product of
         the multiple values.
         :param ctx: The click.Context.
+        :param prefix: The prefix which was applied to all CLI options.
         :return: An sequence of instances of this class, initialized based on parsing
         the context.
         """
         pass
+
+    @classmethod
+    def _prefix_option(cls, option: str, prefix: str):
+        if not prefix:
+            return option
+
+        if option.startswith("--"):
+            return option.replace("--", f"--{prefix}-")
+        elif option.startswith("-"):
+            return option.replace("-", f"-{prefix}_")
+        else:
+            raise ValueError(
+                f"Expected that options start with '-' or '--', got {option}"
+            )
+
+    @classmethod
+    def _prefix_name(cls, name: str, prefix: str):
+        if not prefix:
+            return name
+
+        if name.startswith("-"):
+            raise ValueError(
+                f"Expected that option names don't start with '-', got {name}"
+            )
+
+        return f"{prefix}_{name}"
 
     def key(self) -> str:
         """
@@ -111,45 +157,49 @@ class GPUOptions(_CLIOptions):
         self.ppd = ppd
 
     @classmethod
-    def _cli_options(cls) -> Sequence[click.Option]:
+    def _cli_options(cls, prefix: str = "") -> Sequence[click.Option]:
+        _p = functools.partial(cls._prefix_option, prefix=prefix)
         return [  # type:ignore
             click.option(
-                "-g", "--gpu/--no-gpu", default=False, help="Enable GPU support"
+                _p("-g"), _p("--gpu/--no-gpu"), default=False, help="Enable GPU support"
             ),
             click.option(
-                "--devices",
+                _p("--devices"),
                 default=None,
                 type=str,
                 help="GPU devices (comma separated)",
             ),
             click.option(
-                "-p",
-                "--processes",
+                _p("-p"),
+                _p("--processes"),
                 type=int,
                 default=-1,
                 help="Number of processes",
             ),
-            click.option("--ppd", type=int, default=1, help="Processes per GPU device"),
+            click.option(
+                _p("--ppd"), type=int, default=1, help="Processes per GPU device"
+            ),
         ]
 
     @classmethod
-    def parse_multiple(cls, ctx: click.Context) -> Sequence[GPUOptions]:
-        """
-        Parses GPU options from context.
-        :param ctx: Click context.
-        :return: A GPUOptions instance.
-        """
-        while ctx and "gpu" not in ctx.params:
+    def parse_multiple(
+        cls,
+        ctx: click.Context,
+        prefix: str = "",
+    ) -> Sequence[GPUOptions]:
+        _n = functools.partial(cls._prefix_name, prefix=prefix)
+
+        while ctx and _n("gpu") not in ctx.params:
             ctx = ctx.parent
         if not ctx:
-            raise ValueError("GPU options not found in context")
+            raise ValueError(f"GPU options not found in context ({prefix=})")
 
         return (
             GPUOptions(
-                gpu_enabled=ctx.params["gpu"],
-                gpu_devices=ctx.params["devices"],
-                num_processes=ctx.params["processes"],
-                ppd=ctx.params["ppd"],
+                gpu_enabled=ctx.params[_n("gpu")],
+                gpu_devices=ctx.params[_n("devices")],
+                num_processes=ctx.params[_n("processes")],
+                ppd=ctx.params[_n("ppd")],
             ),
         )
 
@@ -164,34 +214,36 @@ class OutputOptions(_CLIOptions):
         self.out_tag = out_tag
 
     @classmethod
-    def _cli_options(cls) -> Sequence[click.Option]:
+    def _cli_options(cls, prefix: str = "") -> Sequence[click.Option]:
+        _p = functools.partial(cls._prefix_option, prefix=prefix)
         return [  # type:ignore
             click.option(
-                "-o",
-                "--out-dir",
+                _p("-o"),
+                _p("--out-dir"),
                 type=Path,
                 default=EXPERIMENTS_OUT_DIR,
                 help="Output directory",
             ),
-            click.option("--out-tag", type=str, default="", help="Output tag"),
+            click.option(_p("--out-tag"), type=str, default="", help="Output tag"),
         ]
 
     @classmethod
-    def parse_multiple(cls, ctx: click.Context) -> Sequence[OutputOptions]:
-        """
-        Parses output options from context.
-        :param ctx: Click context.
-        :return: An OutputOptions instance.
-        """
-        while ctx and "out_dir" not in ctx.params:
+    def parse_multiple(
+        cls,
+        ctx: click.Context,
+        prefix: str = "",
+    ) -> Sequence[OutputOptions]:
+        _n = functools.partial(cls._prefix_name, prefix=prefix)
+
+        while ctx and _n("out_dir") not in ctx.params:
             ctx = ctx.parent
         if not ctx:
-            raise ValueError("Output options not found in context")
+            raise ValueError(f"Output options not found in context {prefix=}")
 
         return (
             OutputOptions(
-                out_dir=ctx.params["out_dir"],
-                out_tag=ctx.params["out_tag"],
+                out_dir=ctx.params[_n("out_dir")],
+                out_tag=ctx.params[_n("out_tag")],
             ),
         )
 
@@ -205,18 +257,28 @@ class LoggingOptions(_CLIOptions):
         self.debug = debug
 
     @classmethod
-    def _cli_options(cls) -> Sequence[click.Option]:
+    def _cli_options(cls, prefix: str = "") -> Sequence[click.Option]:
+        _p = functools.partial(cls._prefix_option, prefix=prefix)
         return [  # type:ignore
-            click.option("--debug/--no-debug", default=False, help="Use DEBUG logging"),
+            click.option(
+                _p("--debug/--no-debug"), default=False, help="Use DEBUG logging"
+            ),
         ]
 
     @classmethod
-    def parse_multiple(cls, ctx: click.Context) -> Sequence[LoggingOptions]:
-        while ctx and "debug" not in ctx.params:
+    def parse_multiple(
+        cls,
+        ctx: click.Context,
+        prefix: str = "",
+    ) -> Sequence[LoggingOptions]:
+        _n = functools.partial(cls._prefix_name, prefix=prefix)
+
+        while ctx and _n("debug") not in ctx.params:
             ctx = ctx.parent
         if not ctx:
-            raise ValueError("Logging options not found in context")
-        return (LoggingOptions(debug=ctx.params["debug"]),)
+            raise ValueError(f"Logging options not found in context {prefix=}")
+
+        return (LoggingOptions(debug=ctx.params[_n("debug")]),)
 
 
 class VQROptions(_CLIOptions):
@@ -244,109 +306,138 @@ class VQROptions(_CLIOptions):
         return self.__dict__.copy()
 
     @classmethod
-    def _cli_options(cls) -> Sequence[click.Option]:
+    def _cli_options(cls, prefix: str = "") -> Sequence[click.Option]:
+        _p = functools.partial(cls._prefix_option, prefix=prefix)
+        _n = functools.partial(cls._prefix_name, prefix=prefix)
+
         return [  # type:ignore
             click.option(
-                "-N", "ns", type=int, multiple=True, default=[1000], help="Samples"
+                _p("-N"),
+                _n("ns"),
+                type=int,
+                multiple=True,
+                default=[1000],
+                help="Samples",
             ),
             click.option(
-                "-T",
-                "ts",
+                _p("-T"),
+                _n("ts"),
                 type=int,
                 multiple=True,
                 default=[20],
                 help="Quantile levels",
             ),
             click.option(
-                "-d", "ds", type=int, multiple=True, default=[2], help="Y dimension"
+                _p("-d"),
+                _n("ds"),
+                type=int,
+                multiple=True,
+                default=[2],
+                help="Y dimension",
             ),
             click.option(
-                "-k", "ks", type=int, multiple=True, default=[3], help="X dimension"
+                _p("-k"),
+                _n("ks"),
+                type=int,
+                multiple=True,
+                default=[3],
+                help="X dimension",
             ),
             click.option(
-                "-E",
-                "epsilons",
+                _p("-E"),
+                _n("epsilons"),
                 type=float,
                 multiple=True,
                 default=[1e-6],
                 help="epsilon",
             ),
             click.option(
-                "--bs-y",
-                "bys",
+                _p("--bs-y"),
+                _n("bys"),
                 type=int,
                 multiple=True,
                 default=[-1],
                 help="Batch size of Y (samples), -1 disables batching",
             ),
             click.option(
-                "--bs-u",
-                "bus",
+                _p("--bs-u"),
+                _n("bus"),
                 type=int,
                 multiple=True,
                 default=[-1],
                 help="Batch size of U (quantile levels), -1 disables batching",
             ),
-            click.option("--epochs", type=int, default=1000, help="epochs"),
-            click.option("--lr", type=float, default=0.5, help="Learning rate"),
+            click.option(_p("--epochs"), type=int, default=1000, help="epochs"),
+            click.option(_p("--lr"), type=float, default=0.5, help="Learning rate"),
             click.option(
-                "--lr-max-steps", type=int, default=10, help="LR sched. steps"
+                _p("--lr-max-steps"), type=int, default=10, help="LR sched. steps"
             ),
             click.option(
-                "--lr-factor", type=float, default=0.9, help="LR sched. factor"
+                _p("--lr-factor"), type=float, default=0.9, help="LR sched. factor"
             ),
             click.option(
-                "--lr-patience", type=int, default=500, help="LR sched. patience"
+                _p("--lr-patience"), type=int, default=500, help="LR sched. patience"
             ),
             click.option(
-                "--lr-threshold", type=float, default=0.01 * 5, help="LR sched. thresh."
+                _p("--lr-threshold"),
+                type=float,
+                default=0.01 * 5,
+                help="LR sched. " "thresh.",
             ),
             click.option(
-                "--mlp/--no-mlp", type=bool, default=False, help="NL-VQR with MLP"
+                _p("--mlp/--no-mlp"), type=bool, default=False, help="NL-VQR with MLP"
             ),
             click.option(
-                "--mlp-layers", type=str, default="32,32", help="comma-separated ints"
+                _p("--mlp-layers"),
+                type=str,
+                default="32,32",
+                help="comma-separated ints",
             ),
             click.option(
-                "--mlp-skip/--no-mlp-skip",
+                _p("--mlp-skip/--no-mlp-skip"),
                 type=bool,
                 default=False,
                 help="MLP residual",
             ),
             click.option(
-                "--mlp-activation", type=str, default="relu", help="MLP activation"
+                _p("--mlp-activation"), type=str, default="relu", help="MLP activation"
             ),
             click.option(
-                "--mlp-batchnorm/--no-mlp-batchnorm", type=bool, default=False
+                _p("--mlp-batchnorm/--no-mlp-batchnorm"), type=bool, default=False
             ),
-            click.option("--mlp-dropout", type=float, default=0.0),
+            click.option(_p("--mlp-dropout"), type=float, default=0.0),
         ]
 
     @classmethod
-    def parse_multiple(cls, ctx: click.Context) -> Sequence[VQROptions]:
+    def parse_multiple(
+        cls,
+        ctx: click.Context,
+        prefix: str = "",
+    ) -> Sequence[VQROptions]:
+        _n = functools.partial(cls._prefix_name, prefix=prefix)
 
-        while ctx and "ns" not in ctx.params:
+        while ctx and _n("ns") not in ctx.params:
             ctx = ctx.parent
         if not ctx:
-            raise ValueError("VQR options not found in context")
+            raise ValueError(f"VQR options not found in context {prefix=}")
 
         gpu_options = GPUOptions.parse(ctx)
         p = ctx.params
 
         # parse mlp options
         mlp_opts = dict(
-            hidden_layers=p["mlp_layers"],
-            activation=p["mlp_activation"],
-            skip=p["mlp_skip"],
-            batchnorm=p["mlp_batchnorm"],
-            dropout=p["mlp_dropout"],
+            hidden_layers=p[_n("mlp_layers")],
+            activation=p[_n("mlp_activation")],
+            skip=p[_n("mlp_skip")],
+            batchnorm=p[_n("mlp_batchnorm")],
+            dropout=p[_n("mlp_dropout")],
         )
         # Filter out defaults and remove everything if mlp==False.
-        mlp_opts = {k: v for k, v in mlp_opts.items() if v is not None and p["mlp"]}
+        mlp_opts = {k: v for k, v in mlp_opts.items() if v is not None and p[_n("mlp")]}
 
         solver_name = (
             MLPRegularizedDualVQRSolver.solver_name()
-            if p["mlp"]
+            if p[_n("mlp")]
             else RegularizedDualVQRSolver.solver_name()
         )
 
@@ -359,13 +450,13 @@ class VQROptions(_CLIOptions):
                 solver_name=solver_name,
                 solver_opts=dict(
                     verbose=False,
-                    num_epochs=p["epochs"],
+                    num_epochs=p[_n("epochs")],
                     epsilon=eps_,
-                    lr=p["lr"],
-                    lr_max_steps=p["lr_max_steps"],
-                    lr_factor=p["lr_factor"],
-                    lr_patience=p["lr_patience"],
-                    lr_threshold=p["lr_threshold"],
+                    lr=p[_n("lr")],
+                    lr_max_steps=p[_n("lr_max_steps")],
+                    lr_factor=p[_n("lr_factor")],
+                    lr_patience=p[_n("lr_patience")],
+                    lr_threshold=p[_n("lr_threshold")],
                     batchsize_y=bs_y_ if bs_y_ > 0 else None,
                     batchsize_u=bs_u_ if bs_u_ > 0 else None,
                     gpu=gpu_options.gpu_enabled,
@@ -373,7 +464,13 @@ class VQROptions(_CLIOptions):
                 ),
             )
             for (N_, T_, d_, k_, eps_, bs_y_, bs_u_) in product(
-                p["ns"], p["ts"], p["ds"], p["ks"], p["epsilons"], p["bys"], p["bus"]
+                p[_n("ns")],
+                p[_n("ts")],
+                p[_n("ds")],
+                p[_n("ks")],
+                p[_n("epsilons")],
+                p[_n("bys")],
+                p[_n("bus")],
             )
         )
 
