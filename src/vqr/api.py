@@ -13,6 +13,7 @@ from sklearn.utils.validation import check_is_fitted
 from vqr.vqr import (
     VQRSolver,
     VQRSolution,
+    QuantileFunction,
     quantile_levels,
     quantile_contour,
     inversion_sampling,
@@ -192,13 +193,10 @@ class VectorQuantileEstimator(VectorQuantileBase):
     ):
         super().__init__(n_levels, solver, solver_opts)
 
-    def vector_quantiles(self) -> Sequence[Array]:
+    def vector_quantiles(self) -> QuantileFunction:
         """
-        :return: A sequence of arrays containing the vector-quantile values.
-        The sequence is of length d, where d is the dimension of the target
-        variable (Y). The j-th array is the d-dimensional vector-quantile of
-        the j-th variable of Y given the other variables of Y.
-        It is of shape (T, T, ... T).
+        :return: A QuantileFunction instance, representing a discretized version of
+        the quantile function Q_{Y}(u).
         """
         check_is_fitted(self)
         return self._fitted_solution.vector_quantiles(X=None)[0]
@@ -233,12 +231,12 @@ class VectorQuantileEstimator(VectorQuantileBase):
         """
         check_is_fitted(self)
 
-        # Calculate vector quantiles
-        # d x (T, T, ..., T) where each is d-dimensional
-        Qs = self.vector_quantiles()
+        # Calculate vector quantile function
+        vqf = self.vector_quantiles()
+        q_surfaces = tuple(vqf)  # d x (T, T, ..., T)
 
         # Sample from the quantile function
-        return inversion_sampling(T=self.n_levels, d=self.dim_y, n=n, Qs=Qs)
+        return inversion_sampling(T=self.n_levels, d=self.dim_y, n=n, Qs=q_surfaces)
 
     def coverage(self, Y: Array, alpha: float = 0.05) -> float:
         """
@@ -256,13 +254,13 @@ class VectorQuantileEstimator(VectorQuantileBase):
         """
         check_is_fitted(self)
 
-        # Calculate vector quantiles
-        # d x (T, T, ..., T) where each is d-dimensional
-        Qs = self.vector_quantiles()
+        # Calculate vector quantile functions
+        vqf = self.vector_quantiles()
+        q_surfaces = tuple(vqf)  # d x (T, T, ..., T)
 
         return measure_coverage(
             quantile_contour=quantile_contour(
-                T=self.n_levels, d=self.dim_y, Qs=Qs, alpha=alpha
+                T=self.n_levels, d=self.dim_y, Qs=q_surfaces, alpha=alpha
             ),
             data=Y,
         )
@@ -303,17 +301,13 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
 
         return self
 
-    def vector_quantiles(self, X: Array) -> Sequence[Sequence[Array]]:
+    def vector_quantiles(self, X: Array) -> Sequence[QuantileFunction]:
         """
         :param X: Covariates, of shape (N, k). Should be None if the fitted solution
-            was for a VQE (un conditional quantiles).
-        :return: A sequence of sequence of arrays.
-        The outer sequence corresponds to the number of samples, and it's length is N.
-        The inner sequences contain the vector-quantile values.
-        Each inner sequence is of length d, where d is the dimension of the target
-        variable (Y). The j-th inner array is the d-dimensional vector-quantile of
-        the j-th variable in Y given the other variables of Y.
-        It is of shape (T, T, ... T).
+        was for a VQE (un conditional quantiles).
+        :return: A sequence of length N, containing QuantileFunction instances.
+        Each element of the sequence corresponds to one of the covariates in X,
+        and contains the discretized conditional quantile function Q_{Y|X=x}(u).
         """
         check_is_fitted(self)
         X = self._validate_X_(X, single=False)
@@ -334,12 +328,12 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
         """
         check_is_fitted(self)
 
-        vq_samples: Sequence[Sequence[Array]] = self.vector_quantiles(X)
+        vqfs: Sequence[QuantileFunction] = self.vector_quantiles(X)
 
         # Stack the vector quantiles for each sample into one tensor
         vqs = np.stack(
-            # vq_sample is a Sequence[Array] of length d
-            [np.stack(vq_sample, axis=0) for vq_sample in vq_samples],
+            # Iterating over vqf produces the quantile surfaces
+            [np.stack(vqf, axis=0) for vqf in vqfs],
             axis=0,
         )
 
@@ -363,11 +357,11 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
         x = self._validate_X_(X=x, single=True)
 
         # Calculate vector quantiles given sample X=x
-        # 1 x d x (T, T, ..., T) where each is d-dimensional
-        Qs = self.vector_quantiles(X=x)[0]
+        vqf: QuantileFunction = self.vector_quantiles(X=x)[0]
+        q_surfaces = tuple(vqf)  # d x (T, T, ..., T) where each is d-dimensional
 
         # Sample from the quantile function
-        return inversion_sampling(T=self.n_levels, d=self.dim_y, n=n, Qs=Qs)
+        return inversion_sampling(T=self.n_levels, d=self.dim_y, n=n, Qs=q_surfaces)
 
     def coverage(self, Y: Array, x: Array, alpha: float = 0.05) -> float:
         """
@@ -389,12 +383,12 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
         x = self._validate_X_(X=x, single=True)
 
         # Calculate vector quantiles given sample X=x
-        # 1 x d x (T, T, ..., T) where each is d-dimensional
-        Qs = self.vector_quantiles(X=x)[0]
+        vqf: QuantileFunction = self.vector_quantiles(X=x)[0]
+        q_surfaces = tuple(vqf)  # d x (T, T, ..., T) where each is d-dimensional
 
         return measure_coverage(
             quantile_contour=quantile_contour(
-                T=self.n_levels, d=self.dim_y, Qs=Qs, alpha=alpha
+                T=self.n_levels, d=self.dim_y, Qs=q_surfaces, alpha=alpha
             ),
             data=Y,
         )
