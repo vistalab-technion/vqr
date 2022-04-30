@@ -160,7 +160,7 @@ def scale_exp(
 ):
 
     # Generate experiment configs from CLI
-    vqr_options = VQROptions.parse(ctx)
+    vqr_options = VQROptions.parse_multiple(ctx)
     exp_configs = {
         vqr_option.key(): dict(
             cov_n=cov_n,

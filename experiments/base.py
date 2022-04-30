@@ -61,12 +61,25 @@ class _CLIOptions(ABC):
         return _click_decorator(fn, cls._cli_options())
 
     @classmethod
-    @abstractmethod
     def parse(cls, ctx: click.Context) -> _CLIOptions:
         """
         Parses a click.Context into a _CLIOptions instance.
+        If there are multiple option values, returns the first one.
         :param ctx: The click.Context.
         :return: An instance of this class, initialized based on parsing the context.
+        """
+        return cls.parse_multiple(ctx)[0]
+
+    @classmethod
+    @abstractmethod
+    def parse_multiple(cls, ctx: click.Context) -> Sequence[_CLIOptions]:
+        """
+        Parses a click.Context, which may contain some options with multiple
+        values, into a sequence of _CLIOptions instance, generated as a product of
+        the multiple values.
+        :param ctx: The click.Context.
+        :return: An sequence of instances of this class, initialized based on parsing
+        the context.
         """
         pass
 
@@ -120,7 +133,7 @@ class GPUOptions(_CLIOptions):
         ]
 
     @classmethod
-    def parse(cls, ctx: click.Context) -> GPUOptions:
+    def parse_multiple(cls, ctx: click.Context) -> Sequence[GPUOptions]:
         """
         Parses GPU options from context.
         :param ctx: Click context.
@@ -131,11 +144,13 @@ class GPUOptions(_CLIOptions):
         if not ctx:
             raise ValueError("GPU options not found in context")
 
-        return GPUOptions(
-            gpu_enabled=ctx.params["gpu"],
-            gpu_devices=ctx.params["devices"],
-            num_processes=ctx.params["processes"],
-            ppd=ctx.params["ppd"],
+        return (
+            GPUOptions(
+                gpu_enabled=ctx.params["gpu"],
+                gpu_devices=ctx.params["devices"],
+                num_processes=ctx.params["processes"],
+                ppd=ctx.params["ppd"],
+            ),
         )
 
 
@@ -162,7 +177,7 @@ class OutputOptions(_CLIOptions):
         ]
 
     @classmethod
-    def parse(cls, ctx: click.Context) -> OutputOptions:
+    def parse_multiple(cls, ctx: click.Context) -> Sequence[OutputOptions]:
         """
         Parses output options from context.
         :param ctx: Click context.
@@ -173,9 +188,11 @@ class OutputOptions(_CLIOptions):
         if not ctx:
             raise ValueError("Output options not found in context")
 
-        return OutputOptions(
-            out_dir=ctx.params["out_dir"],
-            out_tag=ctx.params["out_tag"],
+        return (
+            OutputOptions(
+                out_dir=ctx.params["out_dir"],
+                out_tag=ctx.params["out_tag"],
+            ),
         )
 
 
@@ -194,12 +211,12 @@ class LoggingOptions(_CLIOptions):
         ]
 
     @classmethod
-    def parse(cls, ctx: click.Context) -> LoggingOptions:
+    def parse_multiple(cls, ctx: click.Context) -> Sequence[LoggingOptions]:
         while ctx and "debug" not in ctx.params:
             ctx = ctx.parent
         if not ctx:
             raise ValueError("Logging options not found in context")
-        return LoggingOptions(debug=ctx.params["debug"])
+        return (LoggingOptions(debug=ctx.params["debug"]),)
 
 
 class VQROptions(_CLIOptions):
@@ -306,7 +323,7 @@ class VQROptions(_CLIOptions):
         ]
 
     @classmethod
-    def parse(cls, ctx: click.Context) -> Sequence[VQROptions]:
+    def parse_multiple(cls, ctx: click.Context) -> Sequence[VQROptions]:
 
         while ctx and "ns" not in ctx.params:
             ctx = ctx.parent
@@ -333,7 +350,7 @@ class VQROptions(_CLIOptions):
             else RegularizedDualVQRSolver.solver_name()
         )
 
-        vqr_options = [
+        vqr_options = tuple(
             VQROptions(
                 N=N_,
                 T=T_,
@@ -358,7 +375,7 @@ class VQROptions(_CLIOptions):
             for (N_, T_, d_, k_, eps_, bs_y_, bs_u_) in product(
                 p["ns"], p["ts"], p["ds"], p["ks"], p["epsilons"], p["bys"], p["bus"]
             )
-        ]
+        )
 
         return vqr_options
 

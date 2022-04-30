@@ -146,7 +146,7 @@ def optim_exp(
 ):
 
     # Generate experiment configs from CLI
-    vqr_options = VQROptions.parse(ctx)
+    vqr_options = VQROptions.parse_multiple(ctx)
     exp_configs = {
         vqr_option.key(): dict(
             dp_vqr_n=dp_vqr_n,
