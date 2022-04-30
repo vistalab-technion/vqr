@@ -224,6 +224,33 @@ def quantile_levels(T: int) -> Array:
     return (np.arange(T) + 1) * (1 / T)
 
 
+def vector_quantile_levels(T: int, d: int) -> Array:
+    """
+    Constructs an array of vector-quantile levels. Each level is a d-dimensional
+    vector with entries in [0,1].
+
+    The quantile levels are returned stacked along the first axis of the result.
+    The output of this function can be converted into a "meshgrid" with
+    decode_quantile_grid().
+
+    :param T: Number of levels in each dimension.
+    :param d: Dimension of target variable.
+    :return: A (T^d, d) array with a different level at each "row".
+    """
+    # Number of all quantile levels
+    Td: int = T**d
+
+    # Quantile levels grid: list of grid coordinate matrices, one per dimension
+    # d arrays of shape (T,..., T)
+    U_grids: Sequence[Array] = np.meshgrid(*([quantile_levels(T)] * d))
+
+    # Stack all nd-grid coordinates into one long matrix, of shape (T**d, d)
+    U: Array = np.stack([U_grid.reshape(-1) for U_grid in U_grids], axis=1)
+    assert U.shape == (Td, d)
+
+    return U
+
+
 def decode_quantile_values(T: int, d: int, Y_hat: Array) -> Sequence[Array]:
     """
     Decodes the regression coefficients of a VQR solution into vector quantile values.
@@ -257,14 +284,16 @@ def decode_quantile_values(T: int, d: int, Y_hat: Array) -> Sequence[Array]:
 
 def decode_quantile_grid(T: int, d: int, U: Array) -> Sequence[Array]:
     """
-    Decodes the U variable of a VQR solution into the grid of the
-    evaluation points for the vector quantile functions.
+    Decodes stacked vector quantile levels (the output of the vector_quantile_level()
+    function) into a "meshgrid" of the evaluation points of the vector quantile
+    function.
+
     :param T: The number of quantile levels that was used for solving the problem.
     :param d: The dimension of the target data (Y) that was used for solving the
     problem.
     :param U: The encoded grid U, of shape (T**d, d).
     :return: A sequence length d. Each array in the sequence is a d-dimensional
-    array of shape (T, T, ..., T), which together represent the d-dimentional grid
+    array of shape (T, T, ..., T), which together represent the d-dimensional grid
     on which the vector quantiles were evaluated.
     """
     return tuple(np.reshape(U[:, dim], newshape=(T,) * d) for dim in range(d))
