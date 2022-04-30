@@ -1,23 +1,15 @@
 import logging
-from typing import Optional, Sequence
-from pathlib import Path
-from itertools import product
+from typing import Optional
 
 import click
 import numpy as np
 import torch
 from numpy import ndarray
-from torch import tensor
 
 from vqr.api import VectorQuantileRegressor
+from experiments.base import VQROptions, run_exp_context
 from experiments.data.mvn import LinearMVNDataProvider
-from experiments.utils.helpers import experiment_id
 from experiments.utils.metrics import kde_l1, w2_keops
-from experiments.utils.parallel import run_parallel_exp
-from vqr.solvers.dual.regularized_lse import (
-    RegularizedDualVQRSolver,
-    MLPRegularizedDualVQRSolver,
-)
 
 _LOG = logging.getLogger(__name__)
 
@@ -58,9 +50,10 @@ def single_scale_exp(
     k: int,
     solver_name: str,
     solver_opts: dict,
+    validation_proportion: float = 0.25,
     cov_n: int = 1000,
     cov_alpha: float = 0.05,
-    validation_proportion: float = 0.25,
+    dist_n: int = 1000,
     seed: int = 42,
 ):
     # Data provider
@@ -83,19 +76,21 @@ def single_scale_exp(
     cov_train = _measure_paired_coverage(X, Y, vqr, cov_n, cov_alpha, seed)
     cov_valid = _measure_paired_coverage(X_valid, Y_valid, vqr, cov_n, cov_alpha, seed)
 
-    # Estimate d distribution and compare it with the gt cond distribution
+    # Estimate cond distribution and compare it with the gt cond distribution
     w2_dists = []
     kde_l1_dists = []
-    for i in range(int(cov_n)):
-        _, Y_gt = data_provider.sample(n=T**d, x=X_valid[[i], :])
-        Y_est = vqr.sample(n=T**d, x=X_valid[[i], :])
-        w2_dists.append(w2_keops(Y_gt, Y_est).detach().cpu().item())
+    for i in range(min(dist_n, len(Y_valid))):
+        x = X_valid[[i], :]
+        _, Y_gt = data_provider.sample(n=T**d, x=x)
+        Y_est = vqr.sample(n=T**d, x=x)
+        w2_dists.append(w2_keops(Y_gt, Y_est))
         kde_l1_dist = kde_l1(
-            tensor(Y_gt, dtype=torch.float32),
-            tensor(Y_est, dtype=torch.float32),
-            T,
-            "cuda" if solver_opts["gpu"] else "cpu",
+            Y_gt,
+            Y_est,
+            grid_resolution=T,
             sigma=0.1,
+            dtype=torch.float32,
+            device="cuda" if solver_opts["gpu"] else "cpu",
         )
         kde_l1_dists.append(kde_l1_dist)
 
@@ -120,111 +115,64 @@ def single_scale_exp(
 
 @click.command(name="scale-exp")
 @click.pass_context
-@click.option("-N", "N", type=int, multiple=True, default=[1000])
-@click.option("-T", "T", type=int, multiple=True, default=[20])
-@click.option("-d", type=int, multiple=True, default=[2])
-@click.option("-k", type=int, multiple=True, default=[3])
-@click.option("--bs-y", type=int, multiple=True, default=[-1])
-@click.option("--bs-u", type=int, multiple=True, default=[-1])
-@click.option("--epochs", type=int, default=1000)
-@click.option("--epsilon", type=float, default=1e-6)
-@click.option("--lr", type=float, default=0.5)
-@click.option("--lr-max-steps", type=int, default=10)
-@click.option("--lr-factor", type=float, default=0.9)
-@click.option("--lr-patience", type=int, default=500)
-@click.option("--lr-threshold", type=float, default=0.01 * 5)
-@click.option("--mlp/--no-mlp", type=bool, default=False, help="NL-VQR with MLP")
-@click.option("--mlp-layers", type=str, default="32,32", help="comma-separated ints")
-@click.option("--mlp-skip/--no-mlp-skip", type=bool, default=False)
-@click.option("--mlp-activation", type=str, default="relu")
-@click.option("--mlp-batchnorm/--no-mlp-batchnorm", type=bool, default=False)
-@click.option("--mlp-dropout", type=float, default=0.0)
-@click.option("--out-tag", type=str, default="")
+@VQROptions.cli
+@click.option(
+    "--validation-proportion",
+    type=float,
+    default=0.25,
+    help="Proportion of between validation set and training set.",
+)
+@click.option(
+    "--cov-n",
+    type=int,
+    default=1000,
+    help="Number of validation-set samples to use for coverage calculation",
+)
+@click.option(
+    "--cov-alpha",
+    type=float,
+    default=0.05,
+    help="Quantile level for coverage calculation.",
+)
+@click.option(
+    "--dist-n",
+    type=int,
+    default=1000,
+    help=(
+        "Number of validation-set samples to use for conditional distribution "
+        "estimation"
+    ),
+)
+@click.option(
+    "--seed",
+    type=int,
+    default=42,
+    help="Seed for data generation",
+)
 def scale_exp(
     ctx: click.Context,
-    N: Sequence[int],
-    T: Sequence[int],
-    d: Sequence[int],
-    k: Sequence[int],
-    bs_y: Sequence[Optional[int]],
-    bs_u: Sequence[Optional[int]],
-    epochs: int,
-    epsilon: float,
-    lr: float,
-    lr_max_steps: int,
-    lr_factor: float,
-    lr_patience: int,
-    lr_threshold: float,
-    mlp: bool,
-    mlp_layers: Optional[str],
-    mlp_skip: Optional[bool],
-    mlp_activation: Optional[str],
-    mlp_batchnorm: Optional[bool],
-    mlp_dropout: Optional[float],
-    out_tag: str = None,
+    validation_proportion: float,
+    cov_n: int,
+    cov_alpha: float,
+    dist_n: int,
+    seed: int,
+    **kw,
 ):
-    exp_id = experiment_id(name="scale", tag=out_tag)
 
-    # Get global options
-    gpu_enabled: bool = ctx.parent.params["gpu"]
-    gpu_devices: Optional[str] = ctx.parent.params["devices"]
-    num_processes: int = ctx.parent.params["processes"]
-    ppd: int = ctx.parent.params["ppd"]
-    out_dir: Path = ctx.parent.params["out_dir"]
-
-    # parse mlp options
-    mlp_opts = dict(
-        hidden_layers=mlp_layers,
-        activation=mlp_activation,
-        skip=mlp_skip,
-        batchnorm=mlp_batchnorm,
-        dropout=mlp_dropout,
-    )
-    # Filter out defaults and remove everything if mlp==False.
-    mlp_opts = {k: v for k, v in mlp_opts.items() if v is not None and mlp}
-
-    solver_name = (
-        MLPRegularizedDualVQRSolver.solver_name()
-        if mlp
-        else RegularizedDualVQRSolver.solver_name()
-    )
-
-    exp_configs = [
-        dict(
-            N=N_,
-            T=T_,
-            d=d_,
-            k=k_,
-            solver_name=solver_name,
-            solver_opts=dict(
-                verbose=False,
-                num_epochs=epochs,
-                epsilon=epsilon,
-                lr=lr,
-                lr_max_steps=lr_max_steps,
-                lr_factor=lr_factor,
-                lr_patience=lr_patience,
-                lr_threshold=lr_threshold,
-                batchsize_y=bs_y_ if bs_y_ > 0 else None,
-                batchsize_u=bs_u_ if bs_u_ > 0 else None,
-                gpu=gpu_enabled,
-                **mlp_opts,
-            ),
+    # Generate experiment configs from CLI
+    vqr_options = VQROptions.parse_multiple(ctx)
+    exp_configs = {
+        vqr_option.key(): dict(
+            cov_n=cov_n,
+            cov_alpha=cov_alpha,
+            dist_n=dist_n,
+            validation_proportion=validation_proportion,
+            seed=seed,
+            **vqr_option.to_dict(),
         )
-        for (N_, T_, d_, k_, bs_y_, bs_u_) in product(N, T, d, k, bs_y, bs_u)
-    ]
+        for vqr_option in vqr_options
+    }
 
-    results_df = run_parallel_exp(
-        exp_name=exp_id,
-        exp_fn=single_scale_exp,
-        exp_configs=exp_configs,
-        max_workers=num_processes,
-        gpu_enabled=gpu_enabled,
-        gpu_devices=gpu_devices,
-        workers_per_device=ppd,
+    return run_exp_context(
+        ctx, exp_fn=single_scale_exp, exp_configs=exp_configs, write_csv=True
     )
-
-    out_file_path = out_dir.joinpath(f"{exp_id}.csv")
-    results_df.to_csv(out_file_path, index=False)
-    _LOG.info(f"Wrote output file: {out_file_path.absolute()!s}")
-    return results_df

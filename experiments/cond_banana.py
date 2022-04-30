@@ -100,7 +100,7 @@ for cond_X in Xs:
     cond_Y_est = tensor(cond_Y_est, dtype=dtype)
 
     # w2 distance
-    w2_dist = w2_keops(cond_Y_gt, cond_Y_est, gpu_device=GPU_DEVICE_NUM)
+    w2_dist = w2_keops(cond_Y_gt, cond_Y_est, device=device)
 
     # Estimate KDEs
     kde_orig = kde(

@@ -8,7 +8,12 @@ import matplotlib.pyplot as plt
 from numpy.linalg import norm
 from sklearn.exceptions import NotFittedError
 
-from vqr import VectorQuantileEstimator, VectorQuantileRegressor
+from vqr import (
+    VQRSolution,
+    QuantileFunction,
+    VectorQuantileEstimator,
+    VectorQuantileRegressor,
+)
 from experiments.data.mvn import LinearMVNDataProvider, IndependentDataProvider
 from vqr.solvers.dual.regularized_lse import (
     RegularizedDualVQRSolver,
@@ -62,15 +67,22 @@ class TestVectorQuantileEstimator(object):
 
     def test_shapes(self, vqe_fitted):
         Y, vqe = vqe_fitted
-        N, d = Y.shape[0], Y.shape[1]
+        N, d = Y.shape
         T = vqe.n_levels
 
         assert vqe.dim_y == d
         assert len(vqe.quantile_grid) == d
-        assert len(vqe.vector_quantiles()) == d
-
-        assert all(q.shape == (T,) * d for q in vqe.vector_quantiles())
         assert all(q.shape == (T,) * d for q in vqe.quantile_grid)
+
+    def test_vector_quantiles(self, vqe_fitted):
+        Y, vqe = vqe_fitted
+        N, d = Y.shape
+        T = vqe.n_levels
+
+        vqf: QuantileFunction = vqe.vector_quantiles()
+        assert len(vqf) == d
+        assert all(q_surface.shape == (T,) * d for q_surface in vqf)
+        assert vqf.values.shape == (d, *[T] * d)
 
     def test_sample(self, vqe_fitted, test_out_dir):
         Y, vqe = vqe_fitted
@@ -98,8 +110,11 @@ class TestVectorQuantileEstimator(object):
         print(f"{cov=}")
         assert cov > (0.7 if d < 3 else 0.25)
 
-    def test_not_fitted(self):
-        vq = VectorQuantileEstimator(n_levels=100)
+    def test_not_fitted(self, vqr_solver_opts):
+        solver, solver_opts = vqr_solver_opts
+        vq = VectorQuantileEstimator(
+            n_levels=100, solver=solver, solver_opts=solver_opts
+        )
         with pytest.raises(NotFittedError):
             _ = vq.quantile_grid
         with pytest.raises(NotFittedError):
@@ -197,18 +212,42 @@ class TestVectorQuantileRegressor(object):
         assert all(q.shape == (T,) * d for q in vqr.quantile_grid)
         assert vqr.solution_metrics is not None
 
-        for X_ in [None, X]:
-            N_ = N if X_ is not None else 1
-
-            vq_samples = vqr.vector_quantiles(X=X_)
-
-            assert len(vq_samples) == N_
-
-            for vq_sample in vq_samples:
-                assert all(vq.shape == (T,) * d for vq in vq_sample)
+        for X_ in [X[[0], :], X[0:, :]]:  # Single and multiple X should be valid
+            N_ = len(X_)
 
             Y_hat = vqr.predict(X_)
             assert Y_hat.shape == (N_, d, *[T] * d)
+
+    def test_vector_quantiles(self, vqr_fitted):
+        X, Y, vqr = vqr_fitted
+        N, d = Y.shape
+        N, k = X.shape
+        T = vqr.n_levels
+        U_grid = vqr.quantile_grid
+
+        # QuantileFunction per X
+        vqfs = vqr.vector_quantiles(X=X)
+        assert len(vqfs) == N
+
+        vqf: QuantileFunction
+        for vqf in vqfs:
+
+            # Iterating over QuantileFunction returns its surfaces
+            assert all(vq_surface.shape == (T,) * d for vq_surface in vqf)
+
+            # All values of the quantile function
+            assert vqf.values.shape == (d, *[T] * d)
+
+            for j in range(10):
+                # Obtain a random quantile level
+                u_idx = np.random.randint(low=0, high=T, size=(d,), dtype=int)
+
+                # Obtain a vector-quantile at level u
+                vq = vqf(u_idx)
+
+                # d-dimensional vector quantile value
+                assert vq.shape == (d,)
+                assert np.all(vq == vqf.values[(slice(None), *u_idx)])
 
     def test_sample(self, vqr_fitted, test_out_dir):
         X, Y, vqr = vqr_fitted
@@ -217,10 +256,6 @@ class TestVectorQuantileRegressor(object):
         T = vqr.n_levels
 
         n = 1000
-
-        Y_samp = vqr.sample(n, x=None)
-        assert Y_samp.shape == (n, d)
-
         xs = []
         YXs = []
         for i in range(5):
@@ -233,7 +268,6 @@ class TestVectorQuantileRegressor(object):
         if d == 2:
             fig, ax = plt.subplots(1, 1, figsize=(10, 10))
             ax.scatter(Y[:, 0], Y[:, 1], c="k", label="Y (GT)")
-            ax.scatter(Y_samp[:, 0], Y_samp[:, 1], c="C0", label="Y")
             for i, (x, YX_samp) in enumerate(zip(xs, YXs)):
                 ax.scatter(
                     YX_samp[:, 0],
@@ -255,7 +289,7 @@ class TestVectorQuantileRegressor(object):
         cov = np.mean(
             [
                 # Coverage for each single data point is just 0 or 1
-                vqr.coverage(y.reshape(1, d), alpha=0.05, x=x)
+                vqr.coverage(y.reshape(1, d), x=x, alpha=0.05)
                 for (x, y) in zip(X, Y)
             ]
         )
@@ -281,6 +315,56 @@ class TestVectorQuantileRegressor(object):
             Qs=vqr.vector_quantiles(X=X[[i]])[0],
             T=vqr.n_levels,
         )
+
+    @pytest.mark.parametrize("with_batches", [False, True])
+    def test_callback(self, with_batches):
+
+        callback_kwargs = []
+
+        def _callback(*args, **kwargs):
+            callback_kwargs.append(kwargs)
+
+        N = 1000
+        num_epochs = 100
+        batchsize_y = (N // 5) if with_batches else None
+        num_batches = np.ceil(N / batchsize_y) if with_batches else 1
+
+        X, Y = LinearMVNDataProvider(d=2, k=3).sample(n=N)
+        solver = RegularizedDualVQRSolver(
+            verbose=False,
+            num_epochs=num_epochs,
+            batchsize_y=batchsize_y,
+            post_iter_callback=_callback,
+        )
+        vqr = VectorQuantileRegressor(n_levels=15, solver=solver)
+        vqr.fit(X, Y)
+
+        assert len(callback_kwargs) == num_epochs * num_batches
+        for kw in callback_kwargs:
+            assert kw.keys() == callback_kwargs[0].keys()
+            solution = kw["solution"]
+            assert isinstance(solution, VQRSolution)
+
+    def test_not_fitted(self, vqr_solver):
+        X, Y = LinearMVNDataProvider(d=2, k=3).sample(n=100)
+        vq = VectorQuantileRegressor(
+            n_levels=100,
+            solver=vqr_solver,
+        )
+        with pytest.raises(NotFittedError):
+            _ = vq.quantile_grid
+        with pytest.raises(NotFittedError):
+            _ = vq.vector_quantiles(X)
+
+    def test_no_x(self, vqr_fitted):
+        X, Y, vqr = vqr_fitted
+        error_message = "Must provide covariates "
+        with pytest.raises(ValueError, match=error_message):
+            vqr.sample(n=100, x=None)
+        with pytest.raises(ValueError, match=error_message):
+            vqr.coverage(Y, x=None)
+        with pytest.raises(ValueError, match=error_message):
+            vqr.vector_quantiles(X=None)
 
 
 def _test_monotonicity(

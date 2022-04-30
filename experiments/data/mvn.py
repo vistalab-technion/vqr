@@ -1,10 +1,9 @@
 from typing import Tuple, Optional, Sequence
 
 import numpy as np
-from numpy import array
 from numpy.random import Generator
 
-from experiments.data.base import DataProvider
+from experiments.data.base import Array, DataProvider, SerializableRandomDataGenerator
 
 
 class LinearMVNDataProvider(DataProvider):
@@ -19,23 +18,24 @@ class LinearMVNDataProvider(DataProvider):
     """
 
     def __init__(
-        self, k: int, d: int, A: Optional[array] = None, seed: Optional[int] = 42
+        self, k: int, d: int, A: Optional[Array] = None, seed: Optional[int] = 42
     ):
         """
         :param d: Dimension of targets.
         :param k: Dimension of features.
         :param seed: Random seed to use for generation. None means don't set.
         """
+        super().__init__(seed=seed)
         assert d > 0
         assert k >= 0
         self._d = d
         self._k = k
-        self._rng = np.random.default_rng(seed)
+
         if A is not None:
             assert k == A.shape[0]
             assert d == A.shape[1]
         self._A = self._make_A() if A is None else A
-        self._noise_generator = MVNNoiseGenerator(d=d, rng=self._rng, random_cov=True)
+        self._noise_generator = MVNNoiseGenerator(d=d, seed=self._seed, random_cov=True)
 
     @property
     def k(self) -> int:
@@ -45,32 +45,28 @@ class LinearMVNDataProvider(DataProvider):
     def d(self) -> int:
         return self._d
 
-    def sample(self, n: int, x: Optional[array] = None) -> Sequence[array]:
-        """
-        :param n: Number of samples.
-        :param x: Features whose conditional distribution needs to be sampled.
-        :return: A tuple (X, Y), where X is of shape (n, k) and contains the features
-        and Y is of shape (n, d) and contains the responses.
-        """
+    def sample_x(self, n: int) -> Array:
+        X = self._rng.uniform(size=(n, self.k))
+        X -= np.mean(X, axis=0)
+        return X
 
+    def sample(self, n: int, x: Optional[Array] = None) -> Tuple[Array, Array]:
         if x is None:
-            X = self._rng.uniform(size=(n, self.k))
-            X -= np.mean(X, axis=0)
+            X = self.sample_x(n=n)
         else:
-            assert len(x.shape) == 2
-            assert x.shape[1] == self._k
-            assert x.shape[0] == 1
+            x = np.reshape(x, (1, -1))
+            assert x.shape[1] == self.k
             X = np.concatenate([x for _ in range(n)], axis=0)
 
         N = self._noise_generator.sample(n)
         Y = X @ self._A + N
         return X, Y
 
-    def _make_A(self) -> array:
+    def _make_A(self) -> Array:
         return self._rng.random(size=(self.k, self.d))
 
 
-class MVNNoiseGenerator:
+class MVNNoiseGenerator(SerializableRandomDataGenerator):
     """
     Generates multivariate normal distribution.
     """
@@ -78,14 +74,12 @@ class MVNNoiseGenerator:
     def __init__(
         self,
         d: int,
-        rng: Optional[Generator] = None,
         seed: int = 42,
         random_cov: bool = False,
     ):
         """
 
         :param d: dimension of the distribution
-        :param rng: a numpy random number generator
         :param seed: Random seed to use for generation. If a random number generator
         is provided, this seed will be ignored.
         :param random_cov: Whether to use a random covariance. If set to False, a
@@ -93,18 +87,18 @@ class MVNNoiseGenerator:
         only when d=2).
         """
         assert d > 0
+        super().__init__(seed=seed)
         self._d = d
-        self._rng = np.random.default_rng(seed) if rng is None else rng
         self._Sigma = self._make_Sigma(random_cov)
         self._mu = self._make_mu()
 
-    def sample(self, n: int) -> array:
+    def sample(self, n: int) -> Array:
         return self._rng.multivariate_normal(mean=self._mu, cov=self._Sigma, size=(n,))
 
-    def _make_mu(self) -> array:
+    def _make_mu(self) -> Array:
         return np.zeros(self._d)
 
-    def _make_Sigma(self, random_cov: bool = False) -> array:
+    def _make_Sigma(self, random_cov: bool = False) -> Array:
         if (not random_cov) and self._d == 2:
             S = np.array([[1.0, -0.7], [-0.7, 1.0]])
 

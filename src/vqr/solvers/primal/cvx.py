@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from typing import Optional, Sequence
+from typing import Optional
 
 import cvxpy as cp
 import numpy as np
-from numpy.typing import ArrayLike as Array
+from numpy import ndarray as Array
 from scipy.spatial.distance import cdist
 
-from vqr import VQRSolver, VectorQuantiles
-from vqr.vqr import quantile_levels
+from vqr import VQRSolver, VQRSolution
+from vqr.vqr import vector_quantile_levels
 
 SIMILARITY_FN_INNER_PROD = lambda x, y: np.dot(x, y)
 
@@ -34,7 +34,7 @@ class CVXVQRSolver(VQRSolver):
         cvx_solver_opts["verbose"] = verbose
         self._solver_opts = cvx_solver_opts
 
-    def solve_vqr(self, T: int, Y: Array, X: Optional[Array] = None) -> VectorQuantiles:
+    def solve_vqr(self, T: int, Y: Array, X: Optional[Array] = None) -> VQRSolution:
         N = len(Y)
         Y = np.reshape(Y, (N, -1))
 
@@ -52,14 +52,7 @@ class CVXVQRSolver(VQRSolver):
 
         # All quantile levels
         Td: int = T**d
-        u: Array = quantile_levels(T)
-
-        # Quantile levels grid: list of grid coordinate matrices, one per dimension
-        U_grids: Sequence[Array] = np.meshgrid(
-            *([u] * d)
-        )  # d arrays of shape (T,..., T)
-        # Stack all nd-grid coordinates into one long matrix, of shape (T**d, d)
-        U: Array = np.stack([U_grid.reshape(-1) for U_grid in U_grids], axis=1)
+        U: Array = vector_quantile_levels(T, d)
         assert U.shape == (Td, d)
 
         # Pairwise distances (similarity)
@@ -89,4 +82,4 @@ class CVXVQRSolver(VQRSolver):
         else:
             B = AB[:, 1:]  # B is (T**d, k)
 
-        return VectorQuantiles(T, d, U, A, B)
+        return VQRSolution(T, d, U, A, B)

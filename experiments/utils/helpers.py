@@ -1,31 +1,18 @@
+import pickle
 import logging
-from time import strftime
-from typing import NamedTuple
-
-from _socket import gethostname
+from typing import Any, NamedTuple
+from hashlib import blake2b
 
 _LOG = logging.getLogger(__name__)
 
 
-def experiment_id(name: str, tag: str):
+def stable_hash(obj: Any, hash_len: int = 8) -> str:
     """
-    Creates a unique id for an experiment based on hostname, timestamp and a
-    user-specified tag.
-    :param name: An experiment name.
-    :param tag: A user tag.
-    :return: The experiment id.
+    :param obj: An object to hash.
+    :param hash_len: Desired length of output string.
+    :return: A unique and repeatable hash of the given object.
     """
-    hostname = gethostname()
-    if hostname:
-        hostname = hostname.split(".")[0].strip()
-    else:
-        hostname = "localhost"
-
-    name = f"{name}-" if name else ""
-    tag = f"-{tag}" if tag else ""
-    timestamp = strftime(f"%Y%m%d_%H%M%S")
-    exp_id = strftime(f"{name}{timestamp}-{hostname}{tag}")
-    return exp_id
+    return blake2b(pickle.dumps(obj), digest_size=hash_len // 2).hexdigest()
 
 
 def sec_to_time(sec: float):

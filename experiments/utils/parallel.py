@@ -44,29 +44,27 @@ def _exp_fn_wrapper(_exp_fn, _exp_idx: int, **kwargs):
 def run_parallel_exp(
     exp_name: str,
     exp_fn: Callable[[Any], Dict[str, Any]],
-    exp_configs: Iterable[dict],
+    exp_configs: Dict[str, dict],
     max_workers: Optional[int] = None,
     gpu_enabled: bool = False,
     gpu_devices: Optional[Union[Sequence[int], str]] = None,
     workers_per_device: int = 1,
-) -> pd.DataFrame:
+) -> Sequence[Dict[str, Any]]:
     """
     Runs multiple experiment configurations with parallel workers.
     :param exp_name: Name of experiment (for logging only).
     :param exp_fn: Callable that runs a single experiment configuration. It must
     return a dict with string keys.
-    :param exp_configs: Iterable which iterates over experiment configurations
-    represented as dicts. Each such config dict will be passed as **kwargs to exp_fn.
+    :param exp_configs: Mapping from a string, representing a single experiments
+    id/name, to a dict of kwargs containing the configuration of that experiment.
+    Each such config dict will be passed as **kwargs to exp_fn.
     :param max_workers: Maximal number of parallel worker processes to use. None
     means use number of physical cores.
     :param gpu_enabled: Whether to enable GPU support.
     :param gpu_devices: Either a list of device IDs (ints) or a comma-separated string.
     :param workers_per_device: Number of worker processes that may share a GPU.
-    :return: A Dataframe with the results. Rows correspond to experiment
-    configurations and columns correspond to keys in the results dicts (can be
-    nested, in which case the columns will be e.g. key1.key2.key3 etc.)
+    :return: A sequence with the results returned by each invocation of the exp_fn.
     """
-    exp_configs = tuple(exp_configs)
     n_exps = len(exp_configs)
 
     if not max_workers or max_workers < 0:
@@ -107,27 +105,29 @@ def run_parallel_exp(
         initializer=cuda_worker_init_fn,
     ) as executor:
 
-        futures = [
-            executor.submit(_exp_fn_wrapper, exp_fn, i, **exp_config)
-            for i, exp_config in enumerate(exp_configs)
-        ]
+        futures = {
+            exp_name: executor.submit(_exp_fn_wrapper, exp_fn, i, **exp_config)
+            for i, (exp_name, exp_config) in enumerate(exp_configs.items())
+        }
 
         results = []
-        for i, (_, result) in enumerate(
+        for i, (exp_name, exp_result) in enumerate(
             yield_future_results(
                 futures,
                 wait_time_sec=1.0,
                 re_raise=False,
             )
         ):
-            _LOG.info(f"Collected result {i+1}/{n_exps} ({100*(i+1)/n_exps:.0f}%)")
-            results.append(result)
+            _LOG.info(
+                f"Collected result {exp_name} {i+1}/{n_exps} "
+                f"({100*(i+1)/n_exps:.0f}%)"
+            )
+            results.append(exp_result)
 
     elapsed_time = sec_to_time(time() - start_time)
     _LOG.info(f"Completed {len(results)}/{n_exps}, elapsed={elapsed_time}")
 
-    df = pd.json_normalize(results)
-    return df
+    return tuple(results)
 
 
 def yield_future_results(
