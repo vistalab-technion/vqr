@@ -36,7 +36,13 @@ def _compare_conditional_quantiles(
     q_surfaces_est = vqf_est.values  # (d, T, T, ..., T)
     assert q_surfaces_gt_subsampled.shape == q_surfaces_est.shape
 
-    return np.linalg.norm(q_surfaces_gt_subsampled - q_surfaces_est).item()
+    return (
+        100
+        * (
+            np.linalg.norm(q_surfaces_gt_subsampled - q_surfaces_est)
+            / np.linalg.norm(q_surfaces_gt_subsampled)
+        )
+    ).item()
 
 
 def single_optim_exp(
