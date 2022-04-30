@@ -327,11 +327,7 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
             refined_cqfs = []
             for cqf in cqfs:
                 pre_samples = np.stack([qv.ravel() for qv in cqf], axis=-1)
-                pi = ot.emd(
-                    M=-U @ pre_samples.T,
-                    a=[],
-                    b=[],
-                )
+                pi = ot.emd(M=-U @ pre_samples.T, a=[], b=[], numItermax=10**6)
                 post_samples = pre_samples.shape[0] * pi @ pre_samples
                 refined_cqfs.append(
                     [
