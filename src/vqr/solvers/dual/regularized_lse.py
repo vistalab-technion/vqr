@@ -3,7 +3,7 @@ from __future__ import annotations
 import sys
 import logging
 from time import time
-from typing import Any, Dict, Union, Callable, Optional, Sequence
+from typing import Any, Union, Callable, Optional, Sequence
 from functools import partial
 
 import numpy as np
@@ -15,7 +15,7 @@ from torch.optim import Optimizer
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 from vqr import VQRSolver, VQRSolution
-from vqr.vqr import quantile_levels
+from vqr.vqr import vector_quantile_levels
 from vqr.models import MLP
 
 _LOG = logging.getLogger(__name__)
@@ -153,12 +153,7 @@ class RegularizedDualVQRSolver(VQRSolver):
 
         # All quantile levels
         Td: int = T**d
-
-        # Quantile levels grid: list of grid coordinate matrices, one per dimension
-        # d arrays of shape (T,..., T)
-        U_grids: Sequence[Array] = np.meshgrid(*([quantile_levels(T)] * d))
-        # Stack all nd-grid coordinates into one long matrix, of shape (T**d, d)
-        U: Array = np.stack([U_grid.reshape(-1) for U_grid in U_grids], axis=1)
+        U: Array = vector_quantile_levels(T, d)
         assert U.shape == (Td, d)
 
         #####
