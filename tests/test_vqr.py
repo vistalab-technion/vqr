@@ -8,7 +8,12 @@ import matplotlib.pyplot as plt
 from numpy.linalg import norm
 from sklearn.exceptions import NotFittedError
 
-from vqr import VQRSolution, VectorQuantileEstimator, VectorQuantileRegressor
+from vqr import (
+    VQRSolution,
+    QuantileFunction,
+    VectorQuantileEstimator,
+    VectorQuantileRegressor,
+)
 from experiments.data.mvn import LinearMVNDataProvider, IndependentDataProvider
 from vqr.solvers.dual.regularized_lse import (
     RegularizedDualVQRSolver,
@@ -62,15 +67,22 @@ class TestVectorQuantileEstimator(object):
 
     def test_shapes(self, vqe_fitted):
         Y, vqe = vqe_fitted
-        N, d = Y.shape[0], Y.shape[1]
+        N, d = Y.shape
         T = vqe.n_levels
 
         assert vqe.dim_y == d
         assert len(vqe.quantile_grid) == d
-        assert len(vqe.vector_quantiles()) == d
-
-        assert all(q.shape == (T,) * d for q in vqe.vector_quantiles())
         assert all(q.shape == (T,) * d for q in vqe.quantile_grid)
+
+    def test_vector_quantiles(self, vqe_fitted):
+        Y, vqe = vqe_fitted
+        N, d = Y.shape
+        T = vqe.n_levels
+
+        vqf: QuantileFunction = vqe.vector_quantiles()
+        assert len(vqf) == d
+        assert all(q_surface.shape == (T,) * d for q_surface in vqf)
+        assert vqf.values.shape == (d, *[T] * d)
 
     def test_sample(self, vqe_fitted, test_out_dir):
         Y, vqe = vqe_fitted
@@ -203,15 +215,39 @@ class TestVectorQuantileRegressor(object):
         for X_ in [X[[0], :], X[0:, :]]:  # Single and multiple X should be valid
             N_ = len(X_)
 
-            vq_samples = vqr.vector_quantiles(X=X_)
-
-            assert len(vq_samples) == N_
-
-            for vq_sample in vq_samples:
-                assert all(vq.shape == (T,) * d for vq in vq_sample)
-
             Y_hat = vqr.predict(X_)
             assert Y_hat.shape == (N_, d, *[T] * d)
+
+    def test_vector_quantiles(self, vqr_fitted):
+        X, Y, vqr = vqr_fitted
+        N, d = Y.shape
+        N, k = X.shape
+        T = vqr.n_levels
+        U_grid = vqr.quantile_grid
+
+        # QuantileFunction per X
+        vqfs = vqr.vector_quantiles(X=X)
+        assert len(vqfs) == N
+
+        vqf: QuantileFunction
+        for vqf in vqfs:
+
+            # Iterating over QuantileFunction returns its surfaces
+            assert all(vq_surface.shape == (T,) * d for vq_surface in vqf)
+
+            # All values of the quantile function
+            assert vqf.values.shape == (d, *[T] * d)
+
+            for j in range(10):
+                # Obtain a random quantile level
+                u_idx = np.random.randint(low=0, high=T, size=(d,), dtype=int)
+
+                # Obtain a vector-quantile at level u
+                vq = vqf(u_idx)
+
+                # d-dimensional vector quantile value
+                assert vq.shape == (d,)
+                assert np.all(vq == vqf.values[(slice(None), *u_idx)])
 
     def test_sample(self, vqr_fitted, test_out_dir):
         X, Y, vqr = vqr_fitted
