@@ -103,6 +103,7 @@ class VQRSolution:
 
             check_array(X, ensure_2d=True, allow_nd=False)
 
+            Z = X  # Z represents the transformed X
             if self._X_transform is not None:
                 N, k_in = X.shape
                 if k_in != self._k_in:
@@ -111,9 +112,9 @@ class VQRSolution:
                         f"={self._k_in}, but got covariates with {k_in=} features."
                     )
 
-                X = self._X_transform(X)
+                Z = self._X_transform(X)
 
-            N, k = X.shape
+            N, k = Z.shape
             if k != self._k:
                 raise ValueError(
                     f"VQR model was fitted with k={self._k}, "
@@ -122,7 +123,7 @@ class VQRSolution:
 
             B = self._B  # (T**d, k)
             A = self._A  # (T**d, 1) -> will be broadcast to (T**d, N)
-            Y_hat = B @ X.T + A  # result is (T**d, N)
+            Y_hat = B @ Z.T + A  # result is (T**d, N)
             Y_hats = Y_hat.T  # (N, T**d)
 
         return tuple(
