@@ -291,16 +291,16 @@ class RegularizedDualVQRSolver(VQRSolver):
         self, T, d, k, U, phi, b, net, solution_metrics: dict = None
     ) -> VQRSolution:
 
-        # Create a copy of the network on CPU, without moving the original net to CPU
-        # Note: deepcopy seems to create a copy of all tensors on cpu, but calling
-        # cpu() to make sure.
-        net_copy: torch.nn.Module = deepcopy(net).cpu()
-
         A = phi.detach().cpu().numpy()
         B = None
         x_transform_fn = None
         if k > 0:
             B = b.detach().cpu().numpy()
+
+            # Create a copy of the net on CPU, without moving the original net to CPU
+            # Note: deepcopy seems to create a copy of all tensors on cpu, but calling
+            # cpu() to make sure.
+            net_copy: torch.nn.Module = deepcopy(net).cpu()
             x_transform_fn = partial(
                 self._features_transform, net=net_copy, dtype=self._dtype
             )
