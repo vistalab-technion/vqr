@@ -28,11 +28,9 @@ class TestVectorQuantileEstimator(object):
                 {"verbose": True, "lr": 0.1, "epsilon": 1e-6},
             ),
             ("cvx_primal", {"verbose": True}),
+            ("vqe_pot", {}),
         ],
-        ids=[
-            "rvqr_linear",
-            "cvx_primal",
-        ],
+        ids=["rvqr_linear", "cvx_primal", "vqe_pot"],
     )
     def vqr_solver_opts(self, request):
         return request.param
@@ -137,6 +135,33 @@ class TestVectorQuantileEstimator(object):
             Qs=vqe.vector_quantiles(),
             T=vqe.n_levels,
         )
+
+    def test_vmr_vqe(self, vqr_solver_opts):
+        solver, solver_opts = vqr_solver_opts
+
+        T = 15
+        N = 1000
+        d = 2
+
+        _, Y = IndependentDataProvider(d=d, k=1).sample(n=N)
+        vqe = VectorQuantileEstimator(
+            n_levels=T, solver=solver, solver_opts=solver_opts
+        )
+        vqe.fit(Y)
+        off_projs, _ = monotonicity_offending_projections(
+            Us=vqe.quantile_grid,
+            Qs=vqe.vector_quantiles(refine=False),
+            T=vqe.n_levels,
+            projection_tolerance=0.0,
+        )
+        off_projs_refined, _ = monotonicity_offending_projections(
+            Us=vqe.quantile_grid,
+            Qs=vqe.vector_quantiles(refine=True),
+            T=vqe.n_levels,
+            projection_tolerance=0.0,
+        )
+        print(len(off_projs), len(off_projs_refined))
+        assert len(off_projs_refined) <= len(off_projs)
 
 
 class TestVectorQuantileRegressor(object):
