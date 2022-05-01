@@ -503,3 +503,38 @@ def vector_monotone_rearrangement(
     rearranged_Y = (T**d) * pi @ Y
     rearranged_Qs = [rearranged_Y[:, i].reshape((T,) * d) for i in range(d)]
     return rearranged_Qs
+
+
+def check_comonotonicity(
+    T: int, d: int, Qs: Sequence[Array], Us: Sequence[Array]
+) -> Array:
+    """
+    Measures co-monotonicity defined as (u_i - u_j).T @ (Q(u_i) - Q(u_j)) for all i, j.
+    Results in a T^d x T^d symmetric matrix.  If co-monotonicity is satisfied,
+    all entries in this matrix are positive. Negative entries in this matrix
+    represent the quantile crossing problem (and its analogue in higher dimensions).
+
+    :param T: The number of quantile levels that was used for solving the problem.
+    :param d: The dimension of the target data (Y) that was used for solving the
+        problem.
+    :param Qs: Quantile surfaces per dimension of Y. A sequence of length d,
+    where each element is of shape (T, T, ..., T).
+    :param Us: Quantile levels per dimension of U. A sequence of length d,
+    where each element is of shape (T, T, ..., T).
+    :return: A T^d x T^d symmetric matrix that measures co-monotonicity between all
+    pairs of quantile levels and quantile values. The (i, j)^th entry in the matrix
+    measures co-monotonicity between quantile levels  u_i and u_j and the quantile
+    values Q(u_i) and Q(u_j).
+    """
+    levels = np.stack([level.ravel() for level in Us])
+    quantiles = np.stack([Q.ravel() for Q in Qs])
+    pairwise_diff_levels = (
+        levels.reshape(d, 1, T**d) - levels.reshape(d, T**d, 1)
+    ).reshape(d, T ** (2 * d))
+    pairwise_diff_quantiles = (
+        quantiles.reshape(d, 1, T**d) - quantiles.reshape(d, T**d, 1)
+    ).reshape(d, T ** (2 * d))
+    all_pairs_inner_prod = np.sum(
+        pairwise_diff_levels * pairwise_diff_quantiles, axis=0
+    ).reshape(T**d, T**d)
+    return all_pairs_inner_prod
