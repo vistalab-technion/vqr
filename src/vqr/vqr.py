@@ -3,6 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Union, Callable, Optional, Sequence
 
+import ot
 import numpy as np
 from numpy import ndarray as Array
 from sklearn.utils import check_array
@@ -470,3 +471,35 @@ def quantile_contour(T: int, d: int, Qs: Sequence[Array], alpha: float = 0.05) -
 
     contour_points = np.array(contour_points_list).T  # (N, d)
     return contour_points
+
+
+def vector_monotone_rearrangement(
+    T: int, d: int, Qs: Sequence[Array], max_iters: int = 1e6
+) -> Sequence[Array]:
+    """
+    Performs vector monotone rearrangement. Can be interpreted as "vector sorting".
+
+    A vector-extension for the quantile rearrangement idea proposed in
+
+    Victor Chernozhukov, Iván Fernández‐Val, Alfred Galichon.
+    Quantile and probability curves without crossing.
+    Econometrica, 2010.
+
+    Solves an exact OT problem using POT's emd solver with U @ Y.T as the cost matrix.
+    Rearrangement is performed by multiplication with the permutation matrix Pi.
+
+    :param T: The number of quantile levels that was used for solving the problem.
+    :param d: The dimension of the target data (Y) that was used for solving the
+        problem.
+    :param Qs: Quantile surfaces per dimension of Y. A sequence of length d,
+    where each element is of shape (T, T, ..., T).
+    :param max_iters: Maximum number of iterations for the emd solver.
+    :return: Rearranged quantile surfaces per dimension of Y. A sequence of length d
+    where each element is of shape (T, T, ..., T).
+    """
+    U: Array = vector_quantile_levels(T, d)
+    Y: Array = np.stack([Q.ravel() for Q in Qs], axis=-1)
+    pi = ot.emd(M=-U @ Y.T, a=[], b=[], numItermax=max_iters)
+    rearranged_Y = (T**d) * pi @ Y
+    rearranged_Qs = [rearranged_Y[:, i].reshape((T,) * d) for i in range(d)]
+    return rearranged_Qs

@@ -18,6 +18,7 @@ from vqr.vqr import (
     quantile_levels,
     quantile_contour,
     inversion_sampling,
+    vector_monotone_rearrangement,
 )
 from vqr.plot import plot_quantiles, plot_quantiles_3d
 from vqr.coverage import measure_coverage
@@ -326,23 +327,18 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
         # Get the conditional quantiles
         cqfs = self._fitted_solution.vector_quantiles(X)
         if refine:
-            U = np.stack([q.ravel() for q in self.quantile_grid], axis=-1)
-            refined_cqfs = []
-            for cqf in cqfs:
-                pre_samples = np.stack([qv.ravel() for qv in cqf], axis=-1)
-                pi = ot.emd(M=-U @ pre_samples.T, a=[], b=[], numItermax=10**6)
-                post_samples = pre_samples.shape[0] * pi @ pre_samples
-                refined_cqfs.append(
+            return tuple(
+                [
                     QuantileFunction(
                         T=self.n_levels,
                         d=len(cqf),
-                        Qs=[
-                            post_samples[:, i].reshape((self.n_levels,) * len(cqf))
-                            for i in range(len(cqf))
-                        ],
+                        Qs=vector_monotone_rearrangement(
+                            T=self.n_levels, d=len(cqf), Qs=[*cqf]
+                        ),
                     )
-                )
-            return tuple(refined_cqfs)
+                    for cqf in cqfs
+                ]
+            )
         else:
             return cqfs
 
