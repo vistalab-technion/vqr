@@ -10,6 +10,7 @@ from numpy.linalg import norm
 from _pytest.fixtures import FixtureRequest
 
 from tests import TESTS_OUT_DIR
+from vqr.vqr import check_comonotonicity
 from experiments.logging import setup_logging
 
 setup_logging()
@@ -93,33 +94,13 @@ def monotonicity_offending_projections(
     T: int,
     projection_tolerance: float,
 ) -> Tuple[Sequence[float], Sequence[float]]:
-    # Only supports 2d for now.
-    U1, U2 = Us
-    Q1, Q2 = Qs
-    ii = jj = tuple(range(1, T))
-    projections = []
-    offending_projections = []
-
-    for i0, j0 in it.product(ii, jj):
-        u0 = np.array([U1[i0, j0], U2[i0, j0]])
-        q0 = np.array([Q1[i0, j0], Q2[i0, j0]])
-
-        for i1, j1 in it.product(ii, jj):
-            u1 = np.array([U1[i1, j1], U2[i1, j1]])
-            q1 = np.array([Q1[i1, j1], Q2[i1, j1]])
-            du = u1 - u0
-            dq = q1 - q0
-            projection = np.dot(dq, du)
-
-            # normalize projection to [-1, 1]
-            # but only if it has any length (to prevent 0/0 -> NaN)
-            if np.abs(projection) > 0:
-                projection = projection / norm(dq) / norm(du)
-
-            assert not np.isnan(projection)
-            if projection < -projection_tolerance:
-                offending_projections.append(projection.item())
-
-            projections.append(projection)
+    assert len(Qs) == len(Us)
+    # TODO: Passing Us here seems crucial. Debug the difference between the Us here and
+    #  the  ones obtained from vqr.vector_quantile_levels() function.
+    pairwise_comonotonicity_mat = check_comonotonicity(T=T, d=len(Qs), Qs=Qs, Us=Us)
+    offending_projections = pairwise_comonotonicity_mat[
+        np.where(np.triu(pairwise_comonotonicity_mat) < projection_tolerance)
+    ].tolist()
+    projections = np.triu(pairwise_comonotonicity_mat).ravel().tolist()
 
     return offending_projections, projections
