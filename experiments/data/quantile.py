@@ -17,6 +17,72 @@ _LOG = logging.getLogger(__name__)
 DEFAULT_CACHE_DIR = EXPERIMENTS_OUT_DIR.joinpath("cache")
 
 
+class QuantileFunctionMVNDataProvider(DataProvider):
+    """
+    A data provider which models the conditional quantile function of an MVN variable Y|X.
+
+    The Conditional quantile function is defined by
+
+    Q_{Y|X=x}(u) = mu(x) + Sigma^{1/2}(x) u
+
+    Where mu(x) is the mean, Sigma(x) is the covariance and u is a vector rank
+    which must be sampled from N(0, I).
+
+    Based on Carlier et. al 2016.
+    """
+
+    def __init__(self, k: int, d: int, seed: Optional[int] = 42):
+        """
+        :param d: Dimension of targets.
+        :param k: Dimension of features.
+        :param seed: Random seed to use for generation. None means don't set.
+        """
+        super().__init__(seed=seed)
+        assert d > 0
+        assert k >= 0
+        self._d = d
+        self._k = k
+        self._loc = self._rng.random((d,))
+        self._scale = self._rng.random((d, d))
+
+    @property
+    def k(self) -> int:
+        return self._k
+
+    @property
+    def d(self) -> int:
+        return self._d
+
+    def _mu_sigma(self, x: Array) -> Tuple[Array, Array]:
+        x2 = np.sum(x**2)  # will have chi-squared distribution with k-DOF
+
+        mu = self._loc + x2  # (d,)
+        sigma = self._scale * x2  # (d, d)
+        return mu, sigma
+
+    def sample_x(self, n: int) -> Array:
+        return self._rng.normal(size=(n, self.k))
+
+    def sample(self, n: int, x: Optional[Array] = None) -> Tuple[Array, Array]:
+        if x is None:
+            X = self.sample_x(n=n)
+        else:
+            x = np.reshape(x, (1, -1))
+            assert x.shape[1] == self.k
+            X = np.concatenate([x for _ in range(n)], axis=0)
+
+        mu, sigma = zip(*[self._mu_sigma(x) for x in X])
+
+        U = self._rng.normal(size=(n, self.d))  # (n, d)
+        M = np.array(mu)  # (n,d)
+        S = np.array(sigma)  # (n,d,d)
+        SU = np.einsum("Nij, Nj -> Ni", S, U)  # (n,d,d) @ (n,d) -> (n,d)
+
+        Y = M + SU
+
+        return X, Y
+
+
 class QuantileFunctionDataProviderWrapper(DataProvider):
     """
     A wrapper around a data provider which first estimates the conditional quantile

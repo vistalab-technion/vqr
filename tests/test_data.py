@@ -2,9 +2,11 @@ import os
 
 import pytest
 
-from tests import TESTS_OUT_DIR
 from experiments.data.mvn import LinearMVNDataProvider, IndependentDataProvider
-from experiments.data.quantile import QuantileFunctionDataProviderWrapper
+from experiments.data.quantile import (
+    QuantileFunctionMVNDataProvider,
+    QuantileFunctionDataProviderWrapper,
+)
 from experiments.data.cond_banana import ConditionalBananaDataProvider
 
 
@@ -28,6 +30,17 @@ class TestCondBanana(object):
         X, Y = ConditionalBananaDataProvider(
             k=k, d=d, nonlinear=nonlinear, seed=63
         ).sample(n)
+
+        assert X.shape == (n, k)
+        assert Y.shape == (n, d)
+
+
+class TestQuantileFunctionMVNDataProvider:
+    @pytest.mark.parametrize("k", [1, 20, 100])
+    @pytest.mark.parametrize("d", [2, 3, 4])
+    @pytest.mark.parametrize("n", [1000, 5000, 10000])
+    def test_shapes(self, n, d, k):
+        X, Y = QuantileFunctionMVNDataProvider(k=k, d=d, seed=127).sample(n)
 
         assert X.shape == (n, k)
         assert Y.shape == (n, d)
