@@ -333,10 +333,14 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
                 pi = ot.emd(M=-U @ pre_samples.T, a=[], b=[], numItermax=10**6)
                 post_samples = pre_samples.shape[0] * pi @ pre_samples
                 refined_cqfs.append(
-                    [
-                        post_samples[:, i].reshape((self.n_levels,) * len(cqf))
-                        for i in range(len(cqf))
-                    ]
+                    QuantileFunction(
+                        T=self.n_levels,
+                        d=len(cqf),
+                        Qs=[
+                            post_samples[:, i].reshape((self.n_levels,) * len(cqf))
+                            for i in range(len(cqf))
+                        ],
+                    )
                 )
             return tuple(refined_cqfs)
         else:
