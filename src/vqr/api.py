@@ -197,13 +197,25 @@ class VectorQuantileEstimator(VectorQuantileBase):
     ):
         super().__init__(n_levels, solver, solver_opts)
 
-    def vector_quantiles(self) -> QuantileFunction:
+    def vector_quantiles(self, refine: bool = False) -> QuantileFunction:
         """
+        :param refine: Refine the quantile function using vector monotone rearrangement.
         :return: A QuantileFunction instance, representing a discretized version of
         the quantile function Q_{Y}(u).
         """
         check_is_fitted(self)
-        return self._fitted_solution.vector_quantiles(X=None)[0]
+        quantile_function = self._fitted_solution.vector_quantiles(X=None)[0]
+        if refine:
+            refined_quantile_function = QuantileFunction(
+                T=self.n_levels,
+                d=len(quantile_function),
+                Qs=vector_monotone_rearrangement(
+                    T=self.n_levels, d=len(quantile_function), Qs=[*quantile_function]
+                ),
+            )
+            return refined_quantile_function
+        else:
+            return quantile_function
 
     def fit(self, X: Array):
         """
