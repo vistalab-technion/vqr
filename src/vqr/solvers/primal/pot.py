@@ -2,11 +2,11 @@ from typing import Optional, Sequence
 
 import ot
 import numpy as np
-from numpy.typing import ArrayLike as Array
+from numpy import ndarray as Array
 
-from vqr import VectorQuantiles
-from vqr.vqr import VQRSolver, quantile_levels
-from vqr.solvers.primal.cvx import SIMILARITY_FN_INNER_PROD, CVXVQRSolver, grid_points
+from vqr import VQRSolution
+from vqr.vqr import VQRSolver, vector_quantile_levels
+from vqr.solvers.primal.cvx import SIMILARITY_FN_INNER_PROD
 
 
 class POTVQESolver(VQRSolver):
@@ -21,7 +21,7 @@ class POTVQESolver(VQRSolver):
     def solver_name(cls) -> str:
         return "vqe_pot"
 
-    def solve_vqr(self, T: int, Y: Array, X: Optional[Array] = None) -> VectorQuantiles:
+    def solve_vqr(self, T: int, Y: Array, X: Optional[Array] = None) -> VQRSolution:
         # Can't deal with X's
         if X is not None:
             raise AssertionError(
@@ -34,7 +34,7 @@ class POTVQESolver(VQRSolver):
         # All quantile levels
         Td: int = T**d
 
-        U: Array = grid_points(T, d)
+        U: Array = vector_quantile_levels(T, d)
         assert U.shape == (Td, d)
 
         # Pairwise distances (similarity)
@@ -49,4 +49,4 @@ class POTVQESolver(VQRSolver):
 
         # Obtain the lagrange multipliers Alpha (A) and Beta (B)
         A = np.reshape(-log["u"][:, None], newshape=(Td, 1))
-        return VectorQuantiles(T, d, U, A, None)
+        return VQRSolution(T, d, U, A, None)
