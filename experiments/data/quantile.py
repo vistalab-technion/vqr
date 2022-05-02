@@ -42,8 +42,10 @@ class QuantileFunctionMVNDataProvider(DataProvider):
         assert k >= 0
         self._d = d
         self._k = k
-        self._loc = self._rng.random((d,))
-        self._scale = self._rng.random((d, d))
+        # self._loc = self._rng.random((d,))
+        # self._scale = self._rng.random((d, d))
+        self._loc = np.zeros((d,))
+        self._scale = np.eye(N=d)
 
     @property
     def k(self) -> int:
@@ -54,7 +56,7 @@ class QuantileFunctionMVNDataProvider(DataProvider):
         return self._d
 
     def _mu_sigma(self, x: Array) -> Tuple[Array, Array]:
-        x2 = np.sum(x**2)  # will have chi-squared distribution with k-DOF
+        x2 = np.sum(x**1)  # will have chi-squared distribution with k-DOF
 
         mu = self._loc + x2  # (d,)
         sigma = self._scale * x2  # (d, d)
