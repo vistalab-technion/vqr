@@ -380,6 +380,8 @@ class RegularizedDualVQRSolver(VQRSolver):
                     batch_idx=None,
                     num_epochs=self._num_epochs,
                     num_batches=None,
+                    xy_slice=None,
+                    u_slice=None,
                 )
 
         return objective.item()
@@ -462,7 +464,7 @@ class RegularizedDualVQRSolver(VQRSolver):
                 if self._callback:
                     self._callback(
                         solution=self._create_solution(
-                            T, d, k, U, phi_batch, b_batch, net
+                            len(U_batch), d, k, U_batch, phi_batch, b_batch, net
                         ),
                         batch_loss=objective.item(),
                         epoch_loss=total_objective.item(),
@@ -470,6 +472,8 @@ class RegularizedDualVQRSolver(VQRSolver):
                         batch_idx=batch_idx,
                         num_epochs=self._num_epochs,
                         num_batches=total_batches,
+                        xy_slice=xy_slice,
+                        u_slice=u_slice,
                     )
 
             total_objective /= total_batches
