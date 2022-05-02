@@ -67,6 +67,7 @@ def single_optim_exp(
     seed: int = 42,
 ) -> Dict[str, Any]:
 
+    dp_vqr_solver_opts["verbose"] = True
     # Data provider
     wrapped_provider = LinearMVNDataProvider(d=d, k=k, seed=seed)
     data_provider = QuantileFunctionDataProviderWrapper(
@@ -115,7 +116,7 @@ def single_optim_exp(
     solver_opts["post_iter_callback"] = _post_iter_callback
 
     ###
-    solver_opts["verbose"] = False
+    solver_opts["verbose"] = True
 
     # Solve
     vqr = VectorQuantileRegressor(
