@@ -474,7 +474,7 @@ def quantile_contour(T: int, d: int, Qs: Sequence[Array], alpha: float = 0.05) -
 
 
 def vector_monotone_rearrangement(
-    T: int, d: int, Qs: Sequence[Array], max_iters: int = 1e6
+    T: int, d: int, Qs: Sequence[Array], max_iters: int = 2e6
 ) -> Sequence[Array]:
     """
     Performs vector monotone rearrangement. Can be interpreted as "vector sorting".
