@@ -1,3 +1,5 @@
+import pickle
+
 import numpy as np
 import torch
 from numpy import array, zeros
@@ -39,12 +41,12 @@ d = 2
 k = 1
 T = 50
 num_epochs = 20000
-linear = True
+linear = False
 sigma = 0.1
-GPU_DEVICE_NUM = 5
+GPU_DEVICE_NUM = 1
 device = f"cuda:{GPU_DEVICE_NUM}" if GPU_DEVICE_NUM is not None else "cpu"
 dtype = torch.float32
-epsilon = 1e-9
+epsilon = 5e-3
 
 data_provider = ConditionalBananaDataProvider(k=k, d=d, nonlinear=True)
 X, Y = data_provider.sample(n=n)
@@ -58,8 +60,8 @@ if linear:
         gpu=True,
         full_precision=False,
         device_num=GPU_DEVICE_NUM,
-        batchsize_y=100000,
-        batchsize_u=2500,
+        batchsize_y=None,
+        batchsize_u=None,
         inference_batch_size=100,
         lr_factor=0.9,
         lr_patience=500,
@@ -76,8 +78,8 @@ else:
         batchnorm=False,
         hidden_layers=(2, 10, 20),
         device_num=GPU_DEVICE_NUM,
-        batchsize_y=100000,
-        batchsize_u=2500,
+        batchsize_y=None,
+        batchsize_u=None,
         inference_batch_size=100,
         lr_factor=0.9,
         lr_patience=300,
@@ -90,7 +92,7 @@ vqr_est.fit(X, Y)
 
 # Generate conditional distributions for the below X's
 Xs = [tensor(array([[x] * k]), dtype=dtype) for x in np.linspace(1.0, 3.0, 20)]
-
+kde_l1_dists = []
 
 for cond_X in Xs:
     _, cond_Y_gt = data_provider.sample(n=n, x=cond_X.numpy())
@@ -121,6 +123,7 @@ for cond_X in Xs:
     kde_l1_dist = kde_l1(
         cond_Y_gt, cond_Y_est, grid_resolution=T * 2, device=device, sigma=sigma
     )
+    kde_l1_dists.append(kde_l1_dist)
 
     # Plot KDEs
     plot_kde(
@@ -129,3 +132,9 @@ for cond_X in Xs:
         kde_l1_dist,
         f"Y_given_X={cond_X.squeeze().item():.1f}_{linear=}",
     )
+
+
+with open(f"./kde-l1-dists-{linear=}.pkl", "wb") as f:
+    pickle.dump(kde_l1_dists, f)
+    print(np.mean(kde_l1_dists))
+    f.close()
