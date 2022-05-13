@@ -1,6 +1,7 @@
 from abc import ABC
 from typing import Any, Dict, Type, Tuple, Union, Optional, Sequence
 
+import ot
 import numpy as np
 from numpy import ndarray as Array
 from numpy import quantile
@@ -17,10 +18,12 @@ from vqr.vqr import (
     quantile_levels,
     quantile_contour,
     inversion_sampling,
+    vector_monotone_rearrangement,
 )
 from vqr.plot import plot_quantiles, plot_quantiles_3d
 from vqr.coverage import measure_coverage
 from vqr.solvers.primal.cvx import CVXVQRSolver
+from vqr.solvers.primal.pot import POTVQESolver
 from vqr.solvers.dual.regularized_lse import (
     RegularizedDualVQRSolver,
     MLPRegularizedDualVQRSolver,
@@ -32,6 +35,7 @@ SOLVER_TYPES: Dict[str, Type[VQRSolver]] = {
         CVXVQRSolver,
         RegularizedDualVQRSolver,
         MLPRegularizedDualVQRSolver,
+        POTVQESolver,
     ]
 }
 
@@ -193,13 +197,25 @@ class VectorQuantileEstimator(VectorQuantileBase):
     ):
         super().__init__(n_levels, solver, solver_opts)
 
-    def vector_quantiles(self) -> QuantileFunction:
+    def vector_quantiles(self, refine: bool = False) -> QuantileFunction:
         """
+        :param refine: Refine the quantile function using vector monotone rearrangement.
         :return: A QuantileFunction instance, representing a discretized version of
         the quantile function Q_{Y}(u).
         """
         check_is_fitted(self)
-        return self._fitted_solution.vector_quantiles(X=None)[0]
+        quantile_function = self._fitted_solution.vector_quantiles(X=None)[0]
+        if refine:
+            refined_quantile_function = QuantileFunction(
+                T=self.n_levels,
+                d=len(quantile_function),
+                Qs=vector_monotone_rearrangement(
+                    T=self.n_levels, d=len(quantile_function), Qs=[*quantile_function]
+                ),
+            )
+            return refined_quantile_function
+        else:
+            return quantile_function
 
     def fit(self, X: Array):
         """
@@ -301,10 +317,14 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
 
         return self
 
-    def vector_quantiles(self, X: Array) -> Sequence[QuantileFunction]:
+    def vector_quantiles(
+        self, X: Optional[Array] = None, refine: bool = False
+    ) -> Sequence[QuantileFunction]:
         """
         :param X: Covariates, of shape (N, k). Should be None if the fitted solution
         was for a VQE (un conditional quantiles).
+        :param refine: Refine the conditional quantile function using vector monotone
+        rearrangement.
         :return: A sequence of length N, containing QuantileFunction instances.
         Each element of the sequence corresponds to one of the covariates in X,
         and contains the discretized conditional quantile function Q_{Y|X=x}(u).
@@ -316,7 +336,23 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
             # Scale X with the fitted transformation before predicting
             X = self._scaler.transform(X)
 
-        return self._fitted_solution.vector_quantiles(X)
+        # Get the conditional quantiles
+        cqfs = self._fitted_solution.vector_quantiles(X)
+        if refine:
+            return tuple(
+                [
+                    QuantileFunction(
+                        T=self.n_levels,
+                        d=len(cqf),
+                        Qs=vector_monotone_rearrangement(
+                            T=self.n_levels, d=len(cqf), Qs=[*cqf]
+                        ),
+                    )
+                    for cqf in cqfs
+                ]
+            )
+        else:
+            return cqfs
 
     def predict(self, X: Array) -> Array:
         """

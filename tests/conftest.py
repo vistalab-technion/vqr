@@ -1,11 +1,16 @@
 import os
 import shutil
+import itertools as it
+from typing import Tuple, Sequence
 from pathlib import Path
 
+import numpy as np
 import pytest
+from numpy.linalg import norm
 from _pytest.fixtures import FixtureRequest
 
 from tests import TESTS_OUT_DIR
+from vqr.vqr import check_comonotonicity, decode_quantile_grid, vector_quantile_levels
 from experiments.logging import setup_logging
 
 setup_logging()
@@ -59,3 +64,42 @@ def _test_out_dir(request: FixtureRequest, clear: bool = True, with_pid: bool = 
 
     os.makedirs(out_dir, exist_ok=True)
     return out_dir
+
+
+def _test_monotonicity(
+    Us: Sequence[np.ndarray],
+    Qs: Sequence[np.ndarray],
+    T: int,
+    projection_tolerance: float = 0.0,
+    offending_proportion_limit: float = 0.005,
+):
+    offending_projections, projections = monotonicity_offending_projections(
+        Qs, Us, T, projection_tolerance
+    )
+    n_c, n = len(offending_projections), len(projections)
+
+    offending_proportion = n_c / n
+    if offending_projections:
+        q = [0.01, 0.1, 0.25, 0.5, 0.75, 0.9, 0.99]
+        print(f"err quantiles: {np.quantile(offending_projections, q=q)}")
+        print(f"all quantiles: {np.quantile(projections, q=q)}")
+        print(f"{n=}, {n_c=}, {n_c/n=}")
+
+    assert offending_proportion < offending_proportion_limit
+
+
+def monotonicity_offending_projections(
+    Qs: Sequence[np.ndarray],
+    Us: Sequence[np.ndarray],
+    T: int,
+    projection_tolerance: float,
+) -> Tuple[Sequence[float], Sequence[float]]:
+    assert len(Qs) == len(Us)
+
+    pairwise_comonotonicity_mat = check_comonotonicity(T=T, d=len(Qs), Qs=Qs, Us=Us)
+    offending_projections = pairwise_comonotonicity_mat[
+        np.where(np.triu(pairwise_comonotonicity_mat) < projection_tolerance)
+    ].tolist()
+    projections = np.triu(pairwise_comonotonicity_mat).ravel().tolist()
+
+    return offending_projections, projections
