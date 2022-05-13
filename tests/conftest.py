@@ -10,7 +10,7 @@ from numpy.linalg import norm
 from _pytest.fixtures import FixtureRequest
 
 from tests import TESTS_OUT_DIR
-from vqr.vqr import check_comonotonicity
+from vqr.vqr import check_comonotonicity, decode_quantile_grid, vector_quantile_levels
 from experiments.logging import setup_logging
 
 setup_logging()
@@ -95,8 +95,7 @@ def monotonicity_offending_projections(
     projection_tolerance: float,
 ) -> Tuple[Sequence[float], Sequence[float]]:
     assert len(Qs) == len(Us)
-    # TODO: Passing Us here seems crucial. Debug the difference between the Us here and
-    #  the  ones obtained from vqr.vector_quantile_levels() function.
+
     pairwise_comonotonicity_mat = check_comonotonicity(T=T, d=len(Qs), Qs=Qs, Us=Us)
     offending_projections = pairwise_comonotonicity_mat[
         np.where(np.triu(pairwise_comonotonicity_mat) < projection_tolerance)
