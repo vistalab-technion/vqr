@@ -116,23 +116,14 @@ class TestVectorQuantileEstimator(object):
         with pytest.raises(NotFittedError):
             _ = vq.vector_quantiles()
 
-    @pytest.mark.flaky(reruns=1)
-    def test_monotonicity(self, vqr_solver_opts):
-        solver, solver_opts = vqr_solver_opts
-
-        T = 15
-        N = 1000
-        d = 2
-
-        _, Y = IndependentDataProvider(d=d, k=1).sample(n=N)
-        vqe = VectorQuantileEstimator(
-            n_levels=T, solver=solver, solver_opts=solver_opts
-        )
-        vqe.fit(Y)
+    def test_monotonicity(self, vqe_fitted):
+        Y, vqe = vqe_fitted
+        N, d = Y.shape
+        T = vqe.n_levels
 
         _test_monotonicity(
             Us=vqe.quantile_grid,
-            Qs=vqe.vector_quantiles(),
+            Qs=list(vqe.vector_quantiles(refine=True)),
             T=vqe.n_levels,
         )
 
@@ -150,13 +141,13 @@ class TestVectorQuantileEstimator(object):
         vqe.fit(Y)
         off_projs, _ = monotonicity_offending_projections(
             Us=vqe.quantile_grid,
-            Qs=vqe.vector_quantiles(refine=False),
+            Qs=list(vqe.vector_quantiles(refine=False)),
             T=vqe.n_levels,
             projection_tolerance=0.0,
         )
         off_projs_refined, _ = monotonicity_offending_projections(
             Us=vqe.quantile_grid,
-            Qs=vqe.vector_quantiles(refine=True),
+            Qs=list(vqe.vector_quantiles(refine=True)),
             T=vqe.n_levels,
             projection_tolerance=0.0,
         )
@@ -320,24 +311,18 @@ class TestVectorQuantileRegressor(object):
         print(f"{cov=}")
         assert cov > (0.6 if d < 3 else 0.2)
 
-    @pytest.mark.flaky(reruns=1)
-    def test_monotonicity(self, vqr_solver):
-        N = 1000
-        d = 2
-        k = 3
-        T = 15
-        X, Y = LinearMVNDataProvider(d=d, k=k).sample(n=N)
+    def test_monotonicity(self, vqr_fitted):
+        X, Y, vqr = vqr_fitted
+        N = len(Y)
 
-        vqr = VectorQuantileRegressor(n_levels=T, solver=vqr_solver)
-        vqr.fit(X, Y)
-
-        i = random.randrange(0, N)
-
-        _test_monotonicity(
-            Us=vqr.quantile_grid,
-            Qs=vqr.vector_quantiles(X=X[[i]])[0],
-            T=vqr.n_levels,
-        )
+        # Test with a few random X's
+        idxs = np.random.permutation(N)
+        for i in idxs[:10]:
+            _test_monotonicity(
+                Us=vqr.quantile_grid,
+                Qs=list(vqr.vector_quantiles(X=X[[i]], refine=True)[0]),
+                T=vqr.n_levels,
+            )
 
     @pytest.mark.flaky(reruns=1)
     def test_vector_monotone_rearrangement(self, vqr_solver):
@@ -357,14 +342,14 @@ class TestVectorQuantileRegressor(object):
             i = random.randrange(0, N)
             off_projs, all_projs = monotonicity_offending_projections(
                 Us=vqr.quantile_grid,
-                Qs=vqr.vector_quantiles(X=X[[i]], refine=False)[0],
+                Qs=list(vqr.vector_quantiles(X=X[[i]], refine=False)[0]),
                 T=vqr.n_levels,
                 projection_tolerance=0.0,
             )
 
             off_projs_refined, all_projs_refined = monotonicity_offending_projections(
                 Us=vqr.quantile_grid,
-                Qs=vqr.vector_quantiles(X=X[[i]], refine=True)[0],
+                Qs=list(vqr.vector_quantiles(X=X[[i]], refine=True)[0]),
                 T=vqr.n_levels,
                 projection_tolerance=0.0,
             )

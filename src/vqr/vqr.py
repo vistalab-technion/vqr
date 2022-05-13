@@ -528,13 +528,17 @@ def check_comonotonicity(
     """
     levels = np.stack([level.ravel() for level in Us])
     quantiles = np.stack([Q.ravel() for Q in Qs])
+
     pairwise_diff_levels = (
         levels.reshape(d, 1, T**d) - levels.reshape(d, T**d, 1)
     ).reshape(d, T ** (2 * d))
+
     pairwise_diff_quantiles = (
         quantiles.reshape(d, 1, T**d) - quantiles.reshape(d, T**d, 1)
     ).reshape(d, T ** (2 * d))
+
     all_pairs_inner_prod = np.sum(
         pairwise_diff_levels * pairwise_diff_quantiles, axis=0
     ).reshape(T**d, T**d)
+
     return all_pairs_inner_prod
