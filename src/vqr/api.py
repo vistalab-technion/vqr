@@ -1,12 +1,11 @@
 from abc import ABC
-from typing import Any, Dict, Type, Tuple, Union, Optional, Sequence
+from typing import Any, Dict, Type, Union, Optional, Sequence
 
 import numpy as np
 from numpy import ndarray as Array
 from numpy import quantile
 from sklearn.base import BaseEstimator, RegressorMixin
 from sklearn.utils import check_X_y
-from matplotlib.figure import Figure
 from sklearn.preprocessing import StandardScaler
 from sklearn.utils.validation import check_is_fitted
 
@@ -18,7 +17,6 @@ from vqr.vqr import (
     quantile_contour,
     inversion_sampling,
 )
-from vqr.plot import plot_quantiles, plot_quantiles_3d
 from vqr.coverage import measure_coverage
 from vqr.solvers.primal.cvx import CVXVQRSolver
 from vqr.solvers.primal.pot import POTVQESolver
@@ -147,39 +145,6 @@ class VectorQuantileBase(BaseEstimator, ABC):
         """
         check_is_fitted(self)
         return self._fitted_solution
-
-    def plot_quantiles(
-        self, surf_2d: bool = False, figsize: Optional[Tuple[int, int]] = None
-    ) -> Figure:
-        """
-        Plots scalar (d=1) or vector quantiles (d=2 and d=3).
-        A new figure will be created.
-        - Scalar quantiles (d=1) will be plotted using a simple line plot
-        - Vector d=2 quantiles will be plotted either as images (surf_2d=False) or as
-            surface plots (surf_2d=True).
-        - Vector d=3 quantiles will be plotted as voxels.
-        :param surf_2d: Whether for d=2 the quantiles should be plotted as a surface
-            or an image.
-        :param figsize: Size of figure to create. Will be passed to plt.subplots.
-        :return: The created figure.
-        """
-        check_is_fitted(self)
-
-        # TODO: Refactor plot to take the solution
-        plot_kwargs = dict(
-            T=self.n_levels,
-            d=self._fitted_solution.dim_y,
-            U=self._fitted_solution._U,
-            A=self._fitted_solution._A,
-            figsize=figsize,
-        )
-
-        if self.dim_y == 3 or self.dim_y == 2 and surf_2d:
-            plot_fn = plot_quantiles_3d
-        else:
-            plot_fn = plot_quantiles
-
-        return plot_fn(**plot_kwargs)
 
 
 class VectorQuantileEstimator(VectorQuantileBase):
