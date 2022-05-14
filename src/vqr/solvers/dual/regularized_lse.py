@@ -416,16 +416,27 @@ class RegularizedDualVQRSolver(VQRSolver):
             return int(np.ceil(num_samples / batch_size))
 
         def _yield_batches(num_samples, batch_size):
-            if not batch_size:
+            if not batch_size or batch_size > num_samples:
                 batch_size = num_samples
 
             while True:
-                idx = np.random.permutation(num_samples)
+                idx = np.concatenate(
+                    [
+                        np.random.permutation(num_samples),
+                        np.random.permutation(num_samples),
+                    ],
+                    axis=0,
+                )
+
                 for batch_idx in range(_num_batches(num_samples, batch_size)):
                     batch_slice = idx[
-                        batch_size
-                        * batch_idx : min(batch_size * (batch_idx + 1), num_samples)
+                        (batch_size * batch_idx) : (batch_size * (batch_idx + 1))
                     ]
+
+                    if batch_size == num_samples:
+                        batch_slice = sorted(batch_slice)
+
+                    assert len(batch_slice) == batch_size
                     yield batch_slice
 
         num_batches_xy = _num_batches(N, self._batchsize_y)
