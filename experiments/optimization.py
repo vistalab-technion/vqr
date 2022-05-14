@@ -17,38 +17,38 @@ def _compare_conditional_quantiles(
     vqf_gt: QuantileFunction,
     vqf_est: QuantileFunction,
     t_factor: int,
-    u_slice: Sequence[int] = None,
 ) -> float:
 
     # Make sure shapes are consistent and that both quantile functions are
     # conditional on the same X.
     assert vqf_gt.d == vqf_est.d
-    if u_slice is None:
-        assert t_factor == vqf_gt.T // vqf_est.T
+    assert t_factor == vqf_gt.T // vqf_est.T
     assert np.allclose(vqf_gt.X, vqf_est.X)
 
     T = vqf_est.T
     d = vqf_est.d
 
-    q_surfaces_gt = vqf_gt.values  # (d, T, T, ..., T)
-
     # We support having more levels in the gt function, in which case we index the
     # levels corresponding to the estimated levels.
-    idx = (slice(None), *[slice(0, None, t_factor)] * d)
-    q_surfaces_gt_subsampled = q_surfaces_gt[idx]
-    q_surfaces_gt_subsampled = q_surfaces_gt_subsampled.reshape(d, -1)
-    if u_slice is not None:
-        q_surfaces_gt_subsampled = q_surfaces_gt_subsampled[:, u_slice]
+    idx = (slice(None), *[slice(t_factor - 1, None, t_factor)] * d)
 
+    q_surfaces_gt = vqf_gt.values[idx]  # (d, T, T, ..., T)
+    q_surfaces_gt = q_surfaces_gt.reshape(d, -1)
     q_surfaces_est = vqf_est.values  # (d, T, T, ..., T)
     q_surfaces_est = q_surfaces_est.reshape(d, -1)
-    assert q_surfaces_gt_subsampled.shape == q_surfaces_est.shape
+    assert q_surfaces_gt.shape == q_surfaces_est.shape
+
+    # Make sure we're comparing the same quantile levels
+    q_levels_gt = vqf_gt.levels[idx].reshape(d, -1)
+    q_levels_est = vqf_est.levels.reshape(d, -1)
+    assert q_levels_gt.shape == q_levels_est.shape
+    assert np.allclose(q_levels_gt, q_levels_est)
 
     return (
         100
         * (
-            np.linalg.norm(q_surfaces_gt_subsampled - q_surfaces_est)
-            / np.linalg.norm(q_surfaces_gt_subsampled)
+            np.linalg.norm(q_surfaces_gt - q_surfaces_est)
+            / np.linalg.norm(q_surfaces_gt)
         )
     ).item()
 
@@ -105,9 +105,7 @@ def single_optim_exp(
 
         # Calculate distance from g.t.
         dists = [
-            _compare_conditional_quantiles(
-                vqf_gt, vqf_est, t_factor=dp_vqr_t_factor, u_slice=u_slice
-            )
+            _compare_conditional_quantiles(vqf_gt, vqf_est, t_factor=dp_vqr_t_factor)
             for vqf_gt, vqf_est in zip(vqfs_gt, vqfs_est)
         ]
         optimization_dists.append(dists)
