@@ -88,7 +88,7 @@ class RegularizedDualVQRSolver(VQRSolver):
         It will be passed the following kwargs:
         (solution, batch_loss, epoch_loss, epoch_idx, batch_idx, num_epochs,
         num_batches). The solution is a VQRSolution object containing the
-        intermetiate solution for the iteration on which the callback is invoked.
+        intermediate solution for the iteration on which the callback is invoked.
         """
         super().__init__()
 
@@ -462,9 +462,18 @@ class RegularizedDualVQRSolver(VQRSolver):
 
                 # Invoke callback
                 if self._callback:
+                    if not self._batchsize_u:
+                        phi_all_levels = phi_batch
+                    else:
+                        # In the case of U-batches, we need to compute phi with all
+                        # T^d levels, otherwise we can't create a valid solution object
+                        with torch.no_grad():
+                            phi_all_levels = self._evaluate_phi(
+                                Y_batch, U, psi_batch, epsilon, X_batch, b, net, UY=None
+                            )
                     self._callback(
                         solution=self._create_solution(
-                            len(U_batch), d, k, U_batch, phi_batch, b_batch, net
+                            T, d, k, U, phi_all_levels, b, net
                         ),
                         batch_loss=objective.item(),
                         epoch_loss=total_objective.item(),
