@@ -205,17 +205,20 @@ class VectorQuantileEstimator(VectorQuantileBase):
         """
         check_is_fitted(self)
         quantile_function = self._fitted_solution.vector_quantiles(X=None)[0]
-        if refine:
-            refined_quantile_function = QuantileFunction(
+        if not refine:
+            return quantile_function
+
+        refined_quantile_function = QuantileFunction(
+            T=self.n_levels,
+            d=len(quantile_function),
+            Qs=vector_monotone_rearrangement(
                 T=self.n_levels,
                 d=len(quantile_function),
-                Qs=vector_monotone_rearrangement(
-                    T=self.n_levels, d=len(quantile_function), Qs=[*quantile_function]
-                ),
-            )
-            return refined_quantile_function
-        else:
-            return quantile_function
+                Qs=list(quantile_function),
+            ),
+            Us=list(quantile_function.levels),
+        )
+        return refined_quantile_function
 
     def fit(self, X: Array):
         """
@@ -338,21 +341,22 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
 
         # Get the conditional quantiles
         cqfs = self._fitted_solution.vector_quantiles(X)
-        if refine:
-            return tuple(
-                [
-                    QuantileFunction(
-                        T=self.n_levels,
-                        d=len(cqf),
-                        Qs=vector_monotone_rearrangement(
-                            T=self.n_levels, d=len(cqf), Qs=[*cqf]
-                        ),
-                    )
-                    for cqf in cqfs
-                ]
-            )
-        else:
+        if not refine:
             return cqfs
+
+        return tuple(
+            [
+                QuantileFunction(
+                    T=self.n_levels,
+                    d=len(cqf),
+                    Qs=vector_monotone_rearrangement(
+                        T=self.n_levels, d=len(cqf), Qs=list(cqf)
+                    ),
+                    Us=list(cqf.levels),
+                )
+                for cqf in cqfs
+            ]
+        )
 
     def predict(self, X: Array) -> Array:
         """

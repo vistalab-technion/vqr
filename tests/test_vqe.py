@@ -70,6 +70,7 @@ class TestVectorQuantileEstimator(object):
         assert len(vqf) == d
         assert all(q_surface.shape == (T,) * d for q_surface in vqf)
         assert vqf.values.shape == (d, *[T] * d)
+        assert vqf.levels.shape == (d, *[T] * d)
 
     def test_sample(self, vqe_fitted, test_out_dir):
         Y, vqe = vqe_fitted
