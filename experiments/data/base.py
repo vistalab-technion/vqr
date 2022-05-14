@@ -77,3 +77,24 @@ class DataProvider(SerializableRandomDataGenerator):
         In all cases, X will be of shape (n, k) and Y will be of shape (n, d).
         """
         pass
+
+
+class RealDataProvider:
+    @property
+    @abstractmethod
+    def n(self) -> int:
+        pass
+
+    @property
+    @abstractmethod
+    def d(self) -> int:
+        pass
+
+    @property
+    @abstractmethod
+    def k(self) -> int:
+        pass
+
+    @abstractmethod
+    def sample(self, n: int, idx: Optional[Array] = None) -> Tuple[Array, Array]:
+        pass
