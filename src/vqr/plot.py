@@ -10,12 +10,7 @@ from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from mpl_toolkits.mplot3d import Axes3D
 
-from vqr.vqr import (
-    quantile_levels,
-    quantile_contour,
-    decode_quantile_grid,
-    decode_quantile_values,
-)
+from vqr.vqr import quantile_levels, quantile_contour
 from vqr.coverage import point_in_hull
 
 
@@ -32,7 +27,11 @@ def _level_label(t: float) -> str:
 
 
 def plot_quantiles(
-    T: int, d: int, U: ndarray, A: ndarray, figsize: Optional[Tuple[int, int]] = None
+    T: int,
+    d: int,
+    Qs: Sequence[Array],
+    Us: Sequence[Array],
+    figsize: Optional[Tuple[int, int]] = None,
 ) -> Figure:
     """
     Plots scalar quantiles (d=1) or vector quantiles of d=2 obtained from the
@@ -44,14 +43,18 @@ def plot_quantiles(
 
     :param T: The number of quantile levels that was used for solving the problem.
     :param d: The dimension of the target data (Y) that was used for solving the
-        problem.
-    :param U: The encoded grid U, of shape (T**d, d).
-    :param A: The regression coefficients, of shape (T**d, 1).
+    problem.
+    :param Qs: Quantile surfaces per dimension of Y. A sequence of length d,
+    where each element is of shape (T, T, ..., T).
+    :param Us: Quantile levels per dimension of U. A sequence of length d,
+    where each element is of shape (T, T, ..., T).
     :param figsize: Size of figure to create. Will be passed to plt.subplots.
     :return: The created figure.
     """
     if d > 2:
         raise RuntimeError("Can't plot quantiles with dimension greater than 2")
+
+    assert d == len(Qs) == len(Us)
 
     fig: Figure
     _axes: ndarray
@@ -67,11 +70,9 @@ def plot_quantiles(
     levels: ndarray = quantile_levels(T)
     tick_labels = [_level_label(t) for t in levels]
 
-    U_grid = decode_quantile_grid(T, d, U)
-    Q_values = decode_quantile_values(T, d, A)
-    for i, (ax, Q) in enumerate(zip(axes, Q_values)):
+    for i, (ax, Q) in enumerate(zip(axes, Qs)):
         if d == 1:
-            ax.plot(*U_grid, Q)
+            ax.plot(*Us, Q)
             ax.set_title(f"$Q_{{{i + 1}}}(u_1)$")
             ax.set_xlabel(f"$u_1$")
             ax.set_xticks(levels)
@@ -101,9 +102,15 @@ def plot_quantiles(
     return fig
 
 
-def plot_quantiles_3d(T, d, U, A, figsize: Optional[Tuple[int, int]] = None) -> Figure:
+def plot_quantiles_3d(
+    T,
+    d,
+    Qs: Sequence[Array],
+    Us: Sequence[Array],
+    figsize: Optional[Tuple[int, int]] = None,
+) -> Figure:
     """
-    Plots vector quantiles of d=2 or d-3 obtained from the solution of the VQR optimal
+    Plots vector quantiles of d=2 or d=3 obtained from the solution of the VQR optimal
     transport problem.
 
     A new figure will be created. A three-dimensional plot will be created, where for d=2
@@ -114,8 +121,10 @@ def plot_quantiles_3d(T, d, U, A, figsize: Optional[Tuple[int, int]] = None) -> 
     :param T: The number of quantile levels that was used for solving the problem.
     :param d: The dimension of the target data (Y) that was used for solving the
         problem.
-    :param U: The encoded grid U, of shape (T**d, d).
-    :param A: The regression coefficients, of shape (T**d, 1).
+    :param Qs: Quantile surfaces per dimension of Y. A sequence of length d,
+    where each element is of shape (T, T, ..., T).
+    :param Us: Quantile levels per dimension of U. A sequence of length d,
+    where each element is of shape (T, T, ..., T).
     :param figsize: Size of figure to create. Will be passed to plt.subplots.
     :return: The created figure.
     """
@@ -136,12 +145,10 @@ def plot_quantiles_3d(T, d, U, A, figsize: Optional[Tuple[int, int]] = None) -> 
     levels: ndarray = quantile_levels(T)
     tick_labels = [_level_label(t) for t in levels]
 
-    U_grid = decode_quantile_grid(T, d, U)
-    Q_values = decode_quantile_values(T, d, A)
-    for i, (ax, Q) in enumerate(zip(axes, Q_values)):
+    for i, (ax, Q) in enumerate(zip(axes, Qs)):
         if d == 2:
             ticks = levels
-            m = ax.plot_surface(*U_grid, Q, cmap="viridis")
+            m = ax.plot_surface(*Us, Q, cmap="viridis")
             fig.colorbar(m, ax=[ax], shrink=0.2)
             ax.set_title(f"$Q_{{{i + 1}}}(u_1, u_2)$")
             ax.set_ylabel("$u_1$")
