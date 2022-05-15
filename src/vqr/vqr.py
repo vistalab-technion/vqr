@@ -85,10 +85,14 @@ class VQRSolution:
     def is_conditional(self) -> bool:
         return self._B is not None
 
-    def vector_quantiles(self, X: Optional[Array] = None) -> Sequence[QuantileFunction]:
+    def vector_quantiles(
+        self, X: Optional[Array] = None, refine: bool = False
+    ) -> Sequence[QuantileFunction]:
         """
         :param X: Covariates, of shape (N, k). Should be None if the fitted solution
         was for a VQE (un conditional quantiles).
+        :param refine: Refine the conditional quantile function using vector monotone
+        rearrangement.
         :return: A sequence of length N containing QuantileFunction instances
         corresponding to the given covariates X. If X is None, will be a sequence of
         length one.
@@ -128,11 +132,14 @@ class VQRSolution:
             Y_hat = B @ Z.T + A  # result is (T**d, N)
             Y_hats = Y_hat.T  # (N, T**d)
 
+        refine_fn = lambda Qs: (
+            vector_monotone_rearrangement(self._T, self._d, Qs) if refine else Qs
+        )
         return tuple(
             QuantileFunction(
                 T=self._T,
                 d=self._d,
-                Qs=decode_quantile_values(self._T, self._d, Y_hat),
+                Qs=refine_fn(decode_quantile_values(self._T, self._d, Y_hat)),
                 Us=decode_quantile_grid(self._T, self._d, self._U),
                 X=X[[i], :] if X is not None else None,
             )
