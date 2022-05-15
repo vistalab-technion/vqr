@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict, Optional, Sequence
+from typing import Any, Dict
 
 import click
 import numpy as np
@@ -14,7 +14,9 @@ _LOG = logging.getLogger(__name__)
 
 
 def _compare_conditional_quantiles(
-    vqf_gt: QuantileFunction, vqf_est: QuantileFunction, t_factor: int
+    vqf_gt: QuantileFunction,
+    vqf_est: QuantileFunction,
+    t_factor: int,
 ) -> float:
 
     # Make sure shapes are consistent and that both quantile functions are
@@ -26,22 +28,24 @@ def _compare_conditional_quantiles(
     T = vqf_est.T
     d = vqf_est.d
 
-    q_surfaces_gt = vqf_gt.values  # (d, T, T, ..., T)
-
     # We support having more levels in the gt function, in which case we index the
     # levels corresponding to the estimated levels.
-    idx = (slice(None), *[slice(0, None, t_factor)] * d)
-    q_surfaces_gt_subsampled = q_surfaces_gt[idx]
+    idx = (slice(None), *[slice(t_factor - 1, None, t_factor)] * d)
 
+    q_surfaces_gt = vqf_gt.values[idx]  # (d, T, T, ..., T)
+    q_surfaces_gt = q_surfaces_gt.reshape(d, -1)
     q_surfaces_est = vqf_est.values  # (d, T, T, ..., T)
-    assert q_surfaces_gt_subsampled.shape == q_surfaces_est.shape
+    q_surfaces_est = q_surfaces_est.reshape(d, -1)
+    assert q_surfaces_gt.shape == q_surfaces_est.shape
+
+    # Make sure we're comparing the same quantile levels
+    q_levels_gt = vqf_gt.levels[idx].reshape(d, -1)
+    q_levels_est = vqf_est.levels.reshape(d, -1)
+    assert q_levels_gt.shape == q_levels_est.shape
+    assert np.allclose(q_levels_gt, q_levels_est)
 
     return (
-        100
-        * (
-            np.linalg.norm(q_surfaces_gt_subsampled - q_surfaces_est)
-            / np.linalg.norm(q_surfaces_gt_subsampled)
-        )
+        np.linalg.norm(q_surfaces_gt - q_surfaces_est) / np.linalg.norm(q_surfaces_gt)
     ).item()
 
 
@@ -59,6 +63,7 @@ def single_optim_exp(
     seed: int = 42,
 ) -> Dict[str, Any]:
 
+    dp_vqr_solver_opts["verbose"] = True
     # Data provider
     wrapped_provider = LinearMVNDataProvider(d=d, k=k, seed=seed)
     data_provider = QuantileFunctionDataProviderWrapper(
@@ -66,13 +71,14 @@ def single_optim_exp(
         vqr_n_levels=T * dp_vqr_t_factor,
         vqr_fit_n=dp_vqr_n,
         vqr_solver_opts=dp_vqr_solver_opts,
+        seed=seed,
     )
 
     # Sample values of x on which we evaluate
     eval_x = wrapped_provider.sample_x(n=n_eval_x)
 
     # Obtain g.t. VQR quantile functions
-    vqfs_gt = data_provider.vqr.fitted_solution.vector_quantiles(X=eval_x)
+    vqfs_gt = data_provider.vqr.vector_quantiles(X=eval_x, refine=True)
 
     # Generate data
     X, Y = data_provider.sample(n=N)
@@ -81,10 +87,19 @@ def single_optim_exp(
 
     # Define a callback that will be invoked each iteration (epoch or batch)
     def _post_iter_callback(
-        solution, batch_loss, epoch_loss, epoch_idx, batch_idx, num_epochs, num_batches
+        solution,
+        batch_loss,
+        epoch_loss,
+        epoch_idx,
+        batch_idx,
+        num_epochs,
+        num_batches,
+        xy_slice,
+        u_slice,
     ):
         # Obtain quantile functions from current iteration, conditioned on the same X's
-        vqfs_est = solution.vector_quantiles(X=eval_x)
+        eval_x_scaled = data_provider.vqr._scaler.transform(eval_x)
+        vqfs_est = solution.vector_quantiles(X=eval_x_scaled, refine=True)
 
         # Calculate distance from g.t.
         dists = [
@@ -97,7 +112,7 @@ def single_optim_exp(
     solver_opts["post_iter_callback"] = _post_iter_callback
 
     ###
-    solver_opts["verbose"] = False
+    solver_opts["verbose"] = True
 
     # Solve
     vqr = VectorQuantileRegressor(
@@ -117,6 +132,8 @@ def single_optim_exp(
 
         fig, ax = plt.subplots(1, 1, figsize=(10, 5))
         ax.plot(x, y, "k-")
+        ax.grid()
+        ax.set_ylim([0, 2])
         ax.fill_between(x, y - yerr_min, y + yerr_max, alpha=0.5)
         ax.set_xlabel("epoch")
         ax.set_ylabel(r"$\frac{||Q^{*}(u)-\hat{Q}(u)||_{2}}{||Q^{*}(u)||_{2}}$")

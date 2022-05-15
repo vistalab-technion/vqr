@@ -1,7 +1,6 @@
 from abc import ABC
 from typing import Any, Dict, Type, Tuple, Union, Optional, Sequence
 
-import ot
 import numpy as np
 from numpy import ndarray as Array
 from numpy import quantile
@@ -18,7 +17,6 @@ from vqr.vqr import (
     quantile_levels,
     quantile_contour,
     inversion_sampling,
-    vector_monotone_rearrangement,
 )
 from vqr.plot import plot_quantiles, plot_quantiles_3d
 from vqr.coverage import measure_coverage
@@ -204,18 +202,8 @@ class VectorQuantileEstimator(VectorQuantileBase):
         the quantile function Q_{Y}(u).
         """
         check_is_fitted(self)
-        quantile_function = self._fitted_solution.vector_quantiles(X=None)[0]
-        if refine:
-            refined_quantile_function = QuantileFunction(
-                T=self.n_levels,
-                d=len(quantile_function),
-                Qs=vector_monotone_rearrangement(
-                    T=self.n_levels, d=len(quantile_function), Qs=[*quantile_function]
-                ),
-            )
-            return refined_quantile_function
-        else:
-            return quantile_function
+        qf = self._fitted_solution.vector_quantiles(X=None, refine=refine)[0]
+        return qf
 
     def fit(self, X: Array):
         """
@@ -337,22 +325,8 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
             X = self._scaler.transform(X)
 
         # Get the conditional quantiles
-        cqfs = self._fitted_solution.vector_quantiles(X)
-        if refine:
-            return tuple(
-                [
-                    QuantileFunction(
-                        T=self.n_levels,
-                        d=len(cqf),
-                        Qs=vector_monotone_rearrangement(
-                            T=self.n_levels, d=len(cqf), Qs=[*cqf]
-                        ),
-                    )
-                    for cqf in cqfs
-                ]
-            )
-        else:
-            return cqfs
+        cqfs = self._fitted_solution.vector_quantiles(X, refine=refine)
+        return cqfs
 
     def predict(self, X: Array) -> Array:
         """

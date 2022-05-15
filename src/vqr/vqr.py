@@ -64,7 +64,8 @@ class VQRSolution:
         # Validate dimensions
         assert all(x is not None for x in [T, d, U, A])
         assert U.ndim == 2 and A.ndim == 2
-        assert U.shape[0] == A.shape[0] == T**d
+        assert U.shape[0] == A.shape[0]
+        assert U.shape[0] == T**d
         assert A.shape[1] == 1
         assert B is None or (B.ndim == 2 and B.shape[0] == T**d)
         assert (X_transform is not None and k_in) or (X_transform is None and not k_in)
@@ -84,10 +85,14 @@ class VQRSolution:
     def is_conditional(self) -> bool:
         return self._B is not None
 
-    def vector_quantiles(self, X: Optional[Array] = None) -> Sequence[QuantileFunction]:
+    def vector_quantiles(
+        self, X: Optional[Array] = None, refine: bool = False
+    ) -> Sequence[QuantileFunction]:
         """
         :param X: Covariates, of shape (N, k). Should be None if the fitted solution
         was for a VQE (un conditional quantiles).
+        :param refine: Refine the conditional quantile function using vector monotone
+        rearrangement.
         :return: A sequence of length N containing QuantileFunction instances
         corresponding to the given covariates X. If X is None, will be a sequence of
         length one.
@@ -127,11 +132,15 @@ class VQRSolution:
             Y_hat = B @ Z.T + A  # result is (T**d, N)
             Y_hats = Y_hat.T  # (N, T**d)
 
+        refine_fn = lambda Qs: (
+            vector_monotone_rearrangement(self._T, self._d, Qs) if refine else Qs
+        )
         return tuple(
             QuantileFunction(
                 T=self._T,
                 d=self._d,
-                Qs=decode_quantile_values(self._T, self._d, Y_hat),
+                Qs=refine_fn(decode_quantile_values(self._T, self._d, Y_hat)),
+                Us=decode_quantile_grid(self._T, self._d, self._U),
                 X=X[[i], :] if X is not None else None,
             )
             for i, Y_hat in enumerate(Y_hats)
@@ -197,12 +206,21 @@ class QuantileFunction:
     - Using an instance as a function evaluates the quantile function, eg. q(u).
     """
 
-    def __init__(self, T: int, d: int, Qs: Sequence[Array], X: Optional[Array] = None):
+    def __init__(
+        self,
+        T: int,
+        d: int,
+        Qs: Sequence[Array],
+        Us: Sequence[Array],
+        X: Optional[Array] = None,
+    ):
         """
         :param T: The number of quantile levels (in each dimension).
         :param d: The dimension of the target variable.
         :param Qs: Quantile surfaces of the quantile function: d arrays,
         each d-dimensional with shape (T, T, ..., T).
+        :param Us: Quantile levels per dimension of Y. A sequence of length d,
+        where each element is of shape (T, T, ..., T).
         :param X: The covariates on which this quantile function is conditioned.
         """
         if len(Qs) != d:
@@ -215,6 +233,9 @@ class QuantileFunction:
                 f"Expecting {T=} levels in each dimension of each quantile surface"
             )
 
+        if not (len(Us) == len(Qs) and all(U.shape == Q.shape for Q, U in zip(Qs, Us))):
+            raise ValueError(f"Expecting Us and Qs to match in number and shape")
+
         if X is not None:
             if np.ndim(X) > 2 or (np.ndim(X) == 2 and X.shape[0] > 1):
                 raise ValueError(
@@ -225,6 +246,9 @@ class QuantileFunction:
 
         self._Qs = np.stack(Qs, axis=0)  # Stack into shape (d,T,T,...,T)
         assert self._Qs.shape == tuple([d, *[T] * d])
+
+        self._Us = np.stack(Us, axis=0)  # Stack into shape (d,T,T,...,T)
+        assert self._Us.shape == self._Qs.shape
 
         self.T = T
         self.d = d
@@ -239,6 +263,15 @@ class QuantileFunction:
         indexes different quantile surfaces.
         """
         return self._Qs
+
+    @property
+    def levels(self) -> Array:
+        """
+        :return: All the discrete quantile levels of this quantile function.
+        A (d+1)-dimensional array of shape (d, T, T, ... T), where the first axis
+        indexes different quantile surfaces.
+        """
+        return self._Us
 
     def __iter__(self):
         """
@@ -519,7 +552,7 @@ def check_comonotonicity(
         problem.
     :param Qs: Quantile surfaces per dimension of Y. A sequence of length d,
     where each element is of shape (T, T, ..., T).
-    :param Us: Quantile levels per dimension of U. A sequence of length d,
+    :param Us: Quantile levels per dimension of Y. A sequence of length d,
     where each element is of shape (T, T, ..., T).
     :return: A T^d x T^d symmetric matrix that measures co-monotonicity between all
     pairs of quantile levels and quantile values. The (i, j)^th entry in the matrix

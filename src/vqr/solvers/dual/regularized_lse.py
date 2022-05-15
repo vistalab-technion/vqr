@@ -88,7 +88,7 @@ class RegularizedDualVQRSolver(VQRSolver):
         It will be passed the following kwargs:
         (solution, batch_loss, epoch_loss, epoch_idx, batch_idx, num_epochs,
         num_batches). The solution is a VQRSolution object containing the
-        intermetiate solution for the iteration on which the callback is invoked.
+        intermediate solution for the iteration on which the callback is invoked.
         """
         super().__init__()
 
@@ -228,7 +228,11 @@ class RegularizedDualVQRSolver(VQRSolver):
             verbose=False,
         )
 
-        _LOG.log(log_level, f"{self}: Solving with {N=}, {T=}, {d=}, {k=}, {k_out=}")
+        _LOG.log(
+            log_level,
+            f"{self}: Solving with {N=}, {T=}, {d=}, {k=}, {k_out=}, "
+            f"batchsize_y={self._batchsize_y}, batchsize_u={self._batchsize_u}",
+        )
 
         final_loss = None
         with tqdm(
@@ -380,6 +384,8 @@ class RegularizedDualVQRSolver(VQRSolver):
                     batch_idx=None,
                     num_epochs=self._num_epochs,
                     num_batches=None,
+                    xy_slice=None,
+                    u_slice=None,
                 )
 
         return objective.item()
@@ -410,29 +416,40 @@ class RegularizedDualVQRSolver(VQRSolver):
             return int(np.ceil(num_samples / batch_size))
 
         def _yield_batches(num_samples, batch_size):
-            if not batch_size:
+            if not batch_size or batch_size > num_samples:
                 batch_size = num_samples
 
             while True:
-                idx = np.random.permutation(num_samples)
+                idx = np.concatenate(
+                    [
+                        np.random.permutation(num_samples),
+                        np.random.permutation(num_samples),
+                    ],
+                    axis=0,
+                )
+
                 for batch_idx in range(_num_batches(num_samples, batch_size)):
                     batch_slice = idx[
-                        batch_size
-                        * batch_idx : min(batch_size * (batch_idx + 1), num_samples)
+                        (batch_size * batch_idx) : (batch_size * (batch_idx + 1))
                     ]
+
+                    if batch_size == num_samples:
+                        batch_slice = sorted(batch_slice)
+
+                    assert len(batch_slice) == batch_size
                     yield batch_slice
 
         num_batches_xy = _num_batches(N, self._batchsize_y)
         num_batches_u = _num_batches(Td, self._batchsize_u)
-        total_batches = max(num_batches_xy, num_batches_u)
+        num_batches_per_epoch = max(num_batches_xy, num_batches_u)
 
         total_objective = tensor(float("nan"))
         for epoch_idx in range(self._num_epochs):
 
-            total_objective = tensor([0.0], **self._dtd)
+            total_objective = tensor(0.0, **self._dtd)
 
             for batch_idx, xy_slice, u_slice in zip(
-                range(total_batches),
+                range(num_batches_per_epoch),
                 _yield_batches(N, self._batchsize_y),
                 _yield_batches(Td, self._batchsize_u),
             ):
@@ -460,19 +477,30 @@ class RegularizedDualVQRSolver(VQRSolver):
 
                 # Invoke callback
                 if self._callback:
+                    if not self._batchsize_u:
+                        phi_all_levels = phi_batch
+                    else:
+                        # In the case of U-batches, we need to compute phi with all
+                        # T^d levels, otherwise we can't create a valid solution object
+                        with torch.no_grad():
+                            phi_all_levels = self._evaluate_phi(
+                                Y_batch, U, psi_batch, epsilon, X_batch, b, net, UY=None
+                            )
                     self._callback(
                         solution=self._create_solution(
-                            T, d, k, U, phi_batch, b_batch, net
+                            T, d, k, U, phi_all_levels, b, net
                         ),
                         batch_loss=objective.item(),
-                        epoch_loss=total_objective.item(),
+                        epoch_loss=total_objective.item() / (batch_idx + 1),
                         epoch_idx=epoch_idx,
-                        batch_idx=batch_idx,
+                        batch_idx=batch_idx + epoch_idx * num_batches_per_epoch,
                         num_epochs=self._num_epochs,
-                        num_batches=total_batches,
+                        num_batches=num_batches_per_epoch * self._num_epochs,
+                        xy_slice=xy_slice,
+                        u_slice=u_slice,
                     )
 
-            total_objective /= total_batches
+            total_objective /= num_batches_per_epoch
             scheduler.step(total_objective)
 
             # Update progress and stats
@@ -480,7 +508,10 @@ class RegularizedDualVQRSolver(VQRSolver):
             pbar.set_postfix(
                 total_loss=total_objective.item(),
                 lr=optimizer.param_groups[0]["lr"],
-                total_batches=total_batches,
+                batch=(
+                    f"{batch_idx + epoch_idx * num_batches_per_epoch}/"
+                    f"{num_batches_per_epoch * self._num_epochs}"
+                ),
                 refresh=False,
             )
 

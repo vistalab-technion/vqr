@@ -110,6 +110,7 @@ class TestVectorQuantileRegressor(object):
 
             # All values of the quantile function
             assert vqf.values.shape == (d, *[T] * d)
+            assert vqf.levels.shape == (d, *[T] * d)
 
             for j in range(10):
                 # Obtain a random quantile level
@@ -223,8 +224,13 @@ class TestVectorQuantileRegressor(object):
             (np.mean(all_off_projs_refined) <= np.mean(all_off_projs))
         )
 
-    @pytest.mark.parametrize("with_batches", [False, True])
-    def test_callback(self, with_batches):
+    @pytest.mark.parametrize(
+        "batch_y", [None, 0.1, 1.0], ids=["y_none", "y_0.1", "y_1.0"]
+    )
+    @pytest.mark.parametrize(
+        "batch_u", [None, 0.2, 1.5], ids=["u_none", "u_0.2", "u_1.5"]
+    )
+    def test_callback(self, batch_y, batch_u):
 
         callback_kwargs = []
 
@@ -232,18 +238,32 @@ class TestVectorQuantileRegressor(object):
             callback_kwargs.append(kwargs)
 
         N = 1000
-        num_epochs = 100
-        batchsize_y = (N // 5) if with_batches else None
-        num_batches = np.ceil(N / batchsize_y) if with_batches else 1
+        T = 15
+        d = 2
+        k = 3
+        num_epochs = 10
 
-        X, Y = LinearMVNDataProvider(d=2, k=3).sample(n=N)
+        batchsize_y = int(N * batch_y) if batch_y else None
+        batchsize_u = int(T**d * batch_u) if batch_u else None
+
+        num_batches = (
+            max(
+                np.ceil(N / (batchsize_y or N)),
+                np.ceil(T**d / (batchsize_u or T**d)),
+            )
+            if (batchsize_y or batchsize_u)
+            else 1
+        )
+
+        X, Y = LinearMVNDataProvider(d=d, k=k).sample(n=N)
         solver = RegularizedDualVQRSolver(
             verbose=False,
             num_epochs=num_epochs,
             batchsize_y=batchsize_y,
+            batchsize_u=batchsize_u,
             post_iter_callback=_callback,
         )
-        vqr = VectorQuantileRegressor(n_levels=15, solver=solver)
+        vqr = VectorQuantileRegressor(n_levels=T, solver=solver)
         vqr.fit(X, Y)
 
         assert len(callback_kwargs) == num_epochs * num_batches
