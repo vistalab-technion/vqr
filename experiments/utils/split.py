@@ -2,7 +2,7 @@ from typing import Dict, Tuple
 
 import numpy as np
 from numpy import array
-from numpy.random import shuffle
+from numpy.random import shuffle, default_rng
 
 
 def split_train_calib_test(
@@ -26,7 +26,8 @@ def split_train_calib_test(
     assert X.shape[0] == Y.shape[0]
     N, _ = X.shape
     idxes = np.arange(0, N)
-    shuffle(idxes)
+    rng = default_rng(seed)
+    rng.shuffle(idxes)
     X_train = X[idxes[0 : int(N * split_ratios[0])], :]
     Y_train = Y[idxes[0 : int(N * split_ratios[0])], :]
     X_calib = X[idxes[int(N * split_ratios[0]) : int(N * split_ratios[1])], :]
