@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict, Optional, Sequence
+from typing import Any, Dict
 
 import click
 import numpy as np
@@ -45,11 +45,7 @@ def _compare_conditional_quantiles(
     assert np.allclose(q_levels_gt, q_levels_est)
 
     return (
-        100
-        * (
-            np.linalg.norm(q_surfaces_gt - q_surfaces_est)
-            / np.linalg.norm(q_surfaces_gt)
-        )
+        np.linalg.norm(q_surfaces_gt - q_surfaces_est) / np.linalg.norm(q_surfaces_gt)
     ).item()
 
 
@@ -75,13 +71,14 @@ def single_optim_exp(
         vqr_n_levels=T * dp_vqr_t_factor,
         vqr_fit_n=dp_vqr_n,
         vqr_solver_opts=dp_vqr_solver_opts,
+        seed=seed,
     )
 
     # Sample values of x on which we evaluate
     eval_x = wrapped_provider.sample_x(n=n_eval_x)
 
     # Obtain g.t. VQR quantile functions
-    vqfs_gt = data_provider.vqr.fitted_solution.vector_quantiles(X=eval_x)
+    vqfs_gt = data_provider.vqr.vector_quantiles(X=eval_x, refine=True)
 
     # Generate data
     X, Y = data_provider.sample(n=N)
@@ -101,7 +98,8 @@ def single_optim_exp(
         u_slice,
     ):
         # Obtain quantile functions from current iteration, conditioned on the same X's
-        vqfs_est = solution.vector_quantiles(X=eval_x)
+        eval_x_scaled = data_provider.vqr._scaler.transform(eval_x)
+        vqfs_est = solution.vector_quantiles(X=eval_x_scaled, refine=True)
 
         # Calculate distance from g.t.
         dists = [
@@ -134,6 +132,8 @@ def single_optim_exp(
 
         fig, ax = plt.subplots(1, 1, figsize=(10, 5))
         ax.plot(x, y, "k-")
+        ax.grid()
+        ax.set_ylim([0, 2])
         ax.fill_between(x, y - yerr_min, y + yerr_max, alpha=0.5)
         ax.set_xlabel("epoch")
         ax.set_ylabel(r"$\frac{||Q^{*}(u)-\hat{Q}(u)||_{2}}{||Q^{*}(u)||_{2}}$")
