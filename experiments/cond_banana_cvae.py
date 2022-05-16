@@ -37,7 +37,6 @@ def plot_kde(kde_map_1, kde_map_2, l1_distance: float, filename: str):
 
 
 cvae_results_path = "../cvae_results/"
-T = 50
 GPU_DEVICE_NUM = 0
 device = f"cuda:{GPU_DEVICE_NUM}" if GPU_DEVICE_NUM is not None else "cpu"
 sigma = 0.1
@@ -54,21 +53,21 @@ for folder_name in os.listdir(cvae_results_path):
     # Estimate KDEs
     kde_orig = kde(
         y,
-        grid_resolution=T * 2,
+        grid_resolution=100,
         device=device,
         sigma=sigma,
     )
 
     kde_est = kde(
         y_reconstructed,
-        grid_resolution=T * 2,
+        grid_resolution=100,
         device=device,
         sigma=sigma,
     )
 
     # Calculate KDE-L1 distance
     kde_l1_dist = kde_l1(
-        y, y_reconstructed, grid_resolution=T * 2, device=device, sigma=sigma
+        y, y_reconstructed, grid_resolution=100, device=device, sigma=sigma
     )
 
     kde_l1_dists.append(kde_l1_dist)
