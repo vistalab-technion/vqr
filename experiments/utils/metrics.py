@@ -8,6 +8,7 @@ from numpy import ndarray
 from torch import Tensor, ones_like
 from geomloss import SamplesLoss
 from pykeops.torch import Pm, Vi, Vj
+from sklearn.neighbors import KDTree
 
 from experiments.utils.tensors import ensure_numpy, ensure_torch
 
@@ -77,8 +78,8 @@ def get_grid_points(Y: Tensor, grid_resolution: int) -> Tensor:
     :param grid_resolution: Number of bins to tessellate each dimension.
     :return: Co-ordinates of points in each dimension. Shape=[grid_resolution^d, d]
     """
-    Y_max = Y.max(dim=0).values  # torch.tensor([3.0, 2.3]): hack for cond banana plots
-    Y_min = Y.min(dim=0).values  # torch.tensor([-3.0, 0.0]): hack for cond banana plots
+    Y_max = torch.tensor([3.0, 2.3])  #: hack for cond banana plots
+    Y_min = torch.tensor([-3.0, 0.0])  #: hack for cond banana plots
     axes = [
         torch.linspace(y_i_min.item(), y_i_max.item(), grid_resolution)
         for y_i_min, y_i_max in zip(Y_min, Y_max)
@@ -173,3 +174,22 @@ def kde_keops(
     heatmap = heatmap.view(*grid_shape).cpu()
     heatmap /= heatmap.sum()
     return heatmap
+
+
+def ranks(quantiles: ndarray, samples: Union[ndarray, Tensor]) -> ndarray:
+    """
+    Calculates the ranks of the samples w.r.to the quantiles. If quantiles are
+    strongly represented, the ranks must be uniform.
+
+    :param quantiles: An array of quantiles at all levels arranged as (T^d, d)
+    :param samples: Samples whose ranks must be estimated. Each samples must be
+    d-dimensional.
+
+    :return: ranks of the samples calculated w.r.to the quantiles.
+    """
+    assert quantiles.shape[-1] == samples.shape[-1]
+    assert len(quantiles.shape) == len(samples.shape) == 2
+    samples = ensure_numpy(samples)
+    tree = KDTree(quantiles, leaf_size=10, metric="euclidean")
+    indices = tree.query(samples, k=1, return_distance=False)
+    return indices
