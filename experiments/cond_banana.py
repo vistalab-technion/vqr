@@ -2,18 +2,25 @@ import pickle
 
 import numpy as np
 import torch
-from numpy import array, zeros
+import scipy.stats
+from numpy import exp, array, zeros, arange, histogram
 from torch import Tensor, tensor
 from matplotlib import cm
 from matplotlib import pyplot as plt
+from scipy.special import xlogy
 
-from vqr.api import VectorQuantileRegressor
-from experiments.utils.metrics import kde, kde_l1, w2_pot, w2_keops
+from vqr.api import VectorQuantileEstimator, VectorQuantileRegressor
+from experiments.optimization import _compare_conditional_quantiles
+from experiments.utils.metrics import kde, ranks, kde_l1, w2_pot, w2_keops
 from experiments.data.cond_banana import ConditionalBananaDataProvider
 from vqr.solvers.dual.regularized_lse import (
     RegularizedDualVQRSolver,
     MLPRegularizedDualVQRSolver,
 )
+
+
+def entropy(w):
+    return (exp(-xlogy(w, w).sum()) - 1) / (len(w) - 1)
 
 
 def plot_kde(kde_map_1, kde_map_2, l1_distance: float, filename: str):
@@ -43,7 +50,7 @@ T = 50
 num_epochs = 20000
 linear = False
 sigma = 0.1
-GPU_DEVICE_NUM = 1
+GPU_DEVICE_NUM = 0
 device = f"cuda:{GPU_DEVICE_NUM}" if GPU_DEVICE_NUM is not None else "cpu"
 dtype = torch.float32
 epsilon = 5e-3
@@ -93,35 +100,43 @@ vqr_est.fit(X, Y)
 # Generate conditional distributions for the below X's
 Xs = [tensor(array([[x] * k]), dtype=dtype) for x in np.linspace(1.0, 3.0, 20)]
 kde_l1_dists = []
+entropies_is = []
+entropies_oos = []
+q_minus_q_stars = []
 
 for cond_X in Xs:
     _, cond_Y_gt = data_provider.sample(n=n, x=cond_X.numpy())
     cond_Y_gt = tensor(cond_Y_gt, dtype=dtype)
+    vqe = VectorQuantileEstimator(
+        n_levels=T, solver="vqe_pot", solver_opts={"numItermax": 2e6}
+    )
+    vqe.fit(cond_Y_gt.numpy())
+    cond_vq_gt = vqe.vector_quantiles(refine=True)
 
     cond_Y_est = vqr_est.sample(n=n, x=cond_X.numpy())
     cond_Y_est = tensor(cond_Y_est, dtype=dtype)
 
     # w2 distance
-    w2_dist = w2_keops(cond_Y_gt, cond_Y_est, device=device)
+    # w2_dist = w2_keops(cond_Y_gt, cond_Y_est, device=device)
 
     # Estimate KDEs
     kde_orig = kde(
         cond_Y_gt,
-        grid_resolution=T * 2,
+        grid_resolution=100,
         device=device,
         sigma=sigma,
     )
 
     kde_est = kde(
         cond_Y_est,
-        grid_resolution=T * 2,
+        grid_resolution=100,
         device=device,
         sigma=sigma,
     )
 
     # Calculate KDE-L1 distance
     kde_l1_dist = kde_l1(
-        cond_Y_gt, cond_Y_est, grid_resolution=T * 2, device=device, sigma=sigma
+        cond_Y_gt, cond_Y_est, grid_resolution=100, device=device, sigma=sigma
     )
     kde_l1_dists.append(kde_l1_dist)
 
@@ -133,8 +148,48 @@ for cond_X in Xs:
         f"Y_given_X={cond_X.squeeze().item():.1f}_{linear=}",
     )
 
+    # get quantiles
+    cond_vq_est = vqr_est.vector_quantiles(X=cond_X.numpy(), refine=True)[0]
+    quantiles = cond_vq_est.values.reshape(2, -1).T
+
+    # Q - Q*
+    q_minus_q_star = _compare_conditional_quantiles(
+        cond_vq_gt, cond_vq_est, t_factor=1, ignore_X=True
+    )
+    q_minus_q_stars.append(q_minus_q_star)
+    print(q_minus_q_star)
+
+    # Uniformity of ranks
+    ranks_is = ranks(quantiles, cond_Y_est.numpy()).squeeze()
+    ranks_oos = ranks(quantiles, cond_Y_gt.numpy()).squeeze()
+    hist_is, _ = histogram(ranks_is, arange(ranks_is.min(), ranks_is.max()))
+    entropy_is = entropy(hist_is / hist_is.sum())
+    hist_oos, _ = histogram(ranks_oos, arange(ranks_oos.min(), ranks_oos.max()))
+    entropy_oos = entropy(hist_oos / hist_oos.sum())
+    entropies_is.append(entropy_is)
+    entropies_oos.append(entropy_oos)
+
+    fig, ax = plt.subplots(nrows=1, ncols=2)
+    ax[0].hist(ranks_is, bins=100)
+    ax[0].set_title(f"IS - entropy: {entropy_is:.3f}")
+    ax[1].hist(ranks_oos, bins=100)
+    ax[1].set_title(f"OOS - entropy: {entropy_oos:.3f}")
+    fig.suptitle(f"(X={cond_X.item():.1f})")
+    plt.show()
+
 
 with open(f"./kde-l1-dists-{linear=}.pkl", "wb") as f:
-    pickle.dump(kde_l1_dists, f)
-    print(np.mean(kde_l1_dists))
+    pickle.dump(
+        {
+            "kde_dists": kde_l1_dists,
+            "entropy_is": entropies_is,
+            "entropy_oos": entropies_oos,
+            "q_minus_q_stars": q_minus_q_stars,
+        },
+        f,
+    )
+    print("KDE:", np.mean(kde_l1_dists))
+    print("Entropy IS:", np.mean(entropies_is))
+    print("Entropy OOS:", np.mean(entropies_oos))
+    print("||Q - Q*||:", np.mean(q_minus_q_stars))
     f.close()
