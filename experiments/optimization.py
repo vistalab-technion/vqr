@@ -87,7 +87,7 @@ def single_optim_exp(
                 n_levels=T, solver="vqe_pot", solver_opts={"numItermax": 2e6}
             )
             .fit(data_provider.sample(N, eval_x_)[1])
-            .vector_quantiles(refine=True)
+            .vector_quantiles(refine=False)
         )
         for eval_x_ in eval_x_scaled
     ]
