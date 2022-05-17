@@ -184,7 +184,70 @@ def plot_quantiles_3d(
 
         ax.locator_params(axis="both", tight=True, nbins=10)
 
-    return fig
+    return fig, axes
+
+
+def plot_contour_2d(
+    Qs: Sequence[Array],
+    Y: Array = None,
+    alphas: Sequence[float] = (0.1,),
+    alpha_labels: Sequence[str] = None,
+    alpha_colors: Sequence[str] = None,
+    ax: Axes = None,
+):
+    """
+    Plots two-dimensional coverage plots.
+    Can show both training and validation data, and calculate coverage.
+
+    :param Qs: The quantile surfaces
+    :param Y: optional data to plot
+    :param alphas: Contour levels to plot.
+    :param ax: Optional axes object to plot to. If not provided, will create a new
+    figure.
+    :return: A tuple with the (Figure, Axis).
+    """
+    assert len(Qs) == 2
+    Q1, Q2 = Qs
+
+    T = Q1.shape[0]
+    assert Q1.shape == Q2.shape == (T, T)
+    assert all(0.0 < alpha < 0.5 for alpha in alphas)
+
+    if alpha_labels:
+        assert len(alpha_labels) == len(alphas)
+    if alpha_colors:
+        assert len(alpha_colors) == len(alphas)
+
+    if ax is None:
+        fig, ax = plt.subplots(1, 1, figsize=(8, 8))
+    else:
+        fig, ax = None, ax
+
+    if Y is not None:
+        assert np.ndim(Y) == 2 and Y.shape[1] == 2
+        ax.scatter(
+            Y[:, 0],
+            Y[:, 1],
+            alpha=0.4,
+            color="k",
+            marker=".",
+            edgecolor="white",
+            label="Y",
+        )
+
+    for i, alpha in enumerate(alphas):
+        Q_contour = quantile_contour(T, d=2, Qs=[Q1, Q2], alpha=alpha)
+
+        label = alpha_labels[i] if alpha_labels else rf"$\alpha$={alpha:.2f}"
+        color = alpha_colors[i] if alpha_colors else f"C{i}"
+        surf_kws = dict(alpha=0.5, color=color, s=200, marker=".", label=label)
+        ax.scatter(
+            *Q_contour.T,
+            **surf_kws,
+        )
+
+    ax.legend()
+    return fig, ax
 
 
 def plot_coverage_2d(
