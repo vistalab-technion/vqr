@@ -2,8 +2,8 @@ from typing import Tuple, Optional, Sequence
 
 import numpy as np
 from numpy import ndarray
+from numpy import ndarray as Array
 from matplotlib import pyplot as plt
-from numpy.typing import ArrayLike as Array
 from matplotlib.cm import ScalarMappable
 from scipy.spatial import ConvexHull
 from matplotlib.axes import Axes
@@ -82,6 +82,7 @@ def plot_quantiles(
             ax.grid(True)
 
         elif d == 2:
+            Q = Q.T  # to match the axes
             m = ax.imshow(Q, aspect="equal", interpolation="none", origin="lower")
 
             ticks = levels * T - 1
@@ -131,6 +132,12 @@ def plot_quantiles_3d(
     if not 1 < d < 4:
         raise RuntimeError("Can't plot 3d quantiles with dimension other than 2, 3")
 
+    # Transpose to match axes
+    # TODO: Need to check why this is needed
+    axes_perm = [*range(1, d), 0]
+    Qs = [np.transpose(Q, axes_perm) for Q in Qs]
+    Us = [np.transpose(U, axes_perm) for U in Us]
+
     fig: Figure
     _axes: ndarray
     fig, _axes = plt.subplots(
@@ -151,8 +158,8 @@ def plot_quantiles_3d(
             m = ax.plot_surface(*Us, Q, cmap="viridis")
             fig.colorbar(m, ax=[ax], shrink=0.2)
             ax.set_title(f"$Q_{{{i + 1}}}(u_1, u_2)$")
-            ax.set_ylabel("$u_1$")
-            ax.set_xlabel("$u_2$")
+            ax.set_xlabel("$u_1$")
+            ax.set_ylabel("$u_2$")
 
         if d == 3:
             ticks = levels * T - 1
@@ -165,9 +172,10 @@ def plot_quantiles_3d(
             ax.set_zticks(ticks)
             ax.set_zticklabels(tick_labels)
             ax.set_title(f"$Q_{{{i + 1}}}(u_1, u_2, u_3)$")
-            ax.set_zlabel("$u_3$")
-            ax.set_ylabel("$u_2$")
+
             ax.set_xlabel("$u_1$")
+            ax.set_ylabel("$u_2$")
+            ax.set_zlabel("$u_3$")
 
         ax.set_yticks(ticks)
         ax.set_yticklabels(tick_labels)
