@@ -108,6 +108,7 @@ def plot_quantiles_3d(
     d,
     Qs: Sequence[Array],
     Us: Sequence[Array],
+    colorbar: bool = True,
     figsize: Optional[Tuple[int, int]] = None,
 ) -> Figure:
     """
@@ -126,6 +127,7 @@ def plot_quantiles_3d(
     where each element is of shape (T, T, ..., T).
     :param Us: Quantile levels per dimension of U. A sequence of length d,
     where each element is of shape (T, T, ..., T).
+    :param colorbar: whether to add a colorbar.
     :param figsize: Size of figure to create. Will be passed to plt.subplots.
     :return: The created figure.
     """
@@ -156,10 +158,11 @@ def plot_quantiles_3d(
         if d == 2:
             ticks = levels
             m = ax.plot_surface(*Us, Q, cmap="viridis")
-            fig.colorbar(m, ax=[ax], shrink=0.2)
             ax.set_title(f"$Q_{{{i + 1}}}(u_1, u_2)$")
             ax.set_xlabel("$u_1$")
             ax.set_ylabel("$u_2$")
+            if colorbar:
+                fig.colorbar(m, ax=[ax], shrink=0.2)
 
         if d == 3:
             ticks = levels * T - 1
@@ -168,14 +171,15 @@ def plot_quantiles_3d(
             active_voxesls = np.ones_like(Q)
             # active_voxesls[T // 2 :, :, T // 2 :] = 0
             ax.voxels(active_voxesls, facecolors=cmap(norm(Q)), edgecolors="black")
-            fig.colorbar(ScalarMappable(norm=norm, cmap=cmap), ax=[ax], shrink=0.2)
             ax.set_zticks(ticks)
             ax.set_zticklabels(tick_labels)
             ax.set_title(f"$Q_{{{i + 1}}}(u_1, u_2, u_3)$")
-
             ax.set_xlabel("$u_1$")
             ax.set_ylabel("$u_2$")
             ax.set_zlabel("$u_3$")
+
+            if colorbar:
+                fig.colorbar(ScalarMappable(norm=norm, cmap=cmap), ax=[ax], shrink=0.2)
 
         ax.set_yticks(ticks)
         ax.set_yticklabels(tick_labels)
