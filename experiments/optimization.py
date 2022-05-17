@@ -73,6 +73,17 @@ def single_optim_exp(
 
     # Sample values of x on which we evaluate
     eval_x = wrapped_provider.sample_x(n=n_eval_x)
+    vqfs_gt = [
+        (
+            VectorQuantileEstimator(
+                n_levels=T, solver="vqe_pot", solver_opts={"numItermax": 2e6}
+            )
+            .fit(wrapped_provider.sample(N, eval_x_)[1])
+            .vector_quantiles(refine=False)
+        )
+        for eval_x_ in eval_x
+    ]
+
     data_provider = wrapped_provider
 
     # Generate data
@@ -80,17 +91,6 @@ def single_optim_exp(
 
     scaler = StandardScaler(with_mean=True, with_std=True).fit(X)
     eval_x_scaled = scaler.transform(eval_x)
-
-    vqfs_gt = [
-        (
-            VectorQuantileEstimator(
-                n_levels=T, solver="vqe_pot", solver_opts={"numItermax": 2e6}
-            )
-            .fit(data_provider.sample(N, eval_x_)[1])
-            .vector_quantiles(refine=False)
-        )
-        for eval_x_ in eval_x_scaled
-    ]
 
     optimization_dists = []
 
