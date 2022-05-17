@@ -35,7 +35,7 @@ dependencies:
   - cudatoolkit=11.3 # comment out on osx-arm64
   - cudatoolkit-dev=11.3 # comment out on osx-arm64
   - pip:
-    - pykeops<2
+    - pykeops
     - geomloss
     # install vqp as a lib with pip (its deps are specified in setup.cfg)
     # Note: For KeOps to work, after installing this env run:
