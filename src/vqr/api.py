@@ -230,7 +230,7 @@ class VectorQuantileEstimator(VectorQuantileBase):
         return measure_coverage(
             quantile_contour=quantile_contour(
                 T=self.n_levels, d=self.dim_y, Qs=q_surfaces, alpha=alpha
-            ),
+            )[0],
             data=Y,
         )
 
@@ -364,7 +364,7 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
         return measure_coverage(
             quantile_contour=quantile_contour(
                 T=self.n_levels, d=self.dim_y, Qs=q_surfaces, alpha=alpha
-            ),
+            )[0],
             data=Y,
         )
 

@@ -240,7 +240,7 @@ def plot_contour_2d(
         )
 
     for i, alpha in enumerate(alphas):
-        Q_contour = quantile_contour(T, d=2, Qs=[Q1, Q2], alpha=alpha)
+        Q_contour = quantile_contour(T, d=2, Qs=[Q1, Q2], alpha=alpha)[0]
 
         label = alpha_labels[i] if alpha_labels else rf"$\alpha$={alpha:.2f}"
         color = alpha_colors[i] if alpha_colors else f"C{i}"
@@ -297,7 +297,7 @@ def plot_coverage_2d(
     else:
         fig, ax = None, ax
 
-    Q_surface = quantile_contour(T, d=2, Qs=[Q1, Q2], alpha=alpha)
+    Q_surface = quantile_contour(T, d=2, Qs=[Q1, Q2], alpha=alpha)[0]
 
     surf_kws = dict(alpha=0.5, color=contour_color, s=200, marker="v")
     ax.scatter(*Q_surface.T, **surf_kws)
