@@ -332,7 +332,7 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
         x = self._validate_X_(X=x, single=True)
 
         # Calculate vector quantiles given sample X=x
-        vqf: QuantileFunction = self.vector_quantiles(X=x)[0]
+        vqf: QuantileFunction = self.vector_quantiles(X=x, refine=False)[0]
         q_surfaces = tuple(vqf)  # d x (T, T, ..., T) where each is d-dimensional
 
         # Sample from the quantile function
