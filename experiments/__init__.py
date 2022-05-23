@@ -2,6 +2,9 @@ import os
 from pathlib import Path
 
 EXPERIMENTS_ROOT_DIR = Path(__file__).parent
+PROJECT_ROOT_DIR = EXPERIMENTS_ROOT_DIR.parent
+
+EXPERIMENTS_DATA_DIR = PROJECT_ROOT_DIR.joinpath("data")
 
 EXPERIMENTS_OUT_DIR = EXPERIMENTS_ROOT_DIR.parent.joinpath("out")
 os.makedirs(EXPERIMENTS_OUT_DIR, exist_ok=True)
