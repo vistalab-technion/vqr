@@ -459,8 +459,7 @@ def inversion_sampling(T: int, d: int, n: int, Qs: Sequence[Array], seed: int = 
     """
 
     # Samples of points on the quantile-level grid
-    rng = np.random.default_rng(seed)
-    Us = rng.integers(low=0, high=T, size=(n, d))
+    Us = np.random.randint(low=0, high=T, size=(n, d))
 
     # Sample from Y|X=x
     Y_samp = np.empty(shape=(n, d))
