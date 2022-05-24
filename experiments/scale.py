@@ -73,8 +73,12 @@ def single_scale_exp(
     vqr.fit(X, Y)
 
     # Measure coverage on n_coverage samples
-    cov_train = _measure_paired_coverage(X, Y, vqr, cov_n, cov_alpha, seed)
-    cov_valid = _measure_paired_coverage(X_valid, Y_valid, vqr, cov_n, cov_alpha, seed)
+    # cov_train = _measure_paired_coverage(X, Y, vqr, cov_n, cov_alpha, seed)
+    cov_train = 0.0  # _measure_paired_coverage(X, Y, vqr, cov_n, cov_alpha, seed)
+    # cov_valid = _measure_paired_coverage(X_valid, Y_valid, vqr, cov_n, cov_alpha, seed)
+    cov_valid = (
+        0.0  # _measure_paired_coverage(X_valid, Y_valid, vqr, cov_n, cov_alpha,seed)
+    )
 
     # Estimate cond distribution and compare it with the gt cond distribution
     w2_dists = []
@@ -83,11 +87,12 @@ def single_scale_exp(
         x = X_valid[[i], :]
         _, Y_gt = data_provider.sample(n=T**d, x=x)
         Y_est = vqr.sample(n=T**d, x=x)
-        w2_dists.append(w2_keops(Y_gt, Y_est))
+        # w2_dists.append(w2_keops(Y_gt, Y_est))
+        w2_dists.append(0)
         kde_l1_dist = kde_l1(
             Y_gt,
             Y_est,
-            grid_resolution=T,
+            grid_resolution=100 if d == 2 else T,
             sigma=0.1,
             dtype=torch.float32,
             device="cuda" if solver_opts["gpu"] else "cpu",
