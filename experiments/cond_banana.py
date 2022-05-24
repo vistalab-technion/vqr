@@ -103,9 +103,18 @@ kde_l1_dists = []
 entropies_is = []
 entropies_oos = []
 q_minus_q_stars = []
+samples_gt = {}
+samples_est = {}
+kdes_gt = {}
+kdes_est = {}
+
+n_test = 4000
 
 for cond_X in Xs:
-    _, cond_Y_gt = data_provider.sample(n=n, x=cond_X.numpy())
+    _, cond_Y_gt = data_provider.sample(n=n_test, x=cond_X.numpy())
+
+    samples_gt[f"{round(cond_X.item(), 1)}"] = cond_Y_gt
+
     cond_Y_gt = tensor(cond_Y_gt, dtype=dtype)
     vqe = VectorQuantileEstimator(
         n_levels=T, solver="vqe_pot", solver_opts={"numItermax": 2e6}
@@ -113,7 +122,9 @@ for cond_X in Xs:
     vqe.fit(cond_Y_gt.numpy())
     cond_vq_gt = vqe.vector_quantiles(refine=True)
 
-    cond_Y_est = vqr_est.sample(n=n, x=cond_X.numpy())
+    cond_Y_est = vqr_est.sample(n=n_test, x=cond_X.numpy())
+    samples_est[f"{round(cond_X.item(), 1)}"] = cond_Y_est
+
     cond_Y_est = tensor(cond_Y_est, dtype=dtype)
 
     # w2 distance
@@ -126,6 +137,7 @@ for cond_X in Xs:
         device=device,
         sigma=sigma,
     )
+    kdes_gt[f"{round(cond_X.item(), 1)}"] = kde_orig
 
     kde_est = kde(
         cond_Y_est,
@@ -133,6 +145,7 @@ for cond_X in Xs:
         device=device,
         sigma=sigma,
     )
+    kdes_est[f"{round(cond_X.item(), 1)}"] = kde_est
 
     # Calculate KDE-L1 distance
     kde_l1_dist = kde_l1(
@@ -157,7 +170,7 @@ for cond_X in Xs:
         cond_vq_gt, cond_vq_est, t_factor=1, ignore_X=True
     )
     q_minus_q_stars.append(q_minus_q_star)
-    print(q_minus_q_star)
+    print(f"{round(cond_X.item(), 1)}", q_minus_q_star)
 
     # Uniformity of ranks
     ranks_is = ranks(quantiles, cond_Y_est.numpy()).squeeze()
@@ -175,16 +188,20 @@ for cond_X in Xs:
     ax[1].hist(ranks_oos, bins=100)
     ax[1].set_title(f"OOS - entropy: {entropy_oos:.3f}")
     fig.suptitle(f"(X={cond_X.item():.1f})")
-    plt.show()
+    plt.savefig(f"Entropy_Y_given_X={cond_X.squeeze().item():.1f}_{linear=}.png")
 
 
-with open(f"./kde-l1-dists-{linear=}.pkl", "wb") as f:
+with open(f"./cond-banana-{linear=}.pkl", "wb") as f:
     pickle.dump(
         {
             "kde_dists": kde_l1_dists,
             "entropy_is": entropies_is,
             "entropy_oos": entropies_oos,
             "q_minus_q_stars": q_minus_q_stars,
+            "cond_Y_samples_gt": samples_gt,
+            "cond_Y_samples_est": samples_est,
+            "kdes_gt": kdes_gt,
+            "kdes_est": kdes_est,
         },
         f,
     )

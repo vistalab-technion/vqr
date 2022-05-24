@@ -40,7 +40,12 @@ cvae_results_path = "../cvae_results/"
 GPU_DEVICE_NUM = 0
 device = f"cuda:{GPU_DEVICE_NUM}" if GPU_DEVICE_NUM is not None else "cpu"
 sigma = 0.1
+
 kde_l1_dists = []
+samples_gt = {}
+samples_est = {}
+kdes_gt = {}
+kdes_est = {}
 
 for folder_name in os.listdir(cvae_results_path):
     X = folder_name[-3:]
@@ -49,6 +54,8 @@ for folder_name in os.listdir(cvae_results_path):
         f.close()
     y = Tensor(array(file_contents["y"]))
     y_reconstructed = Tensor(array(file_contents["y_reconstructed"]))
+    samples_gt[str(X)] = y.numpy()
+    samples_est[str(X)] = y_reconstructed.numpy()
 
     # Estimate KDEs
     kde_orig = kde(
@@ -57,6 +64,7 @@ for folder_name in os.listdir(cvae_results_path):
         device=device,
         sigma=sigma,
     )
+    kdes_gt[str(X)] = kde_orig
 
     kde_est = kde(
         y_reconstructed,
@@ -64,6 +72,7 @@ for folder_name in os.listdir(cvae_results_path):
         device=device,
         sigma=sigma,
     )
+    kdes_est[str(X)] = kde_est
 
     # Calculate KDE-L1 distance
     kde_l1_dist = kde_l1(
@@ -80,7 +89,19 @@ for folder_name in os.listdir(cvae_results_path):
         f"Y_given_X={float(X):.1f}_cvae",
     )
 
-with open(f"./kde-l1-dists-cvae.pkl", "wb") as f:
-    pickle.dump(kde_l1_dists, f)
+with open(f"./cond-banana-cvae.pkl", "wb") as f:
+    pickle.dump(
+        {
+            "cond_Y_samples_gt": samples_gt,
+            "cond_Y_samples_est": samples_est,
+            "kde_dists": kde_l1_dists,
+            "entropy_is": None,
+            "entropy_oos": None,
+            "q_minus_q_stars": None,
+            "kdes_gt": kdes_gt,
+            "kdes_est": kdes_est,
+        },
+        f,
+    )
     print(np.mean(kde_l1_dists))
     f.close()
