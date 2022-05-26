@@ -130,7 +130,6 @@ class HeartDataProvider(ImageDataProvider):
         x_discrete=False,
         seed=42,
     ):
-        Y = generate_heart()
         super().__init__(
             image_data=generate_heart()[1],
             initial_rotation_deg=initial_rotation_deg,
@@ -150,7 +149,6 @@ class StarDataProvider(ImageDataProvider):
         x_discrete=False,
         seed=42,
     ):
-        Y = generate_heart()
         super().__init__(
             image_data=generate_star()[1],
             initial_rotation_deg=initial_rotation_deg,

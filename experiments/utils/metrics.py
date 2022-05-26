@@ -80,8 +80,10 @@ def get_grid_points(Y: Tensor, grid_resolution: int) -> Tensor:
     """
     # Y_max = torch.tensor([3.0, 2.3])  #: for cond banana plots
     # Y_min = torch.tensor([-3.0, 0.0])  #: for cond banana plots
-    Y_max = Y.max(dim=0).values
-    Y_min = Y.min(dim=0).values
+    Y_max = torch.tensor([0.6, 0.6])  #: for star plots
+    Y_min = torch.tensor([-0.6, -0.6])  #: for star plots
+    # Y_max = Y.max(dim=0).values
+    # Y_min = Y.min(dim=0).values
     axes = [
         torch.linspace(y_i_min.item(), y_i_max.item(), grid_resolution)
         for y_i_min, y_i_max in zip(Y_min, Y_max)
