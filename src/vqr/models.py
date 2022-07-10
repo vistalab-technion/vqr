@@ -1,9 +1,18 @@
+import os
+import importlib
 from typing import Union, Sequence
 
 import torch
 from numpy import array
 from torch import Tensor, nn, eye, diag
 from torch import ones as ones_th
+
+torch_mps = None
+try:
+    # MPS backend is only supported in torch>1.12
+    from torch.backends import mps as torch_mps
+except ImportError:
+    pass
 
 
 class QuadraticModel(nn.Module):
@@ -121,3 +130,38 @@ class MLP(nn.Module):
             z += x
 
         return z
+
+
+def select_torch_device(
+    use_device: bool,
+    device_num: Union[int, str] = 0,
+) -> torch.device:
+    """
+    Select a torch device to use (CPU, CUDA GPU or Apple Silicon MPS).
+    :param use_device: Whether to use a device:
+    - False means CPU will be used.
+    - True means CUDA will be used if available, otherwise MPS.
+    - If neither are available, an exception will be raised.
+    :param device_num: The device number to use. An integer or string which can be
+    parsed as an integer.
+    :return: A torch.device.
+    """
+
+    device_str: str = "cpu"
+
+    if use_device:
+
+        if torch.cuda.is_available():
+            device_str = "cuda"
+        elif torch_mps and torch_mps.is_available():
+            device_str = "mps"
+            # Since MPS support is experimental, this flag allows CPU fallback for
+            # unsupported operations.
+            # os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
+        else:
+            raise RuntimeError(f"No torch device is available")
+
+        device_num = int(device_num or 0)
+        device_str = f"{device_str}:{device_num}"
+
+    return torch.device(device_str)
