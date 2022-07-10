@@ -19,3 +19,10 @@ repos:
     rev: 22.3.0
     hooks:
     -   id: black
+
+-   repo: https://github.com/mwouts/jupytext
+    rev: v1.14.0
+    hooks:
+    - id: jupytext
+      args: [--sync]
+      include: 'notebooks/.*'
