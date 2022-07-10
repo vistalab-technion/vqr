@@ -1,2 +1,4 @@
 *.png
-temp.ipynb
+
+# We only commit notebooks converted to text via jupytext.
+*.ipynb
