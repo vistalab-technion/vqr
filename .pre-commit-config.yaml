@@ -26,8 +26,10 @@ repos:
     - id: jupytext
       args:
           - --sync
-          - --pipe='isort - --treat-comment-as-code "# %%" --float-to-top'
-          - --pipe='black'
+          - --pipe
+          - isort - --treat-comment-as-code "# %%" --float-to-top
+          - --pipe
+          - black
       include: '.*\.ipynb$'
       additional_dependencies:
         - black==22.3.0
