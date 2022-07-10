@@ -155,9 +155,6 @@ def select_torch_device(
             device_str = "cuda"
         elif torch_mps and torch_mps.is_available():
             device_str = "mps"
-            # Since MPS support is experimental, this flag allows CPU fallback for
-            # unsupported operations.
-            # os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
         else:
             raise RuntimeError(f"No torch device is available")
 
