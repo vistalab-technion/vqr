@@ -27,7 +27,7 @@ repos:
       args:
           - --sync
           - --pipe
-          - isort - --treat-comment-as-code "# %%" --float-to-top
+          - isort - --treat-comment-as-code "# %%"
           - --pipe
           - black
       include: '.*\.ipynb$'
