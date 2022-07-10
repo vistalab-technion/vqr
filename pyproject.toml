@@ -110,6 +110,7 @@ exclude_lines = [
 ]
 
 [tool.jupytext]
-formats = "ipynb,py:percent"
-notebook_metadata_filter = "-all"
-cell_metadata_filter = "-all"
+formats = "ipynb"
+# formats = "ipynb,py:percent"
+# notebook_metadata_filter = "-all"
+# cell_metadata_filter = "-all"
