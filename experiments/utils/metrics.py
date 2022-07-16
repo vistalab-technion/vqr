@@ -78,10 +78,10 @@ def get_grid_points(Y: Tensor, grid_resolution: int) -> Tensor:
     :param grid_resolution: Number of bins to tessellate each dimension.
     :return: Co-ordinates of points in each dimension. Shape=[grid_resolution^d, d]
     """
-    # Y_max = torch.tensor([3.0, 2.3])  #: for cond banana plots
-    # Y_min = torch.tensor([-3.0, 0.0])  #: for cond banana plots
-    Y_max = torch.tensor([0.6, 0.6])  #: for star plots
-    Y_min = torch.tensor([-0.6, -0.6])  #: for star plots
+    Y_max = torch.tensor([3.0, 2.3])  #: for cond banana plots
+    Y_min = torch.tensor([-3.0, 0.0])  #: for cond banana plots
+    # Y_max = torch.tensor([0.6, 0.6])  #: for star plots
+    # Y_min = torch.tensor([-0.6, -0.6])  #: for star plots
     # Y_max = Y.max(dim=0).values
     # Y_min = Y.min(dim=0).values
     axes = [
