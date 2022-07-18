@@ -157,3 +157,9 @@ class StarDataProvider(ImageDataProvider):
             x_discrete=x_discrete,
             seed=seed,
         )
+
+    def sample_x(self, n: int) -> Array:
+        if self._x_discrete:
+            return (self._rng.integers(0, 7, size=(n,)).reshape(n, -1)) * 10
+        else:
+            return self._rng.uniform(0, self._x_high, size=(n,)).reshape(n, -1)
