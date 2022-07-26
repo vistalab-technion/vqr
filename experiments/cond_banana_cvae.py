@@ -36,7 +36,7 @@ def plot_kde(kde_map_1, kde_map_2, l1_distance: float, filename: str):
     plt.savefig(f"{filename}.png")
 
 
-cvae_results_path = "../cvae_results/"
+cvae_results_path = "../cvae_results3/"
 GPU_DEVICE_NUM = 0
 device = f"cuda:{GPU_DEVICE_NUM}" if GPU_DEVICE_NUM is not None else "cpu"
 sigma = 0.1
