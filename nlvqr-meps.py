@@ -4,12 +4,14 @@ import numpy as np
 from sklearn.preprocessing import StandardScaler
 
 from vqr import VectorQuantileRegressor
+from experiments.utils.tensors import ensure_numpy
 from vqr.solvers.dual.regularized_lse import (
     RegularizedDualVQRSolver,
     MLPRegularizedDualVQRSolver,
 )
 
-DATA_FILE_NAME = "bio.pkl"
+dataset = "meps_20"
+DATA_FILE_NAME = f"{dataset}.pkl"
 DATA_FOLDER_NAME = "./data/"
 num_trials = 10
 
@@ -28,7 +30,6 @@ all_Y = np.concatenate(
 global_coverages = []
 global_widths = []
 
-
 for trial_num in range(num_trials):
     permuted_indices = np.random.permutation(np.arange(0, train_size + valid_size))
     train_X, train_Y = (
@@ -46,66 +47,48 @@ for trial_num in range(num_trials):
     scaler_x.fit(train_X)
     scaler_y.fit(train_Y)
 
-    test_X, test_Y = scaler_x.transform(test_X), scaler_y.transform(test_Y)
-
     # Scaled train data
     train_X = scaler_x.transform(train_X)
     train_Y = scaler_y.transform(train_Y)
 
     T = 50
-    num_epochs = 10000
-    linear = True
+    num_epochs = 40000
+    linear = False
     GPU_DEVICE_NUM = 0
     device = f"cuda:{GPU_DEVICE_NUM}" if GPU_DEVICE_NUM is not None else "cpu"
     epsilon = 1e-2
 
-    if linear:
-        solver = RegularizedDualVQRSolver(
-            verbose=True,
-            num_epochs=num_epochs,
-            epsilon=epsilon,
-            lr=2.9,
-            gpu=True,
-            full_precision=False,
-            device_num=GPU_DEVICE_NUM,
-            batchsize_y=None,
-            batchsize_u=None,
-            inference_batch_size=100,
-            lr_factor=0.9,
-            lr_patience=500,
-            lr_threshold=0.5 * 0.01,
-        )
-    else:
-        solver = MLPRegularizedDualVQRSolver(
-            verbose=True,
-            num_epochs=num_epochs,
-            epsilon=epsilon,
-            lr=0.2,
-            gpu=True,
-            skip=True,
-            batchnorm=False,
-            hidden_layers=(1000, 1000, 1000, 1000, 1000),
-            activation="relu",
-            device_num=GPU_DEVICE_NUM,
-            batchsize_y=None,
-            batchsize_u=None,
-            inference_batch_size=100,
-            lr_factor=0.9,
-            lr_patience=300,
-            lr_threshold=0.5 * 0.01,
-        )
+    solver = MLPRegularizedDualVQRSolver(
+        verbose=True,
+        num_epochs=num_epochs,
+        epsilon=epsilon,
+        lr=0.3,
+        gpu=True,
+        skip=False,
+        batchnorm=False,
+        hidden_layers=(100, 60, 20),
+        activation="relu",
+        device_num=GPU_DEVICE_NUM,
+        batchsize_y=None,
+        batchsize_u=None,
+        inference_batch_size=100,
+        lr_factor=0.8,
+        lr_patience=300,
+        lr_threshold=0.5 * 0.02,
+    )
 
     vqr_est = VectorQuantileRegressor(n_levels=T, solver=solver)
     vqr_est.fit(train_X, train_Y)
 
+    test_X, test_Y = scaler_x.transform(test_X), scaler_y.transform(test_Y)
     coverages = []
     widths = []
 
     for X_test_i, Y_test_i in zip(test_X, test_Y):
         coverage_i = vqr_est.coverage(
-            Y=Y_test_i[None, :], x=X_test_i[None, :], alpha=0.03
+            Y=Y_test_i[None, :], x=X_test_i[None, :], alpha=0.02
         )
-        width_i = vqr_est.width(x=X_test_i[None, :], alpha=0.03)
+        width_i = vqr_est.width(x=X_test_i[None, :], alpha=0.02)
         coverages.append(coverage_i)
         widths.append(width_i)
 
