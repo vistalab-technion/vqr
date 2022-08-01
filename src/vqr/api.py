@@ -17,7 +17,7 @@ from vqr.vqr import (
     quantile_contour,
     inversion_sampling,
 )
-from vqr.coverage import measure_coverage
+from vqr.coverage import measure_width, measure_coverage
 from vqr.solvers.primal.cvx import CVXVQRSolver
 from vqr.solvers.primal.pot import POTVQESolver
 from vqr.solvers.dual.regularized_lse import (
@@ -332,7 +332,7 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
         x = self._validate_X_(X=x, single=True)
 
         # Calculate vector quantiles given sample X=x
-        vqf: QuantileFunction = self.vector_quantiles(X=x)[0]
+        vqf: QuantileFunction = self.vector_quantiles(X=x, refine=False)[0]
         q_surfaces = tuple(vqf)  # d x (T, T, ..., T) where each is d-dimensional
 
         # Sample from the quantile function
@@ -366,6 +366,34 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
                 T=self.n_levels, d=self.dim_y, Qs=q_surfaces, alpha=alpha
             )[0],
             data=Y,
+        )
+
+    def width(self, x: Array, alpha: float = 0.05) -> float:
+        """
+        Calculates the width of given data points using the quantiles
+        fitted by this model, conditioned on X=x.
+
+        First, it creates a contour of points in d-dimensional space which surround
+        the region in which 1-2*alpha of the distribution (that was corresponds to a
+        given quantile function) is contained. Then, the proportion of points
+        contained within this contour is calculated.
+
+        :param x: One sample of covariates on which to condition Y.
+            Should have shape  (k,) or (1, k).
+        :param alpha: Confidence level for the contour.
+        :return: The quantile width.
+        """
+        check_is_fitted(self)
+        x = self._validate_X_(X=x, single=True)
+
+        # Calculate vector quantiles given sample X=x
+        vqf: QuantileFunction = self.vector_quantiles(X=x)[0]
+        q_surfaces = tuple(vqf)  # d x (T, T, ..., T) where each is d-dimensional
+
+        return measure_width(
+            quantile_contour=quantile_contour(
+                T=self.n_levels, d=self.dim_y, Qs=q_surfaces, alpha=alpha
+            )[0],
         )
 
     def _validate_X_(self, X: Optional[Array], single: bool = False) -> Optional[Array]:

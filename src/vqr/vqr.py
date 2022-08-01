@@ -444,7 +444,7 @@ def decode_quantile_grid(T: int, d: int, U: Array) -> Sequence[Array]:
     return tuple(np.reshape(U[:, dim], newshape=(T,) * d) for dim in range(d))
 
 
-def inversion_sampling(T: int, d: int, n: int, Qs: Sequence[Array]):
+def inversion_sampling(T: int, d: int, n: int, Qs: Sequence[Array], seed: int = 42):
     """
     Generates samples from the variable Y based on it's fitted
     quantile function, using inversion-transform sampling.
@@ -454,11 +454,12 @@ def inversion_sampling(T: int, d: int, n: int, Qs: Sequence[Array]):
     :param n: Number of samples to generate.
     :param Qs: Quantile surfaces per dimension of Y. A sequence of length d,
     where each element is of shape (T, T, ..., T).
+    :param seed: Seed for the random sampling procedure.
     :return: Samples obtained from this quantile function, of shape (n, d).
     """
 
     # Samples of points on the quantile-level grid
-    Us = np.random.randint(0, T, size=(n, d))
+    Us = np.random.randint(low=0, high=T, size=(n, d))
 
     # Sample from Y|X=x
     Y_samp = np.empty(shape=(n, d))

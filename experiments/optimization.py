@@ -4,8 +4,10 @@ from typing import Any, Dict
 import click
 import numpy as np
 from matplotlib import pyplot as plt
+from sklearn.preprocessing import StandardScaler
 
-from vqr import QuantileFunction, VectorQuantileRegressor
+from vqr import QuantileFunction, VectorQuantileEstimator, VectorQuantileRegressor
+from vqr.vqr import check_comonotonicity
 from experiments.base import VQROptions, run_exp_context
 from experiments.data.mvn import LinearMVNDataProvider
 from experiments.data.quantile import QuantileFunctionDataProviderWrapper
@@ -17,13 +19,15 @@ def _compare_conditional_quantiles(
     vqf_gt: QuantileFunction,
     vqf_est: QuantileFunction,
     t_factor: int,
+    ignore_X: bool = False,
 ) -> float:
 
     # Make sure shapes are consistent and that both quantile functions are
     # conditional on the same X.
     assert vqf_gt.d == vqf_est.d
     assert t_factor == vqf_gt.T // vqf_est.T
-    assert np.allclose(vqf_gt.X, vqf_est.X)
+    if not ignore_X:
+        assert np.allclose(vqf_gt.X, vqf_est.X)
 
     T = vqf_est.T
     d = vqf_est.d
@@ -64,24 +68,41 @@ def single_optim_exp(
 ) -> Dict[str, Any]:
 
     dp_vqr_solver_opts["verbose"] = True
+
     # Data provider
     wrapped_provider = LinearMVNDataProvider(d=d, k=k, seed=seed)
-    data_provider = QuantileFunctionDataProviderWrapper(
-        wrapped_provider=wrapped_provider,
-        vqr_n_levels=T * dp_vqr_t_factor,
-        vqr_fit_n=dp_vqr_n,
-        vqr_solver_opts=dp_vqr_solver_opts,
-        seed=seed,
-    )
 
     # Sample values of x on which we evaluate
     eval_x = wrapped_provider.sample_x(n=n_eval_x)
+    vqfs_gt = [
+        (
+            VectorQuantileEstimator(
+                n_levels=T, solver="vqe_pot", solver_opts={"numItermax": 2e6}
+            )
+            .fit(wrapped_provider.sample(N, eval_x_)[1])
+            .vector_quantiles(refine=False)
+        )
+        for eval_x_ in eval_x
+    ]
 
-    # Obtain g.t. VQR quantile functions
-    vqfs_gt = data_provider.vqr.vector_quantiles(X=eval_x, refine=True)
+    vqfs_gt_vmr = [
+        (
+            VectorQuantileEstimator(
+                n_levels=T, solver="vqe_pot", solver_opts={"numItermax": 2e6}
+            )
+            .fit(wrapped_provider.sample(N, eval_x_)[1])
+            .vector_quantiles(refine=True)
+        )
+        for eval_x_ in eval_x
+    ]
+
+    data_provider = wrapped_provider
 
     # Generate data
     X, Y = data_provider.sample(n=N)
+
+    scaler = StandardScaler(with_mean=True, with_std=True).fit(X)
+    eval_x_scaled = scaler.transform(eval_x)
 
     optimization_dists = []
 
@@ -98,12 +119,13 @@ def single_optim_exp(
         u_slice,
     ):
         # Obtain quantile functions from current iteration, conditioned on the same X's
-        eval_x_scaled = data_provider.vqr._scaler.transform(eval_x)
-        vqfs_est = solution.vector_quantiles(X=eval_x_scaled, refine=True)
+        vqfs_est = solution.vector_quantiles(X=eval_x_scaled, refine=False)
 
         # Calculate distance from g.t.
         dists = [
-            _compare_conditional_quantiles(vqf_gt, vqf_est, t_factor=dp_vqr_t_factor)
+            _compare_conditional_quantiles(
+                vqf_gt, vqf_est, t_factor=dp_vqr_t_factor, ignore_X=True
+            )
             for vqf_gt, vqf_est in zip(vqfs_gt, vqfs_est)
         ]
         optimization_dists.append(dists)
@@ -123,6 +145,33 @@ def single_optim_exp(
 
     # Remove callback so that it doesn't get serialized
     solver_opts.pop("post_iter_callback")
+
+    violations_w_vmr = []
+    violations_wo_vmr = []
+    qdists_vmr = []
+
+    for eval_x_idx in range(eval_x.shape[0]):
+        cvqf_unrefined = vqr.vector_quantiles(eval_x[[eval_x_idx]], refine=False)[0]
+        cvqf_refined = vqr.vector_quantiles(eval_x[[eval_x_idx]], refine=True)[0]
+        qdist_vmr = _compare_conditional_quantiles(
+            vqfs_gt_vmr[eval_x_idx],
+            cvqf_refined,
+            t_factor=dp_vqr_t_factor,
+            ignore_X=True,
+        )
+        all_pairs_unrefined = check_comonotonicity(
+            cvqf_unrefined.T, cvqf_unrefined.d, vqr.quantile_grid, [*cvqf_unrefined]
+        )
+        all_pairs_refined = check_comonotonicity(
+            cvqf_refined.T, cvqf_refined.d, vqr.quantile_grid, [*cvqf_refined]
+        )
+        violations_w_vmr.append((all_pairs_refined < 0).sum())
+        violations_wo_vmr.append((all_pairs_unrefined < 0).sum())
+        qdists_vmr.append(qdist_vmr)
+
+    avg_violations_w_vmr = np.mean(violations_w_vmr)
+    avg_violations_wo_vmr = np.mean(violations_wo_vmr)
+    avg_qdist_vmr = np.mean(qdists_vmr)
 
     if plot := False:
         x = np.arange(len(optimization_dists))
@@ -147,6 +196,9 @@ def single_optim_exp(
         solver_type=solver_name,
         solver=solver_opts,  # note: non-consistent key name on purpose
         optimization_dists=np.round(optimization_dists, decimals=5).tolist(),
+        avg_violations_w_vmr=avg_violations_w_vmr,
+        avg_violations_wo_vmr=avg_violations_wo_vmr,
+        avg_qdist_vmr=avg_qdist_vmr,
     )
 
 

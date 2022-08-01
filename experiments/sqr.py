@@ -16,14 +16,15 @@ from vqr.solvers.dual.regularized_lse import (
 )
 from experiments.data.synthetic_glasses import SyntheticGlassesDataProvider
 
-n = 5000
+n = 10000
 d = 1
 k = 1
 T = 100
 num_epochs = 40000
 linear = False
+refine = False
 sigma = 0.1
-GPU_DEVICE_NUM = 1
+GPU_DEVICE_NUM = 2
 device = f"cuda:{GPU_DEVICE_NUM}" if GPU_DEVICE_NUM is not None else "cpu"
 dtype = torch.float32
 epsilon = 1e-3
@@ -61,15 +62,12 @@ else:
 vqr_est = VectorQuantileRegressor(n_levels=T, solver=solver)
 
 vqr_est.fit(X.reshape(-1, 1), Y.reshape(-1, 1))
-levels = vqr_est.quantile_levels
 quantiles = []
+
 for i in range(n):
     X_i = np.array([X[i]])[:, None]
-    quantile_est = vqr_est.vector_quantiles(X=X_i)[0][0]
-    cost = -SIMILARITY_FN_INNER_PROD(levels[:, None], quantile_est[None, :])
-    pi = ot.emd([], [], cost)
-    refined_quantiles = T * pi @ quantile_est
-    quantiles.append(refined_quantiles)
+    quantile_est = vqr_est.vector_quantiles(X=X_i, refine=refine)[0].values.squeeze()
+    quantiles.append(quantile_est)
 
 quantiles = np.stack(quantiles, axis=0)
 Y_est = np.concatenate(
@@ -83,15 +81,37 @@ ax[0].set_xlabel("x")
 ax[0].set_title("GT")
 ax[0].legend()
 ax[1].plot(X, Y_est, ".", label="samples of Y|X")
-for quantile_level in np.linspace(0.1, 0.90, 10):
-    ax[1].plot(X, quantiles[:, int(quantile_level * T)], label=f"{quantile_level:.2f}")
+for quantile_level in np.linspace(start=0.0, stop=1.0, num=20):
+    if quantile_level == 0.0:
+        ax[1].plot(
+            X,
+            quantiles[:, int(quantile_level * T) + 1],
+            label=f"{quantile_level+1:.2f}",
+        )
+    elif quantile_level == 1.0:
+        ax[1].plot(
+            X,
+            quantiles[:, int(quantile_level * T) - 1],
+            label=f"{quantile_level-1:.2f}",
+        )
+    else:
+        ax[1].plot(
+            X,
+            quantiles[:, int(quantile_level * T)],
+            label=f"{quantile_level:.2f}",
+        )
 ax[1].legend()
+
 ax[1].set_ylabel("y")
 ax[1].set_xlabel("x")
-ax[1].set_title("Non-linear QR")
+ax[1].set_title("Non-linear QR" if not linear else "Linear QR")
 plt.suptitle("Simultaneous scalar QR", fontsize="x-large")
 plt.tight_layout()
-plt.savefig(f"quantile_levels_{linear=}.png")
+plt.savefig(f"sqr_{linear=}_{refine=}.png")
+# plt.show()
 
-with open(f"quantiles_{linear=}.pkl", "wb") as f:
-    pickle.dump({"quantiles": quantiles}, f)
+with open(f"sqr_{linear=}_{refine=}.pkl", "wb") as f:
+    pickle.dump(
+        {"quantiles": quantiles, "Y_gt": Y, "Y_est": Y_est},
+        f,
+    )

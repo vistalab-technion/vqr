@@ -9,12 +9,6 @@ from matplotlib import cm
 
 from experiments.utils.metrics import kde, kde_l1
 
-# CVAE baseline:
-# Produced using the open-source implementation by Feldman et al. 2021.
-# Available at: https://github.com/shai128/mqr
-# Download results from
-# https://drive.google.com/drive/folders/1mkrOraclAiPv-YrYibQSBhY_J4MEis9Z?usp=sharing
-
 
 def plot_kde(kde_map_1, kde_map_2, l1_distance: float, filename: str):
     fig, axes = plt.subplots(1, 2, figsize=(10, 5))
@@ -36,10 +30,10 @@ def plot_kde(kde_map_1, kde_map_2, l1_distance: float, filename: str):
     plt.savefig(f"{filename}.png")
 
 
-cvae_results_path = "../cvae_results3/"
+cvae_results_path = "../cvae_results_star"
 GPU_DEVICE_NUM = 0
 device = f"cuda:{GPU_DEVICE_NUM}" if GPU_DEVICE_NUM is not None else "cpu"
-sigma = 0.1
+sigma = 0.035
 
 kde_l1_dists = []
 samples_gt = {}
@@ -48,7 +42,7 @@ kdes_gt = {}
 kdes_est = {}
 
 for folder_name in os.listdir(cvae_results_path):
-    X = folder_name[-3:]
+    X = folder_name[2:]
     with open(f"{cvae_results_path}/x={X}/y_recon_y.pkl", "rb") as f:
         file_contents = pickle.load(f)
         f.close()
@@ -89,7 +83,7 @@ for folder_name in os.listdir(cvae_results_path):
         f"Y_given_X={float(X):.1f}_cvae",
     )
 
-with open(f"./cond-banana-cvae.pkl", "wb") as f:
+with open(f"./stars-cvae.pkl", "wb") as f:
     pickle.dump(
         {
             "cond_Y_samples_gt": samples_gt,

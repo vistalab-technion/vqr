@@ -298,6 +298,7 @@ class RegularizedDualVQRSolver(VQRSolver):
         A = phi.detach().cpu().numpy()
         B = None
         x_transform_fn = None
+        U = U.detach().cpu().numpy() if isinstance(U, Tensor) else U
         if k > 0:
             B = b.detach().cpu().numpy()
 
