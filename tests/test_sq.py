@@ -1,5 +1,5 @@
 from vqr.api import ScalarQuantileEstimator
-from experiments.data.mvn import IndependentDataProvider
+from experiments.datasets.mvn import IndependentDataProvider
 
 
 class TestScalarQuantileEstimator:

@@ -5,7 +5,7 @@ from numpy import array
 from numpy import ndarray as Array
 from matplotlib import pyplot as plt
 
-from experiments.data.base import DataProvider
+from experiments.datasets.base import DataProvider
 
 
 class SyntheticGlassesDataProvider(DataProvider):

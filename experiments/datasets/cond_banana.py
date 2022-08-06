@@ -3,7 +3,7 @@ from typing import Tuple, Optional, Sequence
 import numpy as np
 import torch
 
-from experiments.data.base import Array, DataProvider
+from experiments.datasets.base import Array, DataProvider
 
 
 class ConditionalBananaDataProvider(DataProvider):

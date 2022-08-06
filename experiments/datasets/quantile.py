@@ -9,7 +9,7 @@ from filelock import FileLock
 
 from vqr.api import DEFAULT_SOLVER_NAME, VectorQuantileRegressor
 from experiments import EXPERIMENTS_OUT_DIR
-from experiments.data.base import Array, DataProvider
+from experiments.datasets.base import Array, DataProvider
 from experiments.utils.helpers import stable_hash
 
 _LOG = logging.getLogger(__name__)

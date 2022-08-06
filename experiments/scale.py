@@ -8,7 +8,7 @@ from numpy import ndarray
 
 from vqr.api import VectorQuantileRegressor
 from experiments.base import VQROptions, run_exp_context
-from experiments.data.mvn import LinearMVNDataProvider
+from experiments.datasets.mvn import LinearMVNDataProvider
 from experiments.utils.metrics import kde_l1, w2_keops
 
 _LOG = logging.getLogger(__name__)

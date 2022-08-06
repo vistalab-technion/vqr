@@ -3,7 +3,11 @@ from typing import Tuple, Optional, Sequence
 import numpy as np
 from numpy.random import Generator
 
-from experiments.data.base import Array, DataProvider, SerializableRandomDataGenerator
+from experiments.datasets.base import (
+    Array,
+    DataProvider,
+    SerializableRandomDataGenerator,
+)
 
 
 class LinearMVNDataProvider(DataProvider):

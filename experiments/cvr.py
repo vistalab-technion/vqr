@@ -6,8 +6,8 @@ from numpy.linalg import pinv
 from vqr import VectorQuantileEstimator
 from vqr.api import ScalarQuantileEstimator
 from vqr.coverage import measure_width, measure_coverage
-from experiments.data.mvn import LinearMVNDataProvider
 from experiments.utils.split import split_train_calib_test
+from experiments.datasets.mvn import LinearMVNDataProvider
 
 
 def experiment(

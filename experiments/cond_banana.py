@@ -9,7 +9,7 @@ from matplotlib import pyplot as plt
 
 from vqr.api import VectorQuantileRegressor
 from experiments.utils.metrics import kde, kde_l1, w2_pot, w2_keops
-from experiments.data.cond_banana import ConditionalBananaDataProvider
+from experiments.datasets.cond_banana import ConditionalBananaDataProvider
 from vqr.solvers.dual.regularized_lse import (
     RegularizedDualVQRSolver,
     MLPRegularizedDualVQRSolver,
