@@ -10,6 +10,7 @@ addopts = [
     "--verbose",
     # Calculate code coverage with coverage.py
     "--cov",
+    "--cov-config=pyproject.toml",
     # Show a detailed coverage report on the terminal output
     "--cov-report=term-missing",
     # Write coverage reports
@@ -17,8 +18,6 @@ addopts = [
     "--cov-report=html:tests/out/reports/cov.html",
     # Write test results to xml
     "--junitxml=tests/out/reports/junit.xml",
-    # Use multiprocessing for speed.
-    "--numprocesses=4",
     # Benchmark-disable means that tests with benchmarks will be run as regular tests,
     # without benchmarking (but with asserts or course).
     # Benchmarking is disabled anyway when using multi-process runs, this just supresses
