@@ -48,7 +48,6 @@ length_sort = true
 # __init__ fails.  This fixes the issue by createing a section specifically for
 # pymol after all the third-party stuff.
 sections = ['FUTURE', 'STDLIB', 'THIRDPARTY', 'PYMOL', 'FIRSTPARTY', 'LOCALFOLDER']
-known_pymol = ['pymol']
 
 [tool.black]
 line-length = 88
