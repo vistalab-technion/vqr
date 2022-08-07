@@ -4,9 +4,9 @@ from numpy import array, argsort
 
 from vqr.api import ScalarQuantileEstimator, VectorQuantileEstimator
 from vqr.coverage import measure_width, measure_coverage
-from experiments.data.mvn import IndependentDataProvider
-from experiments.data.shapes import generate_star, generate_heart
 from experiments.utils.split import split_train_calib_test
+from experiments.datasets.mvn import IndependentDataProvider
+from experiments.datasets.shapes import generate_star, generate_heart
 
 
 def experiment(

@@ -3,9 +3,9 @@ import os
 import pytest
 
 from tests import TESTS_OUT_DIR
-from experiments.data.mvn import LinearMVNDataProvider, IndependentDataProvider
-from experiments.data.quantile import QuantileFunctionDataProviderWrapper
-from experiments.data.cond_banana import ConditionalBananaDataProvider
+from experiments.datasets.mvn import LinearMVNDataProvider, IndependentDataProvider
+from experiments.datasets.quantile import QuantileFunctionDataProviderWrapper
+from experiments.datasets.cond_banana import ConditionalBananaDataProvider
 
 
 class TestMVNData(object):

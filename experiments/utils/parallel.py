@@ -23,7 +23,7 @@ from concurrent.futures import Future, ProcessPoolExecutor
 import torch
 import pandas as pd
 
-from experiments.logging import setup_logging
+from experiments.log import setup_logging
 from experiments.utils.helpers import sec_to_time
 
 _LOG = logging.getLogger(__name__)

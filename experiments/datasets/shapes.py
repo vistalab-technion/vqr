@@ -6,7 +6,7 @@ from numpy import ndarray
 from numpy import ndarray as Array
 
 from experiments import EXPERIMENTS_DATA_DIR
-from experiments.data.base import DataProvider
+from experiments.datasets.base import DataProvider
 
 
 def generate_heart() -> Tuple[ndarray, ndarray]:

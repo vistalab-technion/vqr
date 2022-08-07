@@ -7,8 +7,8 @@ from matplotlib import pyplot as plt
 
 from vqr import QuantileFunction, VectorQuantileRegressor
 from experiments.base import VQROptions, run_exp_context
-from experiments.data.mvn import LinearMVNDataProvider
-from experiments.data.quantile import QuantileFunctionDataProviderWrapper
+from experiments.datasets.mvn import LinearMVNDataProvider
+from experiments.datasets.quantile import QuantileFunctionDataProviderWrapper
 
 _LOG = logging.getLogger(__name__)
 

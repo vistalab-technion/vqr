@@ -2,9 +2,9 @@ import logging
 
 import click
 
+from experiments.log import setup_logging
 from experiments.base import GPUOptions, OutputOptions, LoggingOptions
 from experiments.scale import scale_exp
-from experiments.logging import setup_logging
 from experiments.optimization import optim_exp
 
 _LOG = logging.getLogger(__name__)

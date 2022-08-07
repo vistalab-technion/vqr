@@ -112,7 +112,7 @@ def plot_quantiles_3d(
     cmap: str = "viridis",
     alpha: float = 1.0,
     figsize: Optional[Tuple[int, int]] = None,
-) -> Figure:
+) -> Tuple[Figure, Sequence[Axes]]:
     """
     Plots vector quantiles of d=2 or d=3 obtained from the solution of the VQR optimal
     transport problem.
@@ -130,6 +130,8 @@ def plot_quantiles_3d(
     :param Us: Quantile levels per dimension of U. A sequence of length d,
     where each element is of shape (T, T, ..., T).
     :param colorbar: whether to add a colorbar.
+    :param cmap: Colormap name.
+    :param alpha: Color alpha value (transparency).
     :param figsize: Size of figure to create. Will be passed to plt.subplots.
     :return: The created figure.
     """
@@ -171,8 +173,12 @@ def plot_quantiles_3d(
             cm = plt.get_cmap(cmap)
             norm = plt.Normalize(np.min(Q), np.max(Q))
             active_voxesls = np.ones_like(Q)
-            # active_voxesls[T // 2 :, :, T // 2 :] = 0
-            ax.voxels(active_voxesls, facecolors=cm(norm(Q)), edgecolors="black")
+            ax.voxels(
+                active_voxesls,
+                facecolors=cm(norm(Q)),
+                edgecolors=None,
+                alpha=alpha,
+            )
             ax.set_zticks(ticks)
             ax.set_zticklabels(tick_labels)
             ax.set_title(f"$Q_{{{i + 1}}}(u_1, u_2, u_3)$")

@@ -7,7 +7,7 @@ from sklearn.exceptions import NotFittedError
 
 from vqr import VQRSolution, QuantileFunction, VectorQuantileRegressor
 from tests.conftest import _test_monotonicity, monotonicity_offending_projections
-from experiments.data.mvn import LinearMVNDataProvider
+from experiments.datasets.mvn import LinearMVNDataProvider
 from vqr.solvers.dual.regularized_lse import (
     RegularizedDualVQRSolver,
     MLPRegularizedDualVQRSolver,

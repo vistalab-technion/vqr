@@ -14,7 +14,7 @@ from vqr.solvers.dual.regularized_lse import (
     RegularizedDualVQRSolver,
     MLPRegularizedDualVQRSolver,
 )
-from experiments.data.synthetic_glasses import SyntheticGlassesDataProvider
+from experiments.datasets.synthetic_glasses import SyntheticGlassesDataProvider
 
 n = 5000
 d = 1

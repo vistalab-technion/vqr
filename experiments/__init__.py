@@ -1,8 +1,8 @@
 import os
 from pathlib import Path
 
-EXPERIMENTS_ROOT_DIR = Path(__file__).parent
-PROJECT_ROOT_DIR = EXPERIMENTS_ROOT_DIR.parent
+EXPERIMENTS_ROOT_DIR = Path(__file__).parent.resolve()
+PROJECT_ROOT_DIR = EXPERIMENTS_ROOT_DIR.parent.resolve()
 
 EXPERIMENTS_DATA_DIR = PROJECT_ROOT_DIR.joinpath("data")
 

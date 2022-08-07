@@ -18,7 +18,6 @@ dependencies:
   - nodejs
   - pandas
   - pip
-  - pot
   - pre-commit
   - pytest
   - pytest-benchmark
