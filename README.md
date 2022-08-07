@@ -1,5 +1,7 @@
 # `vqr`: Fast Nonlinear Vector Quantile Regression
 
+![example workflow](https://github.com/vistalab-technion/vqr/actions/workflows/main.yml/badge.svg)
+
 This package provides the first scalable implementation of linear and nonlinear Vector Quantile Regression (VQR), ready for large real-world datasets. In addition, it provides a powerful extension which makes VQR non-linear in the covariates, via a learnable transformation. The package is easy to use via a familiar `sklearn`-style API.
 
 Refer to our paper[^VQR2022] for further details about nonlinear VQR, and please cite our work if you use this package:
@@ -27,7 +29,7 @@ Below is an illustration of vector quantiles of a $d=2$-dimensional star-shaped 
 - Data is sampled uniformely from a 2d star-shaped region (middle, gray dots).
 - Vector quantiles are overlaid on their data distribution (middle,  colored dots).
 - Different colors correspond to $\alpha$-contours, each containing $100\cdot(1-2\alpha)^d$ percent of the data, a generalization of confidence intervals for vector-valued variables. For example, for $\alpha=0.02$, roughly 92% of the data is contained within the contour. The shape of the distribution is correctly modelled, without any distributional assuptions.
-- The vector quantile function (VQF) $Q_{\mathbf{Y}}(\boldsymbol{u})=[Q_1(\boldsymbol{u}),Q_2(\boldsymbol{u})]^{\top}$ is co-monotonic with $\boldsymbol{u}=(u_1,u_2)$. 
+- The vector quantile function (VQF) $Q_{\mathbf{Y}}(\boldsymbol{u})=[Q_1(\boldsymbol{u}),Q_2(\boldsymbol{u})]^{\top}$ is co-monotonic with $\boldsymbol{u}=(u_1,u_2)$.
 - The components $Q_1, Q_2$ of the VQF are shown as surfaces (left, right) with the corresponding vector quantiles overlaid.
 - On $Q_1$, increasing $u_1$ for a fixed $u_2$ produces a monotonically increasing curve. This corresponds to quantile function for $Y_1$ given that $Y_2$ is at a value corresponding to its $u_2$-th quantile (and vice versa for $Q_2$).
 
