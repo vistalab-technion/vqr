@@ -14,7 +14,11 @@ def test_vqr_minimal():
 
     # Generate some data (or load from elsewhere).
     X, Y = make_regression(
-        n_samples=N, n_features=k, n_targets=d, noise=0.1, random_state=seed
+        n_samples=N,
+        n_features=k,
+        n_targets=d,
+        noise=0.1,
+        random_state=seed,
     )
     X_train, X_test, Y_train, Y_test = train_test_split(
         X, Y, test_size=N_test, shuffle=True, random_state=seed
@@ -35,6 +39,7 @@ def test_vqr_minimal():
     cov_test = np.mean(
         [vqr.coverage(Y_test[[i]], X_test[[i]], alpha=alpha) for i in range(N_test)]
     )
+    assert cov_test > 0.7
     print(f"{cov_test=}")
 
     # Sample from the fitted conditional distribution, given a specific x.
@@ -43,3 +48,4 @@ def test_vqr_minimal():
     # Calculate coverage on the samples.
     cov_sampled = vqr.coverage(Y_sampled, x=X_test[0], alpha=alpha)
     print(f"{cov_sampled=}")
+    assert cov_sampled > 0.9
