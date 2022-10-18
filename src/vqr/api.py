@@ -344,7 +344,7 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
         fitted by this model, conditioned on X=x.
 
         First, it creates a contour of points in d-dimensional space which surround
-        the region in which 1-2*alpha of the distribution (that was corresponds to a
+        the region in which 100*(1-2*alpha)^d of the distribution (that was corresponds to a
         given quantile function) is contained. Then, the proportion of points
         contained within this contour is calculated.
 
