@@ -105,7 +105,7 @@ class VectorQuantileBase(BaseEstimator, ABC):
             target variable Y.
         """
         check_is_fitted(self)
-        return self._fitted_solution_.quantile_grid
+        return self.fitted_solution.quantile_grid
 
     @property
     def quantile_levels(self) -> Array:
@@ -114,7 +114,7 @@ class VectorQuantileBase(BaseEstimator, ABC):
             estimated along each target dimension.
         """
         check_is_fitted(self)
-        return self._fitted_solution_.quantile_levels
+        return self.fitted_solution.quantile_levels
 
     @property
     def dim_y(self) -> int:
@@ -122,7 +122,7 @@ class VectorQuantileBase(BaseEstimator, ABC):
         :return: The dimension of the target variable (Y).
         """
         check_is_fitted(self)
-        return self._fitted_solution_.dim_y
+        return self.fitted_solution.dim_y
 
     @property
     def dim_x(self) -> int:
@@ -130,7 +130,7 @@ class VectorQuantileBase(BaseEstimator, ABC):
         :return: The dimension k, of the covariates (X).
         """
         check_is_fitted(self)
-        return self._fitted_solution_.dim_x
+        return self.fitted_solution.dim_x
 
     @property
     def solution_metrics(self) -> Dict[str, Any]:
@@ -138,7 +138,7 @@ class VectorQuantileBase(BaseEstimator, ABC):
         :return: A dict containing solver-specific metrics about the solution.
         """
         check_is_fitted(self)
-        return self._fitted_solution_.metrics
+        return self.fitted_solution.metrics
 
     @property
     def fitted_solution(self) -> VQRSolution:
@@ -170,7 +170,7 @@ class VectorQuantileEstimator(VectorQuantileBase):
         the quantile function Q_{Y}(u).
         """
         check_is_fitted(self)
-        qf = self._fitted_solution.vector_quantiles(X=None, refine=refine)[0]
+        qf = self.fitted_solution.vector_quantiles(X=None, refine=refine)[0]
         return qf
 
     def fit(self, X: Array):
@@ -188,7 +188,7 @@ class VectorQuantileEstimator(VectorQuantileBase):
         N = len(X)
         Y: Array = np.reshape(X, (N, -1))
 
-        self._fitted_solution = self.solver.solve_vqr(T=self.n_levels, Y=Y, X=None)
+        self._fitted_solution_ = self.solver.solve_vqr(T=self.n_levels, Y=Y, X=None)
 
         return self
 
@@ -269,7 +269,7 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
         # Scale features to zero-mean
         X_scaled = self._scaler.fit_transform(X)
 
-        self._fitted_solution = self.solver.solve_vqr(T=self.n_levels, Y=Y, X=X_scaled)
+        self._fitted_solution_ = self.solver.solve_vqr(T=self.n_levels, Y=Y, X=X_scaled)
 
         return self
 
@@ -293,7 +293,7 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
             X = self._scaler.transform(X)
 
         # Get the conditional quantiles
-        cqfs = self._fitted_solution.vector_quantiles(X, refine=refine)
+        cqfs = self.fitted_solution.vector_quantiles(X, refine=refine)
         return cqfs
 
     def predict(self, X: Array) -> Array:
