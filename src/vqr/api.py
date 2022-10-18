@@ -81,10 +81,13 @@ class VectorQuantileBase(BaseEstimator, ABC):
         self.solver_opts = solver_opts
         self.solver = solver_instance
         self._n_levels = n_levels
-        self._fitted_solution: Optional[VQRSolution] = None
+
+        # Deliberate trailing underscore to support detection by check_is_fitted on old
+        # versions of sklearn.
+        self._fitted_solution_: Optional[VQRSolution] = None
 
     def __sklearn_is_fitted__(self):
-        return self._fitted_solution is not None
+        return self._fitted_solution_ is not None
 
     @property
     def n_levels(self) -> int:
@@ -102,7 +105,7 @@ class VectorQuantileBase(BaseEstimator, ABC):
             target variable Y.
         """
         check_is_fitted(self)
-        return self._fitted_solution.quantile_grid
+        return self._fitted_solution_.quantile_grid
 
     @property
     def quantile_levels(self) -> Array:
@@ -111,7 +114,7 @@ class VectorQuantileBase(BaseEstimator, ABC):
             estimated along each target dimension.
         """
         check_is_fitted(self)
-        return self._fitted_solution.quantile_levels
+        return self._fitted_solution_.quantile_levels
 
     @property
     def dim_y(self) -> int:
@@ -119,7 +122,7 @@ class VectorQuantileBase(BaseEstimator, ABC):
         :return: The dimension of the target variable (Y).
         """
         check_is_fitted(self)
-        return self._fitted_solution.dim_y
+        return self._fitted_solution_.dim_y
 
     @property
     def dim_x(self) -> int:
@@ -127,7 +130,7 @@ class VectorQuantileBase(BaseEstimator, ABC):
         :return: The dimension k, of the covariates (X).
         """
         check_is_fitted(self)
-        return self._fitted_solution.dim_x
+        return self._fitted_solution_.dim_x
 
     @property
     def solution_metrics(self) -> Dict[str, Any]:
@@ -135,7 +138,7 @@ class VectorQuantileBase(BaseEstimator, ABC):
         :return: A dict containing solver-specific metrics about the solution.
         """
         check_is_fitted(self)
-        return self._fitted_solution.metrics
+        return self._fitted_solution_.metrics
 
     @property
     def fitted_solution(self) -> VQRSolution:
@@ -144,7 +147,7 @@ class VectorQuantileBase(BaseEstimator, ABC):
         Usually it is recommended to use the high level API on this class instead.
         """
         check_is_fitted(self)
-        return self._fitted_solution
+        return self._fitted_solution_
 
 
 class VectorQuantileEstimator(VectorQuantileBase):
