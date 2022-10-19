@@ -81,10 +81,13 @@ class VectorQuantileBase(BaseEstimator, ABC):
         self.solver_opts = solver_opts
         self.solver = solver_instance
         self._n_levels = n_levels
-        self._fitted_solution: Optional[VQRSolution] = None
+
+        # Deliberate trailing underscore to support detection by check_is_fitted on old
+        # versions of sklearn.
+        self._fitted_solution_: Optional[VQRSolution] = None
 
     def __sklearn_is_fitted__(self):
-        return self._fitted_solution is not None
+        return self._fitted_solution_ is not None
 
     @property
     def n_levels(self) -> int:
@@ -102,7 +105,7 @@ class VectorQuantileBase(BaseEstimator, ABC):
             target variable Y.
         """
         check_is_fitted(self)
-        return self._fitted_solution.quantile_grid
+        return self.fitted_solution.quantile_grid
 
     @property
     def quantile_levels(self) -> Array:
@@ -111,7 +114,7 @@ class VectorQuantileBase(BaseEstimator, ABC):
             estimated along each target dimension.
         """
         check_is_fitted(self)
-        return self._fitted_solution.quantile_levels
+        return self.fitted_solution.quantile_levels
 
     @property
     def dim_y(self) -> int:
@@ -119,7 +122,7 @@ class VectorQuantileBase(BaseEstimator, ABC):
         :return: The dimension of the target variable (Y).
         """
         check_is_fitted(self)
-        return self._fitted_solution.dim_y
+        return self.fitted_solution.dim_y
 
     @property
     def dim_x(self) -> int:
@@ -127,7 +130,7 @@ class VectorQuantileBase(BaseEstimator, ABC):
         :return: The dimension k, of the covariates (X).
         """
         check_is_fitted(self)
-        return self._fitted_solution.dim_x
+        return self.fitted_solution.dim_x
 
     @property
     def solution_metrics(self) -> Dict[str, Any]:
@@ -135,7 +138,7 @@ class VectorQuantileBase(BaseEstimator, ABC):
         :return: A dict containing solver-specific metrics about the solution.
         """
         check_is_fitted(self)
-        return self._fitted_solution.metrics
+        return self.fitted_solution.metrics
 
     @property
     def fitted_solution(self) -> VQRSolution:
@@ -144,7 +147,7 @@ class VectorQuantileBase(BaseEstimator, ABC):
         Usually it is recommended to use the high level API on this class instead.
         """
         check_is_fitted(self)
-        return self._fitted_solution
+        return self._fitted_solution_
 
 
 class VectorQuantileEstimator(VectorQuantileBase):
@@ -167,7 +170,7 @@ class VectorQuantileEstimator(VectorQuantileBase):
         the quantile function Q_{Y}(u).
         """
         check_is_fitted(self)
-        qf = self._fitted_solution.vector_quantiles(X=None, refine=refine)[0]
+        qf = self.fitted_solution.vector_quantiles(X=None, refine=refine)[0]
         return qf
 
     def fit(self, X: Array):
@@ -185,7 +188,7 @@ class VectorQuantileEstimator(VectorQuantileBase):
         N = len(X)
         Y: Array = np.reshape(X, (N, -1))
 
-        self._fitted_solution = self.solver.solve_vqr(T=self.n_levels, Y=Y, X=None)
+        self._fitted_solution_ = self.solver.solve_vqr(T=self.n_levels, Y=Y, X=None)
 
         return self
 
@@ -266,7 +269,7 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
         # Scale features to zero-mean
         X_scaled = self._scaler.fit_transform(X)
 
-        self._fitted_solution = self.solver.solve_vqr(T=self.n_levels, Y=Y, X=X_scaled)
+        self._fitted_solution_ = self.solver.solve_vqr(T=self.n_levels, Y=Y, X=X_scaled)
 
         return self
 
@@ -290,7 +293,7 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
             X = self._scaler.transform(X)
 
         # Get the conditional quantiles
-        cqfs = self._fitted_solution.vector_quantiles(X, refine=refine)
+        cqfs = self.fitted_solution.vector_quantiles(X, refine=refine)
         return cqfs
 
     def predict(self, X: Array) -> Array:
@@ -344,7 +347,7 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
         fitted by this model, conditioned on X=x.
 
         First, it creates a contour of points in d-dimensional space which surround
-        the region in which 1-2*alpha of the distribution (that was corresponds to a
+        the region in which 100*(1-2*alpha)^d of the distribution (that was corresponds to a
         given quantile function) is contained. Then, the proportion of points
         contained within this contour is calculated.
 

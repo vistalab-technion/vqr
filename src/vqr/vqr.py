@@ -474,8 +474,8 @@ def quantile_contour(
 ) -> Tuple[Array, Array]:
     """
     Creates a contour of points in d-dimensional space which surround the region in
-    which 1-2*alpha of the distribution (that was corresponds to a given quantile
-    function) is contained.
+    which 100*(1-2*alpha)^d percent of the distribution (that was corresponds to a
+    given quantile function) is contained.
 
     :param T: The number of quantile levels that was used for solving the problem.
     :param d: The dimension of the target data (Y) that was used for solving the

@@ -1,5 +1,5 @@
 import numpy as np
-from numpy.typing import ArrayLike as Array
+from numpy import ndarray as Array
 from scipy.spatial import ConvexHull
 
 
