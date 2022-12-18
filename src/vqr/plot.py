@@ -244,7 +244,7 @@ def plot_contour_2d(
             color="k",
             marker=".",
             edgecolor="white",
-            label="Y",
+            label="$Y=(Y_1,Y_2)$",
         )
 
     for i, alpha in enumerate(alphas):
@@ -258,6 +258,8 @@ def plot_contour_2d(
             **surf_kws,
         )
 
+    ax.set_xlabel("$Y_1$")
+    ax.set_ylabel("$Y_2$")
     ax.legend()
     return fig, ax
 
