@@ -321,11 +321,6 @@ class QuantileFunction:
 class VQRSolver(ABC):
     """
     Abstraction of a method for solving the Vector Quantile Regression (VQR) problem.
-
-    For an overview of the VQR problem and it's solutions, refer to:
-        Carlier G, Chernozhukov V, De Bie G, Galichon A.
-        Vector quantile regression and optimal transport, from theory to numerics.
-        Empirical Econometrics, 2020.
     """
 
     @classmethod

@@ -3,7 +3,7 @@ from sklearn.datasets import make_regression
 from sklearn.model_selection import train_test_split
 
 from vqr import VectorQuantileRegressor
-from vqr.solvers.dual.regularized_lse import RegularizedDualVQRSolver
+from vqr.solvers.regularized_lse import RegularizedDualVQRSolver
 
 
 def test_vqr_minimal():

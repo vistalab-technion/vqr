@@ -2,18 +2,18 @@ import pickle
 
 import numpy as np
 import torch
-from numpy import array, zeros
-from torch import Tensor, tensor
+from numpy import array
+from torch import tensor
 from matplotlib import cm
 from matplotlib import pyplot as plt
 
 from vqr.api import VectorQuantileRegressor
-from experiments.utils.metrics import kde, kde_l1, w2_pot, w2_keops
-from experiments.datasets.cond_banana import ConditionalBananaDataProvider
-from vqr.solvers.dual.regularized_lse import (
+from experiments.utils.metrics import kde, kde_l1, w2_keops
+from vqr.solvers.regularized_lse import (
     RegularizedDualVQRSolver,
     MLPRegularizedDualVQRSolver,
 )
+from experiments.datasets.cond_banana import ConditionalBananaDataProvider
 
 
 def plot_kde(kde_map_1, kde_map_2, l1_distance: float, filename: str):

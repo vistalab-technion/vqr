@@ -1,4 +1,4 @@
-from typing import Optional, Sequence
+from typing import Optional
 
 import ot
 import numpy as np
@@ -6,7 +6,7 @@ from numpy import ndarray as Array
 
 from vqr import VQRSolution
 from vqr.vqr import VQRSolver, vector_quantile_levels
-from vqr.solvers.primal.cvx import SIMILARITY_FN_INNER_PROD
+from vqr.solvers.cvx import SIMILARITY_FN_INNER_PROD
 
 
 class POTVQESolver(VQRSolver):

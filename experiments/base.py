@@ -4,7 +4,7 @@ import logging
 import functools
 from abc import ABC, abstractmethod
 from time import strftime
-from typing import Any, Dict, List, Callable, Optional, Sequence
+from typing import Any, Dict, Callable, Optional, Sequence
 from pathlib import Path
 from itertools import product
 
@@ -15,7 +15,7 @@ from _socket import gethostname
 from experiments import EXPERIMENTS_OUT_DIR
 from experiments.utils.helpers import stable_hash
 from experiments.utils.parallel import run_parallel_exp
-from vqr.solvers.dual.regularized_lse import (
+from vqr.solvers.regularized_lse import (
     RegularizedDualVQRSolver,
     MLPRegularizedDualVQRSolver,
 )

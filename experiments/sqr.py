@@ -3,14 +3,11 @@ import pickle
 import ot
 import numpy as np
 import torch
-from torch import tensor
-from matplotlib import cm
 from matplotlib import pyplot as plt
 
 from vqr import VectorQuantileRegressor
-from vqr.solvers.primal.cvx import SIMILARITY_FN_INNER_PROD
-from experiments.utils.metrics import kde
-from vqr.solvers.dual.regularized_lse import (
+from vqr.solvers.cvx import SIMILARITY_FN_INNER_PROD
+from vqr.solvers.regularized_lse import (
     RegularizedDualVQRSolver,
     MLPRegularizedDualVQRSolver,
 )

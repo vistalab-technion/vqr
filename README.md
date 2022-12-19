@@ -16,8 +16,8 @@ Refer to our paper[^VQR2022] for further details about nonlinear VQR, and please
 
 ## Brief background and intuition
 
-Quantile regression[^Koenker1978] (QR) is a well-known method which estimates a 
-conditional quantile of a target variable $\text{Y}$, given covariates $\mathbf{X}$. 
+Quantile regression[^Koenker1978] (QR) is a well-known method which estimates a
+conditional quantile of a target variable $\text{Y}$, given covariates $\mathbf{X}$.
 Since a distribution can be exactly specified in terms of its quantile function, estimating all conditional quantiles recovers  the full conditional distribution.
 A major limitation of QR is that it deals with a scalar-valued target variable, while many important applications require estimation of vector-valued responses.
 
@@ -99,7 +99,7 @@ from sklearn.datasets import make_regression
 from sklearn.model_selection import train_test_split
 
 from vqr import VectorQuantileRegressor
-from vqr.solvers.dual.regularized_lse import RegularizedDualVQRSolver
+from vqr.solvers.regularized_lse import RegularizedDualVQRSolver
 
 N, d, k, T = 5000, 2, 1, 20
 N_test = N // 10

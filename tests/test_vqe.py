@@ -5,8 +5,8 @@ from sklearn.exceptions import NotFittedError
 
 from vqr import QuantileFunction, VectorQuantileEstimator
 from tests.conftest import _test_monotonicity, monotonicity_offending_projections
-from vqr.solvers.primal.cvx import CVXVQRSolver
-from vqr.solvers.primal.pot import POTVQESolver
+from vqr.solvers.cvx import CVXVQRSolver
+from vqr.solvers.pot import POTVQESolver
 from experiments.datasets.mvn import IndependentDataProvider
 
 
