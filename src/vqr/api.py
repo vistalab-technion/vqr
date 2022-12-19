@@ -17,13 +17,13 @@ from vqr.vqr import (
     quantile_contour,
     inversion_sampling,
 )
-from vqr.coverage import measure_coverage
-from vqr.solvers.cvx import CVXVQRSolver
-from vqr.solvers.pot import POTVQESolver
-from vqr.solvers.regularized_lse import (
+from vqr.solvers import (
+    CVXVQRSolver,
+    POTVQESolver,
     RegularizedDualVQRSolver,
     MLPRegularizedDualVQRSolver,
 )
+from vqr.coverage import measure_coverage
 
 SOLVER_TYPES: Dict[str, Type[VQRSolver]] = {
     solver_class.solver_name(): solver_class
