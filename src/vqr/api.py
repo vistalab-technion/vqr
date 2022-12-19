@@ -10,14 +10,14 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.utils.validation import check_is_fitted
 
 from vqr.vqr import (
-    VQRSolver,
-    VQRSolution,
     QuantileFunction,
     quantile_levels,
     quantile_contour,
     inversion_sampling,
 )
 from vqr.solvers import (
+    VQRSolver,
+    VQRSolution,
     CVXVQRSolver,
     POTVQESolver,
     RegularizedDualVQRSolver,

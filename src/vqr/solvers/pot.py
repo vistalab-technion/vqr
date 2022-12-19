@@ -4,9 +4,9 @@ import ot
 import numpy as np
 from numpy import ndarray as Array
 
-from vqr import VQRSolution
-from vqr.vqr import VQRSolver, vector_quantile_levels
+from vqr.vqr import vector_quantile_levels
 from vqr.solvers.cvx import SIMILARITY_FN_INNER_PROD
+from vqr.solvers.base import VQRSolver, VQRSolution
 
 
 class POTVQESolver(VQRSolver):
