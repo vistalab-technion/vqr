@@ -15,7 +15,7 @@ from tqdm.auto import tqdm
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
-from vqr.vqr import vector_quantile_levels
+from vqr.cvqf import vector_quantile_levels
 from vqr.models import MLP
 from vqr.solvers.base import VQRSolver, VQRSolution
 

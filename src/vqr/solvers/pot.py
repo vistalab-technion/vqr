@@ -4,7 +4,7 @@ import ot
 import numpy as np
 from numpy import ndarray as Array
 
-from vqr.vqr import vector_quantile_levels
+from vqr.cvqf import vector_quantile_levels
 from vqr.solvers.cvx import SIMILARITY_FN_INNER_PROD
 from vqr.solvers.base import VQRSolver, VQRSolution
 

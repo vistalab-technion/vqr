@@ -6,7 +6,7 @@ from typing import Any, Dict, Callable, Optional, Sequence
 from numpy import ndarray as Array
 from sklearn.utils import check_array
 
-from vqr.vqr import (
+from vqr.cvqf import (
     QuantileFunction,
     quantile_levels,
     decode_quantile_grid,

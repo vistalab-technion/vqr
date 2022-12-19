@@ -7,7 +7,7 @@ import numpy as np
 from numpy import ndarray as Array
 from scipy.spatial.distance import cdist
 
-from vqr.vqr import vector_quantile_levels
+from vqr.cvqf import vector_quantile_levels
 from vqr.solvers.base import VQRSolver, VQRSolution
 
 SIMILARITY_FN_INNER_PROD = lambda x, y: np.dot(x, y)

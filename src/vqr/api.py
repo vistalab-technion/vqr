@@ -9,7 +9,7 @@ from sklearn.utils import check_X_y
 from sklearn.preprocessing import StandardScaler
 from sklearn.utils.validation import check_is_fitted
 
-from vqr.vqr import (
+from vqr.cvqf import (
     QuantileFunction,
     quantile_levels,
     quantile_contour,

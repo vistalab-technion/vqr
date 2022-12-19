@@ -10,7 +10,7 @@ from numpy.linalg import norm
 from _pytest.fixtures import FixtureRequest
 
 from tests import TESTS_OUT_DIR
-from vqr.vqr import check_comonotonicity, decode_quantile_grid, vector_quantile_levels
+from vqr.cvqf import check_comonotonicity, decode_quantile_grid, vector_quantile_levels
 from experiments.log import setup_logging
 
 setup_logging()

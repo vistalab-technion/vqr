@@ -10,7 +10,7 @@ from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from mpl_toolkits.mplot3d import Axes3D
 
-from vqr.vqr import quantile_levels, quantile_contour
+from vqr.cvqf import quantile_levels, quantile_contour
 from vqr.coverage import point_in_hull
 
 
