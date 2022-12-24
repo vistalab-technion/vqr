@@ -31,15 +31,12 @@ class VQRSolver(ABC):
     @abstractmethod
     def solve_vqr(
         self,
-        T: int,
         Y: Array,
         X: Optional[Array] = None,
     ) -> VQRSolution:
         """
         Solves the provided VQR problem in an implementation-specific way.
 
-        :param T: Number of quantile levels to estimate along each of the d
-        dimensions. The quantile level will be spaced uniformly between 0 to 1.
         :param Y: The regression target variable, of shape (N, d) where N is the
         number of samples and d is the dimension of the target, which is also the
         dimension of the quantiles which will be estimated.
