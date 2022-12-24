@@ -46,22 +46,15 @@ class VectorQuantileBase(BaseEstimator, ABC):
 
     def __init__(
         self,
-        n_levels: int = 50,
         solver: Union[str, VQRSolver] = DEFAULT_SOLVER_NAME,
         solver_opts: Optional[Dict[str, Any]] = None,
     ):
         """
-        :param n_levels: Number of quantile levels. The range of possible
-            levels (between 0 and 1) will be divided into this number of levels.
-            For example, if n_levels=4 then the quantiles [.25, .50, .75, 1.0] will be
-            evaluation in each dimension.
         :param solver: Either a supported solver name (see keys of
             :obj:`SOLVER_TYPES`) or an instance of a :class:`VQRSolver`.
         :param solver_opts: If solver is a string, these kwargs will be passed to the
             constructor of the corresponding solver type.
         """
-        if n_levels < 2:
-            raise ValueError("n_levels must be >= 2")
 
         solver_instance: VQRSolver
         if isinstance(solver, str):
@@ -80,7 +73,6 @@ class VectorQuantileBase(BaseEstimator, ABC):
 
         self.solver_opts = solver_opts
         self.solver = solver_instance
-        self._n_levels = n_levels
 
         # Deliberate trailing underscore to support detection by check_is_fitted on old
         # versions of sklearn.
@@ -88,14 +80,6 @@ class VectorQuantileBase(BaseEstimator, ABC):
 
     def __sklearn_is_fitted__(self):
         return self._fitted_solution_ is not None
-
-    @property
-    def n_levels(self) -> int:
-        """
-        :return: Number of quantile levels which this estimator calculates (in every
-        dimension of the target variable).
-        """
-        return self._n_levels
 
     @property
     def quantile_grid(self) -> Sequence[Array]:
@@ -155,14 +139,6 @@ class VectorQuantileEstimator(VectorQuantileBase):
     Performs vector quantile estimation.
     """
 
-    def __init__(
-        self,
-        n_levels: int = 50,
-        solver: Union[str, VQRSolver] = DEFAULT_SOLVER_NAME,
-        solver_opts: Optional[Dict[str, Any]] = None,
-    ):
-        super().__init__(n_levels, solver, solver_opts)
-
     def vector_quantiles(self, refine: bool = False) -> QuantileFunction:
         """
         :param refine: Refine the quantile function using vector monotone rearrangement.
@@ -188,7 +164,7 @@ class VectorQuantileEstimator(VectorQuantileBase):
         N = len(X)
         Y: Array = np.reshape(X, (N, -1))
 
-        self._fitted_solution_ = self.solver.solve_vqr(T=self.n_levels, Y=Y, X=None)
+        self._fitted_solution_ = self.solver.solve_vqr(Y=Y, X=None)
 
         return self
 
@@ -208,7 +184,7 @@ class VectorQuantileEstimator(VectorQuantileBase):
         q_surfaces = tuple(vqf)  # d x (T, T, ..., T)
 
         # Sample from the quantile function
-        return inversion_sampling(T=self.n_levels, d=self.dim_y, n=n, Qs=q_surfaces)
+        return inversion_sampling(n=n, Qs=q_surfaces)
 
     def coverage(self, Y: Array, alpha: float = 0.05) -> float:
         """
@@ -231,9 +207,7 @@ class VectorQuantileEstimator(VectorQuantileBase):
         q_surfaces = tuple(vqf)  # d x (T, T, ..., T)
 
         return measure_coverage(
-            quantile_contour=quantile_contour(
-                T=self.n_levels, d=self.dim_y, Qs=q_surfaces, alpha=alpha
-            )[0],
+            quantile_contour=quantile_contour(Qs=q_surfaces, alpha=alpha)[0],
             data=Y,
         )
 
@@ -245,11 +219,10 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
 
     def __init__(
         self,
-        n_levels: int = 50,
         solver: Union[str, VQRSolver] = DEFAULT_SOLVER_NAME,
         solver_opts: Optional[Dict[str, Any]] = None,
     ):
-        super().__init__(n_levels, solver, solver_opts)
+        super().__init__(solver, solver_opts)
         self._scaler = StandardScaler(with_mean=True, with_std=True)
 
     def fit(self, X: Array, y: Array):
@@ -269,7 +242,7 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
         # Scale features to zero-mean
         X_scaled = self._scaler.fit_transform(X)
 
-        self._fitted_solution_ = self.solver.solve_vqr(T=self.n_levels, Y=Y, X=X_scaled)
+        self._fitted_solution_ = self.solver.solve_vqr(Y=Y, X=X_scaled)
 
         return self
 
@@ -316,7 +289,9 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
         )
 
         N = X.shape[0] if X is not None else 1
-        assert vqs.shape == (N, self.dim_y, *[self.n_levels] * self.dim_y)
+        T = vqfs[0].T
+        d = self.dim_y
+        assert vqs.shape == (N, d, *[T] * d)
         return vqs
 
     def sample(self, n: int, x: Array) -> Array:
@@ -339,7 +314,7 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
         q_surfaces = tuple(vqf)  # d x (T, T, ..., T) where each is d-dimensional
 
         # Sample from the quantile function
-        return inversion_sampling(T=self.n_levels, d=self.dim_y, n=n, Qs=q_surfaces)
+        return inversion_sampling(n=n, Qs=q_surfaces)
 
     def coverage(self, Y: Array, x: Array, alpha: float = 0.05) -> float:
         """
@@ -365,9 +340,7 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
         q_surfaces = tuple(vqf)  # d x (T, T, ..., T) where each is d-dimensional
 
         return measure_coverage(
-            quantile_contour=quantile_contour(
-                T=self.n_levels, d=self.dim_y, Qs=q_surfaces, alpha=alpha
-            )[0],
+            quantile_contour=quantile_contour(Qs=q_surfaces, alpha=alpha)[0],
             data=Y,
         )
 
