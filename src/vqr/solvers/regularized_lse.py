@@ -37,6 +37,7 @@ class RegularizedDualVQRSolver(VQRSolver):
 
     def __init__(
         self,
+        T: int = 50,
         epsilon: float = 1e-3,
         num_epochs: int = 1000,
         lr: float = 0.9,
@@ -55,6 +56,8 @@ class RegularizedDualVQRSolver(VQRSolver):
         post_iter_callback: Optional[Callable[[Any], None]] = None,
     ):
         """
+        :param T: Number of quantile levels to estimate along each of the d
+        dimensions. The quantile level will be spaced uniformly between 0 and 1.
         :param epsilon: Regularization. The lower, the more exact the solution.
         :param num_epochs: Number of epochs (full iterations over all data) to
         optimize for.
@@ -92,6 +95,8 @@ class RegularizedDualVQRSolver(VQRSolver):
         """
         super().__init__()
 
+        if not T > 0:
+            raise ValueError(f"invalid {T=}, must be > 0")
         if not 0 < epsilon < 1:
             raise ValueError(f"invalid {epsilon=}, must be in (0, 1)")
         if not num_epochs > 0:
@@ -113,7 +118,7 @@ class RegularizedDualVQRSolver(VQRSolver):
         ):
             raise ValueError(f"invalid {batchsize_y=} or {batchsize_u}, must be > 0")
 
-        self._verbose = verbose
+        self._T = T
         self._epsilon = epsilon
         self._num_epochs = num_epochs
         self._lr = lr
@@ -138,11 +143,13 @@ class RegularizedDualVQRSolver(VQRSolver):
         self._batchsize_u = batchsize_u
         self._inference_batch_size = inference_batch_size
         self._callback: Optional[Callable] = post_iter_callback
+        self._verbose = verbose
 
-    def solve_vqr(self, T: int, Y: Array, X: Optional[Array] = None) -> VQRSolution:
+    def solve_vqr(self, Y: Array, X: Optional[Array] = None) -> VQRSolution:
         start_time = time()
         log_level = logging.INFO if self._verbose else logging.NOTSET
 
+        T = self._T
         N = len(Y)
         Y = np.reshape(Y, (N, -1))
 
