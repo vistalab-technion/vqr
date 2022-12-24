@@ -47,8 +47,11 @@ class TestVectorQuantileRegressor(object):
             "rvqr_mlp_change_k",
         ],
     )
-    def vqr_solver(self, request):
-        return request.param
+    def vqr_solver(self, request, problem_size):
+        solver = request.param
+        d, k, N, T = problem_size
+        solver._T = T  # FIXME: This is a hack
+        return solver
 
     @pytest.fixture(
         scope="class",
@@ -63,21 +66,24 @@ class TestVectorQuantileRegressor(object):
             "d=3,k=3",
         ],
     )
-    def vqr_fitted(self, request, vqr_solver):
-        params = request.param
-        N, d, k, T = params["N"], params["d"], params["k"], params["T"]
+    def problem_size(self, request):
+        param = request.param
+        d, k, N, T = param["d"], param["k"], param["N"], param["T"]
+        return (d, k, N, T)
+
+    @pytest.fixture(scope="class")
+    def vqr_fitted(self, vqr_solver, problem_size):
+        d, k, N, T = problem_size
         X, Y = LinearMVNDataProvider(d=d, k=k).sample(n=N)
 
-        vqr = VectorQuantileRegressor(n_levels=T, solver=vqr_solver)
+        vqr = VectorQuantileRegressor(solver=vqr_solver)
         vqr.fit(X, Y)
 
         return X, Y, vqr
 
-    def test_shapes(self, vqr_fitted):
+    def test_shapes(self, vqr_fitted, problem_size):
+        d, k, N, T = problem_size
         X, Y, vqr = vqr_fitted
-        N, d = Y.shape
-        N, k = X.shape
-        T = vqr.n_levels
 
         assert vqr.dim_y == d
         assert vqr.dim_x == k
@@ -91,12 +97,9 @@ class TestVectorQuantileRegressor(object):
             Y_hat = vqr.predict(X_)
             assert Y_hat.shape == (N_, d, *[T] * d)
 
-    def test_vector_quantiles(self, vqr_fitted):
+    def test_vector_quantiles(self, vqr_fitted, problem_size):
+        d, k, N, T = problem_size
         X, Y, vqr = vqr_fitted
-        N, d = Y.shape
-        N, k = X.shape
-        T = vqr.n_levels
-        U_grid = vqr.quantile_grid
 
         # QuantileFunction per X
         vqfs = vqr.vector_quantiles(X=X)
@@ -123,11 +126,9 @@ class TestVectorQuantileRegressor(object):
                 assert vq.shape == (d,)
                 assert np.all(vq == vqf.values[(slice(None), *u_idx)])
 
-    def test_sample(self, vqr_fitted, test_out_dir):
+    def test_sample(self, vqr_fitted, problem_size, test_out_dir):
+        d, k, N, T = problem_size
         X, Y, vqr = vqr_fitted
-        N, d = Y.shape
-        N, k = X.shape
-        T = vqr.n_levels
 
         n = 1000
         xs = []
@@ -154,11 +155,9 @@ class TestVectorQuantileRegressor(object):
             fig.savefig(test_out_dir.joinpath("vqr_sample.pdf"), bbox_inches="tight")
 
     @pytest.mark.flaky(reruns=1)
-    def test_coverage(self, vqr_fitted, test_out_dir):
+    def test_coverage(self, vqr_fitted, problem_size, test_out_dir):
+        d, k, N, T = problem_size
         X, Y, vqr = vqr_fitted
-        N, d = Y.shape
-        N, k = X.shape
-        T = vqr.n_levels
 
         cov = np.mean(
             [
@@ -181,7 +180,6 @@ class TestVectorQuantileRegressor(object):
             _test_monotonicity(
                 Us=vqr.quantile_grid,
                 Qs=list(vqr.vector_quantiles(X=X[[i]], refine=True)[0]),
-                T=vqr.n_levels,
             )
 
     @pytest.mark.flaky(reruns=1)
@@ -192,7 +190,8 @@ class TestVectorQuantileRegressor(object):
         T = 15
         X, Y = LinearMVNDataProvider(d=d, k=k, seed=42).sample(n=N)
 
-        vqr = VectorQuantileRegressor(n_levels=T, solver=vqr_solver)
+        vqr_solver._T = T  # FIXME: this is a hack
+        vqr = VectorQuantileRegressor(solver=vqr_solver)
         vqr.fit(X, Y)
 
         all_off_projs_refined = []
@@ -203,14 +202,12 @@ class TestVectorQuantileRegressor(object):
             off_projs, all_projs = monotonicity_offending_projections(
                 Us=vqr.quantile_grid,
                 Qs=list(vqr.vector_quantiles(X=X[[i]], refine=False)[0]),
-                T=vqr.n_levels,
                 projection_tolerance=0.0,
             )
 
             off_projs_refined, all_projs_refined = monotonicity_offending_projections(
                 Us=vqr.quantile_grid,
                 Qs=list(vqr.vector_quantiles(X=X[[i]], refine=True)[0]),
-                T=vqr.n_levels,
                 projection_tolerance=0.0,
             )
             all_off_projs.append(len(off_projs) / len(all_projs))
@@ -258,12 +255,13 @@ class TestVectorQuantileRegressor(object):
         X, Y = LinearMVNDataProvider(d=d, k=k).sample(n=N)
         solver = RegularizedDualVQRSolver(
             verbose=False,
+            T=T,
             num_epochs=num_epochs,
             batchsize_y=batchsize_y,
             batchsize_u=batchsize_u,
             post_iter_callback=_callback,
         )
-        vqr = VectorQuantileRegressor(n_levels=T, solver=solver)
+        vqr = VectorQuantileRegressor(solver=solver)
         vqr.fit(X, Y)
 
         assert len(callback_kwargs) == num_epochs * num_batches
@@ -274,10 +272,7 @@ class TestVectorQuantileRegressor(object):
 
     def test_not_fitted(self, vqr_solver):
         X, Y = LinearMVNDataProvider(d=2, k=3).sample(n=100)
-        vq = VectorQuantileRegressor(
-            n_levels=100,
-            solver=vqr_solver,
-        )
+        vq = VectorQuantileRegressor(solver=vqr_solver)
         with pytest.raises(NotFittedError):
             _ = vq.quantile_grid
         with pytest.raises(NotFittedError):
