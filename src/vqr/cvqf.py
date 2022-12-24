@@ -221,18 +221,39 @@ def decode_quantile_grid(T: int, d: int, U: Array) -> Sequence[Array]:
     return tuple(np.reshape(U[:, dim], newshape=(T,) * d) for dim in range(d))
 
 
-def inversion_sampling(T: int, d: int, n: int, Qs: Sequence[Array]):
+def get_d_T(Qs: Sequence[Array]) -> Tuple[int, int]:
+    """
+    Helper for obtaining d and T parameters from VQF surfaces.
+
+    :param Qs: Quantile surfaces per dimension of Y. A sequence of length d,
+    where each element is of shape (T, T, ..., T).
+    :return: d and T. Will raise if shapes are not consistent with the above.
+    """
+    shapes = tuple(Q.shape for Q in Qs)
+
+    d = len(shapes)
+    T = shapes[0][0]
+
+    # Validate
+    expected_shape = (T,) * d
+    if not all(shape == expected_shape for shape in shapes):
+        raise ValueError(f"Quantile surfaces have unexpected shapes: {shapes}")
+
+    return d, T
+
+
+def inversion_sampling(n: int, Qs: Sequence[Array]):
     """
     Generates samples from the variable Y based on it's fitted
     quantile function, using inversion-transform sampling.
-    :param T: The number of quantile levels that was used for solving the problem.
-    :param d: The dimension of the target data (Y) that was used for solving the
-        problem.
+
     :param n: Number of samples to generate.
     :param Qs: Quantile surfaces per dimension of Y. A sequence of length d,
     where each element is of shape (T, T, ..., T).
     :return: Samples obtained from this quantile function, of shape (n, d).
     """
+
+    d, T = get_d_T(Qs)
 
     # Samples of points on the quantile-level grid
     Us = np.random.randint(0, T, size=(n, d))
@@ -246,17 +267,12 @@ def inversion_sampling(T: int, d: int, n: int, Qs: Sequence[Array]):
     return Y_samp
 
 
-def quantile_contour(
-    T: int, d: int, Qs: Sequence[Array], alpha: float = 0.05
-) -> Tuple[Array, Array]:
+def quantile_contour(Qs: Sequence[Array], alpha: float = 0.05) -> Tuple[Array, Array]:
     """
     Creates a contour of points in d-dimensional space which surround the region in
     which 100*(1-2*alpha)^d percent of the distribution (that was corresponds to a
     given quantile function) is contained.
 
-    :param T: The number of quantile levels that was used for solving the problem.
-    :param d: The dimension of the target data (Y) that was used for solving the
-        problem.
     :param Qs: Quantile surfaces per dimension of Y. A sequence of length d,
     where each element is of shape (T, T, ..., T).
     :param alpha: Confidence level for the contour.
@@ -268,6 +284,7 @@ def quantile_contour(
     if not 0 < alpha < 0.5:
         raise ValueError(f"Got {alpha=}, but must be in (0, 0.5)")
 
+    d, T = get_d_T(Qs)
     lo = int(np.round(T * alpha))
     hi = int(min(np.round(T * (1 - alpha)), T - 1))
 
@@ -303,7 +320,7 @@ def quantile_contour(
 
 
 def vector_monotone_rearrangement(
-    T: int, d: int, Qs: Sequence[Array], max_iters: int = 2e6
+    Qs: Sequence[Array], max_iters: int = 2e6
 ) -> Sequence[Array]:
     """
     Performs vector monotone rearrangement. Can be interpreted as "vector sorting".
@@ -326,6 +343,7 @@ def vector_monotone_rearrangement(
     :return: Rearranged quantile surfaces per dimension of Y. A sequence of length d
     where each element is of shape (T, T, ..., T).
     """
+    d, T = get_d_T(Qs)
     U: Array = vector_quantile_levels(T, d)
     Y: Array = np.stack([Q.ravel() for Q in Qs], axis=-1)
     pi = ot.emd(M=-U @ Y.T, a=[], b=[], numItermax=max_iters)
@@ -334,9 +352,7 @@ def vector_monotone_rearrangement(
     return rearranged_Qs
 
 
-def check_comonotonicity(
-    T: int, d: int, Qs: Sequence[Array], Us: Sequence[Array]
-) -> Array:
+def check_comonotonicity(Qs: Sequence[Array], Us: Sequence[Array]) -> Array:
     """
     Measures co-monotonicity defined as (u_i - u_j).T @ (Q(u_i) - Q(u_j)) for all i, j.
     Results in a T^d x T^d symmetric matrix.  If co-monotonicity is satisfied,
@@ -355,6 +371,7 @@ def check_comonotonicity(
     measures co-monotonicity between quantile levels  u_i and u_j and the quantile
     values Q(u_i) and Q(u_j).
     """
+    d, T = get_d_T(Qs)
     levels = np.stack([level.ravel() for level in Us])
     quantiles = np.stack([Q.ravel() for Q in Qs])
 
