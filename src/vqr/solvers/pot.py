@@ -11,23 +11,32 @@ from vqr.solvers.base import VQRSolver, VQRSolution
 
 class POTVQESolver(VQRSolver):
     """
-    Solves the VQE problem using the POT library.
+    Solves the VQE problem as a Wasserstein2 (W2) distance between uniform measures
+    on U and Y,  with an inner-product ground metric. Uses the POT library's
+    implementation of W2.
     """
 
-    def __init__(self, **pot_solver_opts):
-        self._pot_solver_opts = pot_solver_opts
+    def __init__(self, T: int = 50, **emd2_kwargs):
+        """
+        :param T: Number of quantile levels to estimate along each of the d
+        dimensions. The quantile level will be spaced uniformly between 0 and 1.
+        :param emd2_kwargs:  Any kwargs supported by pot.emd2().
+        """
+        self.T = T
+        self._emd2_kwargs = emd2_kwargs
 
     @classmethod
     def solver_name(cls) -> str:
         return "vqe_pot"
 
-    def solve_vqr(self, T: int, Y: Array, X: Optional[Array] = None) -> VQRSolution:
+    def solve_vqr(self, Y: Array, X: Optional[Array] = None) -> VQRSolution:
         # Can't deal with X's
         if X is not None:
             raise AssertionError(
                 f"{self.__class__.__name__} can't work with X. It solves only "
                 f"the VQE problem."
             )
+        T = self.T
         N: int = Y.shape[0]
         d: int = Y.shape[1]  # number or target dimensions
 
@@ -44,7 +53,7 @@ class POTVQESolver(VQRSolver):
             a=np.ones([Td]) / Td,
             b=np.ones([N]) / N,
             log=True,
-            **self._pot_solver_opts,
+            **self._emd2_kwargs,
         )
 
         # Obtain the lagrange multipliers Alpha (A) and Beta (B)
