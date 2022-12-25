@@ -23,9 +23,10 @@ class CVQF:
         """
         Evaluates the CVQF at quantile level u for covariates x.
 
-        :param u: d-dimensional vector quantile level. Each value should be in [0, 1].
-        :param x: k-dimensional covariates (features) vector.
-        :return: A d-dimensional vector quantile.
+        :param u: d-dimensional vector quantile level of shape (d,). Each value
+        should be in [0, 1].
+        :param x: k-dimensional covariates (features) vector, of shape (k,) or (1,k).
+        :return: A d-dimensional vector quantile of shape (d,).
         """
         pass
 
@@ -33,8 +34,9 @@ class CVQF:
         """
         Conditions the CVQF on a specific covariate vector, x.
 
-        :param x: The covariates on which to condition.
-        :return: A quantile function which then only depends on the level u.
+        :param x: The covariates on which to condition of shape (k,) or (1,k).
+        :return: A quantile function which then only depends on the level u of shape
+        (d,).
         """
         pass
 
@@ -56,8 +58,9 @@ class VQF:
         """
         Evaluates the VQF at quantile level u.
 
-        :param u: d-dimensional vector quantile level. Each value should be in [0, 1].
-        :return: A d-dimensional vector quantile.
+        :param u: d-dimensional vector quantile level of shape (d,). Each value
+        should be in [0, 1].
+        :return: A d-dimensional vector quantile of shape (d,).
         """
         pass
 
@@ -147,10 +150,11 @@ class DiscreteCVQF(CVQF):
 
     def condition(self, x: Array, refine: bool = False) -> DiscreteVQF:
         """
-        :param x: Covariates, of shape (k,) or (1, k).
-        Should be None if the fitted solution was for a VQE (unconditional quantiles).
-        :param refine: Refine the conditional quantile function using vector monotone
-        rearrangement.
+        Conditions the CVQF on a specific covariate vector, x.
+
+        :param x: The covariates on which to condition, shape (1,k) or (k,).
+        :param refine: Whether to refine the conditional quantile function using vector
+        monotone rearrangement.
         :return: A DiscreteVQF instance corresponding to the given covariates X.
         """
 
