@@ -145,8 +145,18 @@ class DiscreteCVQF(CVQF):
     def is_conditional(self) -> bool:
         return self._B is not None
 
-    def evaluate(self, u: Array, x: Array) -> Array:
-        pass
+    def evaluate(self, u: Array, x: Array, refine: bool = False) -> Array:
+        """
+        Evaluates the CVQF at quantile level u for covariates x.
+
+        :param u: d-dimensional vector quantile level of shape (d,). Each value
+        should be in [0, 1].
+        :param x: k-dimensional covariates (features) vector, of shape (k,) or (1,k).
+        :param refine: Whether to refine the conditional quantile function using vector
+        monotone rearrangement.
+        :return: A d-dimensional vector quantile of shape (d,).
+        """
+        return self.condition(x, refine=refine).evaluate(u)
 
     def condition(self, x: Array, refine: bool = False) -> DiscreteVQF:
         """
