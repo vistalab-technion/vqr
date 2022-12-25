@@ -362,24 +362,17 @@ class DiscreteVQF(VQF):
         """
         return self._Qs[d_idx]
 
-    def __call__(self, u: Array) -> Array:
-        """
-        :param u: d-dimensional quantile level represented as the integer index of
-        the level in each dimension. Each entry of u must be an integer in [0, T-1].
-        For example if d=2, T=10 then u=[3, 9] represents the quantile level [0.4, 1.0]
-        :return: The vector-quantile value at level u, i.e. Q_{Y|X=x}(u).
-        """
-        u = u.astype(np.int)
-
+    def evaluate(self, u: Array) -> Array:
         if not np.ndim(u) == 1 or not len(u) == self.d:
             raise ValueError(f"u must be of shape (d,), got shape {u.shape}")
 
-        if not np.all((u >= 0) & (u < self.T)):
+        if not np.all((u >= 0) & (u <= 1)):
             raise ValueError(
-                f"u must contain indices of quantile levels, each in [0, T-1]"
+                f"u must contain indices of quantile levels, each in [0, 1]"
             )
 
-        q_idx = (slice(None), *u)
+        u_idx = np.floor(u * (self.T - 1)).astype(np.int)
+        q_idx = (slice(None), *u_idx)
         q = self._Qs[q_idx]
         assert q.shape == (self.d,)
         return q
