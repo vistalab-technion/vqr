@@ -64,10 +64,6 @@ class VQF:
     __call__ = evaluate
 
 
-class DiscreteVQF(VQF):
-    pass
-
-
 class DiscreteCVQF(CVQF):
     """
     Encapsulates the solution to a VQR problem. Contains the vector quantiles and
@@ -152,13 +148,13 @@ class DiscreteCVQF(CVQF):
 
     def vector_quantiles(
         self, x: Optional[Array] = None, refine: bool = False
-    ) -> QuantileFunction:
+    ) -> DiscreteVQF:
         """
         :param x: Covariates, of shape (k,) or (1, k).
         Should be None if the fitted solution was for a VQE (unconditional quantiles).
         :param refine: Refine the conditional quantile function using vector monotone
         rearrangement.
-        :return: A QuantileFunction instance corresponding to the given covariates X.
+        :return: A DiscreteVQF instance corresponding to the given covariates X.
         """
 
         if not self.is_conditional:
@@ -197,7 +193,7 @@ class DiscreteCVQF(CVQF):
             Y_hat = Y_hat  # (1, T**d)
 
         refine_fn = lambda Qs: (vector_monotone_rearrangement(Qs) if refine else Qs)
-        return QuantileFunction(
+        return DiscreteVQF(
             T=self._T,
             d=self._d,
             Qs=refine_fn(decode_quantile_values(self._T, self._d, Y_hat)),
@@ -247,7 +243,7 @@ class DiscreteCVQF(CVQF):
         return self._solution_metrics.copy()
 
 
-class QuantileFunction:
+class DiscreteVQF(VQF):
     """
     Represents a discretized conditional vector-valued quantile function Q_{Y|X=x}(u)
     of the variable Y|X, where:

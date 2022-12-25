@@ -3,7 +3,7 @@ import pytest
 from matplotlib import pyplot as plt
 from sklearn.exceptions import NotFittedError
 
-from vqr import QuantileFunction, VectorQuantileEstimator
+from vqr import DiscreteVQF, VectorQuantileEstimator
 from tests.conftest import _test_monotonicity, monotonicity_offending_projections
 from vqr.solvers.cvx import CVXVQRSolver
 from vqr.solvers.pot import POTVQESolver
@@ -71,7 +71,7 @@ class TestVectorQuantileEstimator(object):
         d, N, T = problem_size
         Y, vqe = vqe_fitted
 
-        vqf: QuantileFunction = vqe.vector_quantiles()
+        vqf: DiscreteVQF = vqe.vector_quantiles()
         assert len(vqf) == d
         assert all(q_surface.shape == (T,) * d for q_surface in vqf)
         assert vqf.values.shape == (d, *[T] * d)

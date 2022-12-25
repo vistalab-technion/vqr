@@ -10,8 +10,8 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.utils.validation import check_is_fitted
 
 from vqr.cvqf import (
+    DiscreteVQF,
     DiscreteCVQF,
-    QuantileFunction,
     quantile_levels,
     quantile_contour,
     inversion_sampling,
@@ -139,10 +139,10 @@ class VectorQuantileEstimator(VectorQuantileBase):
     Performs vector quantile estimation.
     """
 
-    def vector_quantiles(self, refine: bool = False) -> QuantileFunction:
+    def vector_quantiles(self, refine: bool = False) -> DiscreteVQF:
         """
         :param refine: Refine the quantile function using vector monotone rearrangement.
-        :return: A QuantileFunction instance, representing a discretized version of
+        :return: A DiscreteVQF instance, representing a discretized version of
         the quantile function Q_{Y}(u).
         """
         check_is_fitted(self)
@@ -248,13 +248,13 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
 
     def vector_quantiles(
         self, X: Optional[Array] = None, refine: bool = False
-    ) -> Sequence[QuantileFunction]:
+    ) -> Sequence[DiscreteVQF]:
         """
         :param X: Covariates, of shape (N, k). Should be None if the fitted solution
         was for a VQE (un conditional quantiles).
         :param refine: Refine the conditional quantile function using vector monotone
         rearrangement.
-        :return: A sequence of length N, containing QuantileFunction instances.
+        :return: A sequence of length N, containing DiscreteVQF instances.
         Each element of the sequence corresponds to one of the covariates in X,
         and contains the discretized conditional quantile function Q_{Y|X=x}(u).
         """
@@ -281,7 +281,7 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
         """
         check_is_fitted(self)
 
-        vqfs: Sequence[QuantileFunction] = self.vector_quantiles(X)
+        vqfs: Sequence[DiscreteVQF] = self.vector_quantiles(X)
 
         # Stack the vector quantiles for each sample into one tensor
         vqs = np.stack(
@@ -312,7 +312,7 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
         x = self._validate_X_(X=x, single=True)
 
         # Calculate vector quantiles given sample X=x
-        vqf: QuantileFunction = self.vector_quantiles(X=x)[0]
+        vqf: DiscreteVQF = self.vector_quantiles(X=x)[0]
         q_surfaces = tuple(vqf)  # d x (T, T, ..., T) where each is d-dimensional
 
         # Sample from the quantile function
@@ -338,7 +338,7 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
         x = self._validate_X_(X=x, single=True)
 
         # Calculate vector quantiles given sample X=x
-        vqf: QuantileFunction = self.vector_quantiles(X=x)[0]
+        vqf: DiscreteVQF = self.vector_quantiles(X=x)[0]
         q_surfaces = tuple(vqf)  # d x (T, T, ..., T) where each is d-dimensional
 
         return measure_coverage(

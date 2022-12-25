@@ -5,7 +5,7 @@ import click
 import numpy as np
 from matplotlib import pyplot as plt
 
-from vqr import QuantileFunction, VectorQuantileRegressor
+from vqr import DiscreteVQF, VectorQuantileRegressor
 from experiments.base import VQROptions, run_exp_context
 from experiments.datasets.mvn import LinearMVNDataProvider
 from experiments.datasets.quantile import QuantileFunctionDataProviderWrapper
@@ -14,8 +14,8 @@ _LOG = logging.getLogger(__name__)
 
 
 def _compare_conditional_quantiles(
-    vqf_gt: QuantileFunction,
-    vqf_est: QuantileFunction,
+    vqf_gt: DiscreteVQF,
+    vqf_est: DiscreteVQF,
     t_factor: int,
 ) -> float:
 

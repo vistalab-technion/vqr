@@ -5,7 +5,7 @@ import pytest
 import matplotlib.pyplot as plt
 from sklearn.exceptions import NotFittedError
 
-from vqr import VQRSolver, QuantileFunction, VectorQuantileRegressor
+from vqr import VQRSolver, DiscreteVQF, VectorQuantileRegressor
 from vqr.cvqf import DiscreteCVQF
 from tests.conftest import _test_monotonicity, monotonicity_offending_projections
 from experiments.datasets.mvn import LinearMVNDataProvider
@@ -102,14 +102,14 @@ class TestVectorQuantileRegressor(object):
         d, k, N, T = problem_size
         X, Y, vqr = vqr_fitted
 
-        # QuantileFunction per X
+        # DiscreteVQF per X
         vqfs = vqr.vector_quantiles(X=X)
         assert len(vqfs) == N
 
-        vqf: QuantileFunction
+        vqf: DiscreteVQF
         for vqf in vqfs:
 
-            # Iterating over QuantileFunction returns its surfaces
+            # Iterating over DiscreteVQF returns its surfaces
             assert all(vq_surface.shape == (T,) * d for vq_surface in vqf)
 
             # All values of the quantile function
