@@ -172,9 +172,7 @@ class VQRSolution:
             Y_hat = B @ Z.T + A  # result is (T**d, N)
             Y_hats = Y_hat.T  # (N, T**d)
 
-        refine_fn = lambda Qs: (
-            vector_monotone_rearrangement(self._T, self._d, Qs) if refine else Qs
-        )
+        refine_fn = lambda Qs: (vector_monotone_rearrangement(Qs) if refine else Qs)
         return tuple(
             QuantileFunction(
                 T=self._T,
