@@ -7,7 +7,7 @@ import numpy as np
 from numpy import ndarray as Array
 from scipy.spatial.distance import cdist
 
-from vqr.cvqf import VQRSolution, vector_quantile_levels
+from vqr.cvqf import DiscreteCVQF, vector_quantile_levels
 from vqr.utils import get_kwargs
 from vqr.solvers.base import VQRDiscreteSolver
 
@@ -47,7 +47,7 @@ class CVXVQRSolver(VQRDiscreteSolver):
     def levels_per_dim(self) -> int:
         return self.T
 
-    def solve_vqr(self, Y: Array, X: Optional[Array] = None) -> VQRSolution:
+    def solve_vqr(self, Y: Array, X: Optional[Array] = None) -> DiscreteCVQF:
         T = self.T
         N = len(Y)
         Y = np.reshape(Y, (N, -1))
@@ -96,4 +96,4 @@ class CVXVQRSolver(VQRDiscreteSolver):
         else:
             B = AB[:, 1:]  # B is (T**d, k)
 
-        return VQRSolution(T, d, U, A, B)
+        return DiscreteCVQF(T, d, U, A, B)

@@ -4,7 +4,7 @@ import ot
 import numpy as np
 from numpy import ndarray as Array
 
-from vqr.cvqf import VQRSolution, vector_quantile_levels
+from vqr.cvqf import DiscreteCVQF, vector_quantile_levels
 from vqr.utils import get_kwargs
 from vqr.solvers.cvx import SIMILARITY_FN_INNER_PROD
 from vqr.solvers.base import VQRDiscreteSolver
@@ -39,7 +39,7 @@ class POTVQESolver(VQRDiscreteSolver):
     def levels_per_dim(self) -> int:
         return self.T
 
-    def solve_vqr(self, Y: Array, X: Optional[Array] = None) -> VQRSolution:
+    def solve_vqr(self, Y: Array, X: Optional[Array] = None) -> DiscreteCVQF:
         # Can't deal with X's
         if X is not None:
             raise AssertionError(
@@ -68,4 +68,4 @@ class POTVQESolver(VQRDiscreteSolver):
 
         # Obtain the lagrange multipliers Alpha (A) and Beta (B)
         A = np.reshape(-log["u"][:, None], newshape=(Td, 1))
-        return VQRSolution(T, d, U, A, None)
+        return DiscreteCVQF(T, d, U, A, None)

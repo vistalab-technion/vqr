@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from sklearn.exceptions import NotFittedError
 
 from vqr import VQRSolver, QuantileFunction, VectorQuantileRegressor
-from vqr.cvqf import VQRSolution
+from vqr.cvqf import DiscreteCVQF
 from tests.conftest import _test_monotonicity, monotonicity_offending_projections
 from experiments.datasets.mvn import LinearMVNDataProvider
 from vqr.solvers.regularized_lse import (
@@ -269,7 +269,7 @@ class TestVectorQuantileRegressor(object):
         for kw in callback_kwargs:
             assert kw.keys() == callback_kwargs[0].keys()
             solution = kw["solution"]
-            assert isinstance(solution, VQRSolution)
+            assert isinstance(solution, DiscreteCVQF)
 
     def test_not_fitted(self, vqr_solver):
         X, Y = LinearMVNDataProvider(d=2, k=3).sample(n=100)

@@ -10,7 +10,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.utils.validation import check_is_fitted
 
 from vqr.cvqf import (
-    VQRSolution,
+    DiscreteCVQF,
     QuantileFunction,
     quantile_levels,
     quantile_contour,
@@ -76,7 +76,7 @@ class VectorQuantileBase(BaseEstimator, ABC):
 
         # Deliberate trailing underscore to support detection by check_is_fitted on old
         # versions of sklearn.
-        self._fitted_solution_: Optional[VQRSolution] = None
+        self._fitted_solution_: Optional[DiscreteCVQF] = None
 
     def __sklearn_is_fitted__(self):
         return self._fitted_solution_ is not None
@@ -125,7 +125,7 @@ class VectorQuantileBase(BaseEstimator, ABC):
         return self.fitted_solution.metrics
 
     @property
-    def fitted_solution(self) -> VQRSolution:
+    def fitted_solution(self) -> DiscreteCVQF:
         """
         :return: The low-level VQR solution object.
         Usually it is recommended to use the high level API on this class instead.

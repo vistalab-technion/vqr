@@ -5,7 +5,7 @@ from typing import Type, TypeVar, Optional
 
 from numpy import ndarray as Array
 
-from vqr.cvqf import VQRSolution
+from vqr.cvqf import DiscreteCVQF
 
 TVQRSolver = TypeVar("TVQRSolver", bound="VQRSolver")
 
@@ -36,7 +36,7 @@ class VQRSolver(ABC):
         self,
         Y: Array,
         X: Optional[Array] = None,
-    ) -> VQRSolution:
+    ) -> DiscreteCVQF:
         """
         Solves the provided VQR problem in an implementation-specific way.
 

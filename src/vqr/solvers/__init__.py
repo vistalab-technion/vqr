@@ -1,4 +1,4 @@
-from vqr.cvqf import VQRSolution
+from vqr.cvqf import DiscreteCVQF
 from vqr.solvers.cvx import CVXVQRSolver
 from vqr.solvers.pot import POTVQESolver
 from vqr.solvers.base import VQRSolver

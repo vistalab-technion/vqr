@@ -9,7 +9,26 @@ from numpy import ndarray as Array
 from sklearn.utils import check_array
 
 
-class VQRSolution:
+class CVQF:
+    """
+    Represents a conditional vector quantile function, Q_{Y|X}(u;x).
+    """
+
+    def __init__(self):
+        pass
+
+    def evaluate(self, u: Array, x: Array) -> Array:
+        """
+        Evaluates the CVQF at quantile level u for covariates x.
+
+        :param u: d-dimensional vector quantile level. Each value should be in [0, 1].
+        :param x: k-dimensional covariates (features) vector.
+        :return: A d-dimensional vector quantile.
+        """
+        pass
+
+
+class DiscreteCVQF(CVQF):
     """
     Encapsulates the solution to a VQR problem. Contains the vector quantiles and
     regression coefficients of the solution, and provides useful methods for
