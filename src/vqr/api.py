@@ -10,6 +10,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.utils.validation import check_is_fitted
 
 from vqr.cvqf import (
+    VQRSolution,
     QuantileFunction,
     quantile_levels,
     quantile_contour,
@@ -17,7 +18,6 @@ from vqr.cvqf import (
 )
 from vqr.solvers import (
     VQRSolver,
-    VQRSolution,
     CVXVQRSolver,
     POTVQESolver,
     RegularizedDualVQRSolver,

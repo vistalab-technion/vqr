@@ -15,10 +15,10 @@ from tqdm.auto import tqdm
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
-from vqr.cvqf import vector_quantile_levels
+from vqr.cvqf import VQRSolution, vector_quantile_levels
 from vqr.utils import get_kwargs
 from vqr.models import MLP
-from vqr.solvers.base import VQRSolution, VQRDiscreteSolver
+from vqr.solvers.base import VQRDiscreteSolver
 
 _LOG = logging.getLogger(__name__)
 

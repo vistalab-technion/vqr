@@ -5,7 +5,8 @@ import pytest
 import matplotlib.pyplot as plt
 from sklearn.exceptions import NotFittedError
 
-from vqr import VQRSolver, VQRSolution, QuantileFunction, VectorQuantileRegressor
+from vqr import VQRSolver, QuantileFunction, VectorQuantileRegressor
+from vqr.cvqf import VQRSolution
 from tests.conftest import _test_monotonicity, monotonicity_offending_projections
 from experiments.datasets.mvn import LinearMVNDataProvider
 from vqr.solvers.regularized_lse import (
