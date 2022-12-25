@@ -69,21 +69,14 @@ class VQF:
 
 class DiscreteCVQF(CVQF):
     """
-    Encapsulates the solution to a VQR problem. Contains the vector quantiles and
-    regression coefficients of the solution, and provides useful methods for
-    interacting with them.
+    Represents a discrete conditional vector quantile function, Q_{Y|X}(u;x) where:
 
-    Should only be constructed by :class:`VQRSolver`s, not manually.
+    - Y is a d-dimensional target variable (d>=1).
+    - X is a k-dimensional covariates variable (k>=1).
+    - u is a d-dimensional quantile level, discretized to T levels per dimension.
+    - Q_{Y|X=x}(u) is the d-dimensional quantile of Y|X=x at level u.
 
-    Given a sample x of shape (1, k), the conditional d-dimensional vector quantiles
-    Y|X=x are given by d/du [ B @ x.T  + A ].
-    We first calculate the regression targets Y_hat = B @ x.T  + A.
-    This is an array of shape (T**d, 1).
-    In order to obtain the d vector quantile surfaces (one for each dimension of Y),
-    use the :obj:`decode_quantile_values` function on Y_hat.
-    These surfaces can be visualized over the grid defined in U.
-    The combination of these surfaces comprise the conditional quantile function,
-    Q_{Y|X=x}(u) which has a d-dimensional input and output.
+    Should be constructed by :class:`VQRSolver`s, not manually.
     """
 
     def __init__(
@@ -222,7 +215,7 @@ class DiscreteCVQF(CVQF):
             d-dimensional meshgrid (see np.meshgrid) where d is the dimension of the
             target variable Y.
         """
-        return decode_quantile_grid(self._T, self._d, self._U)
+        return _decode_quantile_grid(self._T, self._d, self._U)
 
     @property
     def quantile_levels(self) -> Array:
@@ -265,10 +258,12 @@ class DiscreteVQF(VQF):
 
     - Y is a d-dimensional target variable.
     - X is a k-dimensional covariates variable with specific realization x.
-    - u is a d-dimensional quantile level.
+    - u is a d-dimensional quantile level, discretized to T levels per dimension.
     - Q_{Y|X=x}(u) is the d-dimensional quantile of Y|X=x at level u.
 
-    This instances of this class expose both the d quantile surfaces of the function,
+    Should be constructed by :class:`VQESolver`s, not manually.
+
+    Instances of this class expose both the d quantile surfaces of the function,
     and also allow evaluating the function at a given quantile level u.
 
     - Iterating over an instance or indexing it yields the d quantile surfaces,
@@ -396,8 +391,6 @@ def vector_quantile_levels(T: int, d: int) -> Array:
     vector with entries in [0,1].
 
     The quantile levels are returned stacked along the first axis of the result.
-    The output of this function can be converted into a "meshgrid" with
-    decode_quantile_grid().
 
     :param T: Number of levels in each dimension.
     :param d: Dimension of target variable.
