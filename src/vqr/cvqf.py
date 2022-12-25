@@ -315,8 +315,8 @@ class DiscreteVQF(VQF):
         self.x = x
         self.k = 0 if x is None else x.shape[1]
 
-        U = decode_quantile_grid(self.T, self.d, U)
-        Q = decode_quantile_values(self.T, self.d, A)
+        U = _decode_quantile_grid(self.T, self.d, U)
+        Q = _decode_quantile_values(self.T, self.d, A)
         if refine:
             Q = vector_monotone_rearrangement(Q)
 
@@ -417,7 +417,7 @@ def vector_quantile_levels(T: int, d: int) -> Array:
     return U
 
 
-def decode_quantile_values(T: int, d: int, Y_hat: Array) -> Sequence[Array]:
+def _decode_quantile_values(T: int, d: int, Y_hat: Array) -> Sequence[Array]:
     """
     Decodes the regression coefficients of a VQR solution into vector quantile values.
     :param T: The number of quantile levels that was used for solving the problem.
@@ -448,7 +448,7 @@ def decode_quantile_values(T: int, d: int, Y_hat: Array) -> Sequence[Array]:
     return tuple(Q_functions)
 
 
-def decode_quantile_grid(T: int, d: int, U: Array) -> Sequence[Array]:
+def _decode_quantile_grid(T: int, d: int, U: Array) -> Sequence[Array]:
     """
     Decodes stacked vector quantile levels (the output of the vector_quantile_level()
     function) into a "meshgrid" of the evaluation points of the vector quantile
