@@ -30,7 +30,7 @@ def experiment(
     scores_calib = Y_calib - (X_calib @ A_hat)
 
     # Estimate vector quantiles on the calibration set
-    vq = VectorQuantileEstimator(n_levels)
+    vq = VectorQuantileEstimator(solver_opts=dict(T=n_levels))
     fitted_vq = vq.fit(scores_calib)
     VQ1, VQ2 = fitted_vq.vector_quantiles()
     T = fitted_vq.quantile_levels
