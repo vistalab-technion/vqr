@@ -126,6 +126,8 @@ class DiscreteCVQF(CVQF):
         assert (X_transform is not None and k_in) or (X_transform is None and not k_in)
         assert solution_metrics is None or isinstance(solution_metrics, dict)
 
+        # TODO: Remove support for B=None
+
         self._T = T
         self._d = d
         self._U = U
@@ -140,15 +142,10 @@ class DiscreteCVQF(CVQF):
     def is_conditional(self) -> bool:
         return self._B is not None
 
-    def condition(self, x: Array) -> VQF:
-        pass
-
     def evaluate(self, u: Array, x: Array) -> Array:
         pass
 
-    def vector_quantiles(
-        self, x: Optional[Array] = None, refine: bool = False
-    ) -> DiscreteVQF:
+    def condition(self, x: Array, refine: bool = False) -> DiscreteVQF:
         """
         :param x: Covariates, of shape (k,) or (1, k).
         Should be None if the fitted solution was for a VQE (unconditional quantiles).
@@ -156,6 +153,8 @@ class DiscreteCVQF(CVQF):
         rearrangement.
         :return: A DiscreteVQF instance corresponding to the given covariates X.
         """
+
+        # TODO: Remove support for x=None
 
         if not self.is_conditional:
             if x is not None:

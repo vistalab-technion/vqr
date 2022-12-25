@@ -146,8 +146,8 @@ class VectorQuantileEstimator(VectorQuantileBase):
         the quantile function Q_{Y}(u).
         """
         check_is_fitted(self)
-        qf = self.fitted_solution.vector_quantiles(x=None, refine=refine)
-        return qf
+        vqf = self.fitted_solution.condition(x=None, refine=refine)
+        return vqf
 
     def fit(self, X: Array):
         """
@@ -265,11 +265,11 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
         if X is not None:
             # Scale X with the fitted transformation before predicting
             X = self._scaler.transform(X)
-            cqfs = [self.fitted_solution.vector_quantiles(x, refine=refine) for x in X]
+            vqfs = [self.fitted_solution.condition(x, refine=refine) for x in X]
         else:
-            cqfs = [self.fitted_solution.vector_quantiles(None, refine=refine)]
+            vqfs = [self.fitted_solution.condition(x=None, refine=refine)]
 
-        return cqfs
+        return vqfs
 
     def predict(self, X: Array) -> Array:
         """
