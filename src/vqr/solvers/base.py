@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Callable, Optional, Sequence
+from typing import Any, Dict, Type, TypeVar, Callable, Optional, Sequence
 
 from numpy import ndarray as Array
 from sklearn.utils import check_array
@@ -14,6 +14,8 @@ from vqr.cvqf import (
     vector_monotone_rearrangement,
 )
 
+TVQRSolver = TypeVar("TVQRSolver", bound="VQRSolver")
+
 
 class VQRSolver(ABC):
     """
@@ -25,6 +27,14 @@ class VQRSolver(ABC):
     def solver_name(cls) -> str:
         """
         :return: An identifier for this solver.
+        """
+        pass
+
+    @property
+    @abstractmethod
+    def solver_opts(self) -> dict:
+        """
+        :return: Implementation-specific options use to configure this solver.
         """
         pass
 
@@ -47,6 +57,18 @@ class VQRSolver(ABC):
         :return: A VQRSolution containing the vector quantiles and regression coefficients.
         """
         pass
+
+    def copy(self: Type[TVQRSolver], **solver_opts) -> TVQRSolver:
+        """
+        Creates a copy of this solver, optionally with some parameters overridden.
+
+        :param solver_opts: Solver options which will override the existing options (
+        can be a subset).
+        :return: A new solver of the same type as self, initialized with the current
+        options and given overrides.
+        """
+        new_opts = {**self.solver_opts, **solver_opts}
+        return type(self)(**new_opts)
 
 
 class VQRSolution:
