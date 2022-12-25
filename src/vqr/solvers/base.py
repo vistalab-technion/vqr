@@ -5,16 +5,12 @@ from typing import Type, TypeVar, Optional
 
 from numpy import ndarray as Array
 
-from vqr.cvqf import DiscreteCVQF
+from vqr.cvqf import VQF, CVQF, DiscreteCVQF
 
-TVQRSolver = TypeVar("TVQRSolver", bound="VQRSolver")
+TSolver = TypeVar("TSolver", bound="_Solver")
 
 
-class VQRSolver(ABC):
-    """
-    Abstraction of a method for solving the Vector Quantile Regression (VQR) problem.
-    """
-
+class _Solver(ABC):
     @classmethod
     @abstractmethod
     def solver_name(cls) -> str:
@@ -31,27 +27,7 @@ class VQRSolver(ABC):
         """
         pass
 
-    @abstractmethod
-    def solve_vqr(
-        self,
-        Y: Array,
-        X: Optional[Array] = None,
-    ) -> DiscreteCVQF:
-        """
-        Solves the provided VQR problem in an implementation-specific way.
-
-        :param Y: The regression target variable, of shape (N, d) where N is the
-        number of samples and d is the dimension of the target, which is also the
-        dimension of the quantiles which will be estimated.
-        :param X: The regression input (features, covariates), of shape (N, k),
-        where k is the number of features. Note that X may be None, in which case the
-        problem becomes quantile estimation (estimating the quantiles of Y) instead
-        of quantile regression.
-        :return: A VQRSolution containing the vector quantiles and regression coefficients.
-        """
-        pass
-
-    def copy(self: Type[TVQRSolver], **solver_opts) -> TVQRSolver:
+    def copy(self: Type[TSolver], **solver_opts) -> TSolver:
         """
         Creates a copy of this solver, optionally with some parameters overridden.
 
@@ -64,7 +40,49 @@ class VQRSolver(ABC):
         return type(self)(**new_opts)
 
 
-class VQRDiscreteSolver(VQRSolver, ABC):
+class VQESolver(_Solver, ABC):
+    """
+    Abstraction of a method for solving the Vector Quantile Estimation (VQE) problem.
+    """
+
+    @abstractmethod
+    def solve_vqe(self, Y: Array) -> VQF:
+        """
+        Solves the VQE problem in an implementation-specific way.
+
+        :param Y: The regression target variable, of shape (N, d) where N is the
+        number of samples and d is the dimension of the target, which is also the
+        dimension of the quantiles which will be estimated.
+        :return: A VQF representing Q_{Y}.
+        """
+        pass
+
+
+class VQRSolver(VQESolver, ABC):
+    """
+    Abstraction of a method for solving the Vector Quantile Regression (VQR) problem.
+    """
+
+    @abstractmethod
+    def solve_vqr(
+        self,
+        Y: Array,
+        X: Array,
+    ) -> CVQF:
+        """
+        Solves the provided VQR problem in an implementation-specific way.
+
+        :param Y: The regression target variable, of shape (N, d) where N is the
+        number of samples and d is the dimension of the target, which is also the
+        dimension of the quantiles which will be estimated.
+        :param X: The regression input (features, covariates), of shape (N, k),
+        where k is the number of features.
+        :return: A CVQF representing Q_{Y|X}.
+        """
+        pass
+
+
+class DiscreteSolver(_Solver, ABC):
     """
     Represents a VQR solver which solves the discrete problem, i.e., obtains an
     estimate of the conditional vector quantile function discretized at T quantile
@@ -79,3 +97,23 @@ class VQRDiscreteSolver(VQRSolver, ABC):
         dimensions. The quantile level will be spaced uniformly between 0 and 1.
         """
         pass
+
+
+class VQRDiscreteSolver(VQRSolver, DiscreteSolver, ABC):
+    """
+    Represents a VQR solver which solves the discrete problem, i.e., obtains an
+    estimate of the conditional vector quantile function discretized at T quantile
+    levels per dimension.
+    """
+
+    pass
+
+
+class VQEDiscreteSolver(VQESolver, DiscreteSolver, ABC):
+    """
+    Represents a VQE solver which solves the discrete problem, i.e., obtains an
+    estimate of the vector quantile function discretized at T quantile
+    levels per dimension.
+    """
+
+    pass
