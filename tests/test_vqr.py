@@ -118,10 +118,11 @@ class TestVectorQuantileRegressor(object):
 
             for j in range(10):
                 # Obtain a random quantile level
-                u_idx = np.random.randint(low=0, high=T, size=(d,), dtype=int)
+                u = np.random.uniform(0.0, 1.0, size=(d,))
+                u_idx = np.floor(u * (T - 1)).astype(np.int)
 
                 # Obtain a vector-quantile at level u
-                vq = vqf(u_idx)
+                vq = vqf.evaluate(u)
 
                 # d-dimensional vector quantile value
                 assert vq.shape == (d,)
