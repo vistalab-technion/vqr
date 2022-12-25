@@ -205,13 +205,14 @@ class DiscreteCVQF(CVQF):
             Y_hat = B @ z.T + A  # result is (T**d, 1)
             Y_hat = Y_hat  # (1, T**d)
 
-        refine_fn = lambda Qs: (vector_monotone_rearrangement(Qs) if refine else Qs)
         return DiscreteVQF(
             T=self._T,
             d=self._d,
-            Qs=refine_fn(decode_quantile_values(self._T, self._d, Y_hat)),
-            Us=decode_quantile_grid(self._T, self._d, self._U),
-            X=x,
+            U=self._U,
+            A=Y_hat,
+            x=x,
+            solution_metrics=self._solution_metrics,
+            refine=refine,
         )
 
     @property
@@ -258,11 +259,12 @@ class DiscreteCVQF(CVQF):
 
 class DiscreteVQF(VQF):
     """
-    Represents a discretized conditional vector-valued quantile function Q_{Y|X=x}(u)
-    of the variable Y|X, where:
+    Represents a discretized vector-valued quantile function Q_{Y|X=x}(u)
+    of the variable Y|X=x (i.e. pre-conditioned on a specific x), or unconditioned
+    vector quantile function Q_{Y}(u), where:
 
-    - Y is a d-dimensional target variable
-    - X is a k-dimensional covariates vector
+    - Y is a d-dimensional target variable.
+    - X is a k-dimensional covariates variable with specific realization x.
     - u is a d-dimensional quantile level.
     - Q_{Y|X=x}(u) is the d-dimensional quantile of Y|X=x at level u.
 
@@ -278,50 +280,51 @@ class DiscreteVQF(VQF):
         self,
         T: int,
         d: int,
-        Qs: Sequence[Array],
-        Us: Sequence[Array],
-        X: Optional[Array] = None,
+        U: Array,
+        A: Array,
+        x: Optional[Array] = None,
+        solution_metrics: Optional[Dict[str, Any]] = None,
+        refine: bool = True,
     ):
         """
-        :param T: The number of quantile levels (in each dimension).
-        :param d: The dimension of the target variable.
-        :param Qs: Quantile surfaces of the quantile function: d arrays,
-        each d-dimensional with shape (T, T, ..., T).
-        :param Us: Quantile levels per dimension of Y. A sequence of length d,
-        where each element is of shape (T, T, ..., T).
-        :param X: The covariates on which this quantile function is conditioned.
+        :param U: Array of shape (T**d, d). Contains the d-dimensional grid on
+        which the vector quantiles are defined. If can be decoded back into a
+        meshgrid-style sequence of arrays using :obj:`decode_quantile_grid`
+        :param A: Array of shape (T**d, 1). Contains the  the regression intercept
+        variable. This can be decoded into the d vector quantiles of Y using the
+        :obj:`decode_quantile_values` function.
+        :param solution_metrics: Optional key-value pairs which can contain any
+        metric values which are tracked by the solver, such as losses, runtimes, etc.
+        The keys in this dict are solver-specific and should be specified in the
+        documentation of the corresponding solver.
+        :param x: The covariates vector that was used to condition a CVQF to produce
+        this VQF, if any.
+        :param refine: Whether to refine the conditional quantile function using vector
+        monotone rearrangement.
         """
-        if len(Qs) != d:
-            raise ValueError(
-                f"Expecting {d=} quantile surfaces in quantile function, got {len(Qs)}"
-            )
-
-        if not all(Q.shape == tuple([T] * d) for Q in Qs):
-            raise ValueError(
-                f"Expecting {T=} levels in each dimension of each quantile surface"
-            )
-
-        if not (len(Us) == len(Qs) and all(U.shape == Q.shape for Q, U in zip(Qs, Us))):
-            raise ValueError(f"Expecting Us and Qs to match in number and shape")
-
-        if X is not None:
-            if np.ndim(X) > 2 or (np.ndim(X) == 2 and X.shape[0] > 1):
-                raise ValueError(
-                    f"Unexpected shape of X, must be (1, k), got {X.shape}"
-                )
-
-            X = np.reshape(X, (1, -1))
-
-        self._Qs = np.stack(Qs, axis=0)  # Stack into shape (d,T,T,...,T)
-        assert self._Qs.shape == tuple([d, *[T] * d])
-
-        self._Us = np.stack(Us, axis=0)  # Stack into shape (d,T,T,...,T)
-        assert self._Us.shape == self._Qs.shape
+        # Validate dimensions
+        assert all(x is not None for x in [T, d, U, A])
+        assert U.ndim == 2 and A.ndim == 2
+        assert U.shape[0] == A.shape[0]
+        assert U.shape[0] == T**d
+        assert A.shape[1] == 1
+        assert solution_metrics is None or isinstance(solution_metrics, dict)
 
         self.T = T
         self.d = d
-        self.X = X
-        self.k = 0 if X is None else X.shape[1]
+        self.x = x
+        self.k = 0 if x is None else x.shape[1]
+
+        U = decode_quantile_grid(self.T, self.d, U)
+        Q = decode_quantile_values(self.T, self.d, A)
+        if refine:
+            Q = vector_monotone_rearrangement(Q)
+
+        self._Q = np.stack(Q, axis=0)  # Stack into shape (d,T,T,...,T)
+        assert self._Q.shape == tuple([d, *[T] * d])
+
+        self._U = np.stack(U, axis=0)  # Stack into shape (d,T,T,...,T)
+        assert self._U.shape == self._Q.shape
 
     @property
     def values(self) -> Array:
@@ -330,7 +333,7 @@ class DiscreteVQF(VQF):
         A (d+1)-dimensional array of shape (d, T, T, ... T), where the first axis
         indexes different quantile surfaces.
         """
-        return self._Qs
+        return self._Q
 
     @property
     def levels(self) -> Array:
@@ -339,7 +342,7 @@ class DiscreteVQF(VQF):
         A (d+1)-dimensional array of shape (d, T, T, ... T), where the first axis
         indexes different quantile surfaces.
         """
-        return self._Us
+        return self._U
 
     def __iter__(self):
         """
@@ -347,7 +350,7 @@ class DiscreteVQF(VQF):
         Yields d elements, each a d-dimensional array of shape (T, T, ..., T).
         """
         for d_idx in range(self.d):
-            yield self._Qs[d_idx]
+            yield self._Q[d_idx]
 
     def __len__(self):
         """
@@ -360,7 +363,7 @@ class DiscreteVQF(VQF):
         :param d_idx: An index of a dimension of the target variable, in range [0, d).
         :return: Quantile surface for that dimension.
         """
-        return self._Qs[d_idx]
+        return self._Q[d_idx]
 
     def evaluate(self, u: Array) -> Array:
         if not np.ndim(u) == 1 or not len(u) == self.d:
@@ -373,7 +376,7 @@ class DiscreteVQF(VQF):
 
         u_idx = np.floor(u * (self.T - 1)).astype(np.int)
         q_idx = (slice(None), *u_idx)
-        q = self._Qs[q_idx]
+        q = self._Q[q_idx]
         assert q.shape == (self.d,)
         return q
 
