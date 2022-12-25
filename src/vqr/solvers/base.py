@@ -71,6 +71,23 @@ class VQRSolver(ABC):
         return type(self)(**new_opts)
 
 
+class VQRDiscreteSolver(VQRSolver, ABC):
+    """
+    Represents a VQR solver which solves the discrete problem, i.e., obtains an
+    estimate of the conditional vector quantile function discretized at T quantile
+    levels per dimension.
+    """
+
+    @property
+    @abstractmethod
+    def levels_per_dim(self) -> int:
+        """
+        :return: T, the number of quantile levels to estimate along each of the d
+        dimensions. The quantile level will be spaced uniformly between 0 and 1.
+        """
+        pass
+
+
 class VQRSolution:
     """
     Encapsulates the solution to a VQR problem. Contains the vector quantiles and
