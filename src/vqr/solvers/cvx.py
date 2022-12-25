@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from typing import Optional
+from typing import Union, Optional
 
 import cvxpy as cp
 import numpy as np
 from numpy import ndarray as Array
 from scipy.spatial.distance import cdist
 
-from vqr.cvqf import DiscreteCVQF, vector_quantile_levels
+from vqr.cvqf import DiscreteVQF, DiscreteCVQF, vector_quantile_levels
 from vqr.utils import get_kwargs
 from vqr.solvers.base import VQRDiscreteSolver
 
@@ -47,7 +47,15 @@ class CVXVQRSolver(VQRDiscreteSolver):
     def levels_per_dim(self) -> int:
         return self.T
 
-    def solve_vqr(self, Y: Array, X: Optional[Array] = None) -> DiscreteCVQF:
+    def solve_vqe(self, Y: Array) -> DiscreteVQF:
+        return self._solve(Y)
+
+    def solve_vqr(self, Y: Array, X: Array) -> DiscreteCVQF:
+        return self._solve(Y, X)
+
+    def _solve(
+        self, Y: Array, X: Optional[Array] = None
+    ) -> Union[DiscreteVQF, DiscreteCVQF]:
         T = self.T
         N = len(Y)
         Y = np.reshape(Y, (N, -1))
@@ -92,8 +100,7 @@ class CVXVQRSolver(VQRDiscreteSolver):
         AB = np.reshape(AB, newshape=[Td, k + 1])
         A = AB[:, [0]]  # A is (T**d, 1)
         if k == 0:
-            B = None
+            return DiscreteVQF(T, d, U, A, refine=False)
         else:
             B = AB[:, 1:]  # B is (T**d, k)
-
-        return DiscreteCVQF(T, d, U, A, B)
+            return DiscreteCVQF(T, d, U, A, B)

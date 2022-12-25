@@ -4,13 +4,13 @@ import ot
 import numpy as np
 from numpy import ndarray as Array
 
-from vqr.cvqf import DiscreteCVQF, vector_quantile_levels
+from vqr.cvqf import DiscreteVQF, DiscreteCVQF, vector_quantile_levels
 from vqr.utils import get_kwargs
 from vqr.solvers.cvx import SIMILARITY_FN_INNER_PROD
-from vqr.solvers.base import VQRDiscreteSolver
+from vqr.solvers.base import VQEDiscreteSolver
 
 
-class POTVQESolver(VQRDiscreteSolver):
+class POTVQESolver(VQEDiscreteSolver):
     """
     Solves the VQE problem as a Wasserstein2 (W2) distance between uniform measures
     on U and Y,  with an inner-product ground metric. Uses the POT library's
@@ -39,13 +39,7 @@ class POTVQESolver(VQRDiscreteSolver):
     def levels_per_dim(self) -> int:
         return self.T
 
-    def solve_vqr(self, Y: Array, X: Optional[Array] = None) -> DiscreteCVQF:
-        # Can't deal with X's
-        if X is not None:
-            raise AssertionError(
-                f"{self.__class__.__name__} can't work with X. It solves only "
-                f"the VQE problem."
-            )
+    def solve_vqe(self, Y: Array) -> DiscreteVQF:
         T = self.T
         N: int = Y.shape[0]
         d: int = Y.shape[1]  # number or target dimensions
@@ -68,4 +62,4 @@ class POTVQESolver(VQRDiscreteSolver):
 
         # Obtain the lagrange multipliers Alpha (A) and Beta (B)
         A = np.reshape(-log["u"][:, None], newshape=(Td, 1))
-        return DiscreteCVQF(T, d, U, A, None)
+        return DiscreteVQF(T, d, U, A, refine=False)

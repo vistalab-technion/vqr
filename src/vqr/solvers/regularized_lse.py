@@ -15,7 +15,7 @@ from tqdm.auto import tqdm
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
-from vqr.cvqf import DiscreteCVQF, vector_quantile_levels
+from vqr.cvqf import DiscreteVQF, DiscreteCVQF, vector_quantile_levels
 from vqr.utils import get_kwargs
 from vqr.models import MLP
 from vqr.solvers.base import VQRDiscreteSolver
@@ -156,7 +156,16 @@ class RegularizedDualVQRSolver(VQRDiscreteSolver):
     def levels_per_dim(self) -> int:
         return self._T
 
-    def solve_vqr(self, Y: Array, X: Optional[Array] = None) -> DiscreteCVQF:
+    def solve_vqe(self, Y: Array) -> DiscreteVQF:
+        return self._solve(Y)
+
+    def solve_vqr(self, Y: Array, X: Array) -> DiscreteCVQF:
+        return self._solve(Y, X)
+
+    def _solve(
+        self, Y: Array, X: Optional[Array] = None
+    ) -> Union[DiscreteVQF, DiscreteCVQF]:
+
         start_time = time()
         log_level = logging.INFO if self._verbose else logging.NOTSET
 
@@ -311,7 +320,7 @@ class RegularizedDualVQRSolver(VQRDiscreteSolver):
 
     def _create_solution(
         self, T, d, k, U, phi, b, net, solution_metrics: dict = None
-    ) -> DiscreteCVQF:
+    ) -> Union[DiscreteVQF, DiscreteCVQF]:
 
         A = phi.detach().cpu().numpy()
         B = None
@@ -327,16 +336,24 @@ class RegularizedDualVQRSolver(VQRDiscreteSolver):
                 self._features_transform, net=net_copy, dtype=self._dtype
             )
 
-        return DiscreteCVQF(
-            T,
-            d,
-            U,
-            A,
-            B,
-            X_transform=x_transform_fn,
-            k_in=k,
-            solution_metrics=solution_metrics,
-        )
+            return DiscreteCVQF(
+                T,
+                d,
+                U,
+                A,
+                B,
+                X_transform=x_transform_fn,
+                k_in=k,
+                solution_metrics=solution_metrics,
+            )
+        else:
+            return DiscreteVQF(
+                T,
+                d,
+                U,
+                A,
+                solution_metrics=solution_metrics,
+            )
 
     @staticmethod
     def _features_transform(
