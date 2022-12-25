@@ -9,12 +9,12 @@ from scipy.spatial.distance import cdist
 
 from vqr.cvqf import vector_quantile_levels
 from vqr.utils import get_kwargs
-from vqr.solvers.base import VQRSolver, VQRSolution
+from vqr.solvers.base import VQRSolution, VQRDiscreteSolver
 
 SIMILARITY_FN_INNER_PROD = lambda x, y: np.dot(x, y)
 
 
-class CVXVQRSolver(VQRSolver):
+class CVXVQRSolver(VQRDiscreteSolver):
     """
     Solves the Optimal Transport formulation of Vector Quantile Regression using
     CVXPY as a solver backend.
@@ -42,6 +42,10 @@ class CVXVQRSolver(VQRSolver):
     @property
     def solver_opts(self) -> dict:
         return self._solver_opts
+
+    @property
+    def levels_per_dim(self) -> int:
+        return self.T
 
     def solve_vqr(self, Y: Array, X: Optional[Array] = None) -> VQRSolution:
         T = self.T

@@ -7,10 +7,10 @@ from numpy import ndarray as Array
 from vqr.cvqf import vector_quantile_levels
 from vqr.utils import get_kwargs
 from vqr.solvers.cvx import SIMILARITY_FN_INNER_PROD
-from vqr.solvers.base import VQRSolver, VQRSolution
+from vqr.solvers.base import VQRSolution, VQRDiscreteSolver
 
 
-class POTVQESolver(VQRSolver):
+class POTVQESolver(VQRDiscreteSolver):
     """
     Solves the VQE problem as a Wasserstein2 (W2) distance between uniform measures
     on U and Y,  with an inner-product ground metric. Uses the POT library's
@@ -34,6 +34,10 @@ class POTVQESolver(VQRSolver):
     @property
     def solver_opts(self) -> dict:
         return self._solver_opts
+
+    @property
+    def levels_per_dim(self) -> int:
+        return self.T
 
     def solve_vqr(self, Y: Array, X: Optional[Array] = None) -> VQRSolution:
         # Can't deal with X's

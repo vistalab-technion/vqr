@@ -18,12 +18,12 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 from vqr.cvqf import vector_quantile_levels
 from vqr.utils import get_kwargs
 from vqr.models import MLP
-from vqr.solvers.base import VQRSolver, VQRSolution
+from vqr.solvers.base import VQRSolution, VQRDiscreteSolver
 
 _LOG = logging.getLogger(__name__)
 
 
-class RegularizedDualVQRSolver(VQRSolver):
+class RegularizedDualVQRSolver(VQRDiscreteSolver):
     """
     Solves the Regularized Dual formulation of Vector Quantile Regression using
     pytorch with gradient-based optimization.
@@ -151,6 +151,10 @@ class RegularizedDualVQRSolver(VQRSolver):
     @property
     def solver_opts(self) -> dict:
         return self._solver_opts.copy()
+
+    @property
+    def levels_per_dim(self) -> int:
+        return self._T
 
     def solve_vqr(self, Y: Array, X: Optional[Array] = None) -> VQRSolution:
         start_time = time()
