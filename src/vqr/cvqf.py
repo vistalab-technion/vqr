@@ -144,42 +144,47 @@ class DiscreteCVQF(CVQF):
     def is_conditional(self) -> bool:
         return self._B is not None
 
+    def condition(self, x: Array) -> VQF:
+        pass
+
+    def evaluate(self, u: Array, x: Array) -> Array:
+        pass
+
     def vector_quantiles(
-        self, X: Optional[Array] = None, refine: bool = False
-    ) -> Sequence[QuantileFunction]:
+        self, x: Optional[Array] = None, refine: bool = False
+    ) -> QuantileFunction:
         """
-        :param X: Covariates, of shape (N, k). Should be None if the fitted solution
-        was for a VQE (un conditional quantiles).
+        :param x: Covariates, of shape (k,) or (1, k).
+        Should be None if the fitted solution was for a VQE (unconditional quantiles).
         :param refine: Refine the conditional quantile function using vector monotone
         rearrangement.
-        :return: A sequence of length N containing QuantileFunction instances
-        corresponding to the given covariates X. If X is None, will be a sequence of
-        length one.
+        :return: A QuantileFunction instance corresponding to the given covariates X.
         """
 
         if not self.is_conditional:
-            if X is not None:
+            if x is not None:
                 raise ValueError(f"VQE was fitted but covariates were supplied")
 
-            Y_hats = [self._A]
+            Y_hat = self._A
         else:
-            if X is None:
+            if x is None:
                 raise ValueError(f"VQR was fitted but no covariates were supplied")
 
-            check_array(X, ensure_2d=True, allow_nd=False)
+            x = x.reshape(1, -1)
+            check_array(x, ensure_2d=True, allow_nd=False)
 
-            Z = X  # Z represents the transformed X
+            z = x  # z represents the transformed x
             if self._X_transform is not None:
-                N, k_in = X.shape
+                _, k_in = x.shape
                 if k_in != self._k_in:
                     raise ValueError(
                         f"VQR model was trained with X_transform expecting k_in"
                         f"={self._k_in}, but got covariates with {k_in=} features."
                     )
 
-                Z = self._X_transform(X)
+                z = self._X_transform(x)
 
-            N, k = Z.shape
+            _, k = z.shape
             if k != self._k:
                 raise ValueError(
                     f"VQR model was fitted with k={self._k}, "
@@ -187,20 +192,17 @@ class DiscreteCVQF(CVQF):
                 )
 
             B = self._B  # (T**d, k)
-            A = self._A  # (T**d, 1) -> will be broadcast to (T**d, N)
-            Y_hat = B @ Z.T + A  # result is (T**d, N)
-            Y_hats = Y_hat.T  # (N, T**d)
+            A = self._A  # (T**d, 1)
+            Y_hat = B @ z.T + A  # result is (T**d, 1)
+            Y_hat = Y_hat  # (1, T**d)
 
         refine_fn = lambda Qs: (vector_monotone_rearrangement(Qs) if refine else Qs)
-        return tuple(
-            QuantileFunction(
-                T=self._T,
-                d=self._d,
-                Qs=refine_fn(decode_quantile_values(self._T, self._d, Y_hat)),
-                Us=decode_quantile_grid(self._T, self._d, self._U),
-                X=X[[i], :] if X is not None else None,
-            )
-            for i, Y_hat in enumerate(Y_hats)
+        return QuantileFunction(
+            T=self._T,
+            d=self._d,
+            Qs=refine_fn(decode_quantile_values(self._T, self._d, Y_hat)),
+            Us=decode_quantile_grid(self._T, self._d, self._U),
+            X=x,
         )
 
     @property
