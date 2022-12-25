@@ -5,7 +5,7 @@ import pytest
 import matplotlib.pyplot as plt
 from sklearn.exceptions import NotFittedError
 
-from vqr import VQRSolution, QuantileFunction, VectorQuantileRegressor
+from vqr import VQRSolver, VQRSolution, QuantileFunction, VectorQuantileRegressor
 from tests.conftest import _test_monotonicity, monotonicity_offending_projections
 from experiments.datasets.mvn import LinearMVNDataProvider
 from vqr.solvers.regularized_lse import (
@@ -47,10 +47,10 @@ class TestVectorQuantileRegressor(object):
             "rvqr_mlp_change_k",
         ],
     )
-    def vqr_solver(self, request, problem_size):
-        solver = request.param
+    def vqr_solver(self, request, problem_size) -> VQRSolver:
+        solver: VQRSolver = request.param
         d, k, N, T = problem_size
-        solver._T = T  # FIXME: This is a hack
+        solver = solver.copy(T=T)
         return solver
 
     @pytest.fixture(
@@ -190,7 +190,7 @@ class TestVectorQuantileRegressor(object):
         T = 15
         X, Y = LinearMVNDataProvider(d=d, k=k, seed=42).sample(n=N)
 
-        vqr_solver._T = T  # FIXME: this is a hack
+        vqr_solver = vqr_solver.copy(T=T)
         vqr = VectorQuantileRegressor(solver=vqr_solver)
         vqr.fit(X, Y)
 
