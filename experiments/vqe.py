@@ -22,7 +22,7 @@ def experiment(
     _, Y_calib = datasets["calib"]
 
     # Fit vector quantiles
-    vq = VectorQuantileEstimator(n_levels)
+    vq = VectorQuantileEstimator(solver_opts=dict(T=n_levels))
     fitted_vq = vq.fit(Y_calib)
 
     # Get the quantiles

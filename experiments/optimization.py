@@ -99,7 +99,7 @@ def single_optim_exp(
     ):
         # Obtain quantile functions from current iteration, conditioned on the same X's
         eval_x_scaled = data_provider.vqr._scaler.transform(eval_x)
-        vqfs_est = solution.vector_quantiles(X=eval_x_scaled, refine=True)
+        vqfs_est = [solution.vector_quantiles(x=x, refine=True) for x in eval_x_scaled]
 
         # Calculate distance from g.t.
         dists = [
@@ -116,9 +116,8 @@ def single_optim_exp(
 
     # Solve
     vqr = VectorQuantileRegressor(
-        n_levels=T,
         solver=solver_name,
-        solver_opts=solver_opts,
+        solver_opts=dict(**solver_opts, T=T),
     ).fit(X, Y)
 
     # Remove callback so that it doesn't get serialized
