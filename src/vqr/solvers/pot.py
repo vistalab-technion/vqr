@@ -5,6 +5,7 @@ import numpy as np
 from numpy import ndarray as Array
 
 from vqr.cvqf import vector_quantile_levels
+from vqr.utils import get_kwargs
 from vqr.solvers.cvx import SIMILARITY_FN_INNER_PROD
 from vqr.solvers.base import VQRSolver, VQRSolution
 
@@ -23,11 +24,16 @@ class POTVQESolver(VQRSolver):
         :param emd2_kwargs:  Any kwargs supported by pot.emd2().
         """
         self.T = T
-        self._emd2_kwargs = emd2_kwargs
+        self.emd2_kwargs = emd2_kwargs
+        self._solver_opts = get_kwargs()
 
     @classmethod
     def solver_name(cls) -> str:
         return "vqe_pot"
+
+    @property
+    def solver_opts(self) -> dict:
+        return self._solver_opts
 
     def solve_vqr(self, Y: Array, X: Optional[Array] = None) -> VQRSolution:
         # Can't deal with X's
@@ -53,7 +59,7 @@ class POTVQESolver(VQRSolver):
             a=np.ones([Td]) / Td,
             b=np.ones([N]) / N,
             log=True,
-            **self._emd2_kwargs,
+            **self.emd2_kwargs,
         )
 
         # Obtain the lagrange multipliers Alpha (A) and Beta (B)

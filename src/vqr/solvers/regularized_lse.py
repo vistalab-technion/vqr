@@ -16,6 +16,7 @@ from torch.optim import Optimizer
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 from vqr.cvqf import vector_quantile_levels
+from vqr.utils import get_kwargs
 from vqr.models import MLP
 from vqr.solvers.base import VQRSolver, VQRSolution
 
@@ -126,6 +127,17 @@ class RegularizedDualVQRSolver(VQRSolver):
         self._lr_patience = lr_patience
         self._lr_threshold = lr_threshold
         self._lr_max_steps = lr_max_steps
+        self._batchsize_y = batchsize_y
+        self._batchsize_u = batchsize_u
+        self._inference_batch_size = inference_batch_size
+        self._post_iter_callback: Optional[Callable] = post_iter_callback
+        self._verbose = verbose
+
+        if nn_init is None:
+            self._nn_init = self._default_nn_init
+        else:
+            self._nn_init = nn_init
+
         self._dtype = torch.float64 if full_precision else torch.float32
         self._device = (
             torch.device("cuda" if device_num is None else f"cuda:{device_num}")
@@ -134,16 +146,11 @@ class RegularizedDualVQRSolver(VQRSolver):
         )
         self._dtd = dict(dtype=self._dtype, device=self._device)
 
-        if nn_init is None:
-            self._nn_init = self._default_nn_init
-        else:
-            self._nn_init = nn_init
+        self._solver_opts = get_kwargs()
 
-        self._batchsize_y = batchsize_y
-        self._batchsize_u = batchsize_u
-        self._inference_batch_size = inference_batch_size
-        self._callback: Optional[Callable] = post_iter_callback
-        self._verbose = verbose
+    @property
+    def solver_opts(self) -> dict:
+        return self._solver_opts.copy()
 
     def solve_vqr(self, Y: Array, X: Optional[Array] = None) -> VQRSolution:
         start_time = time()
@@ -382,8 +389,8 @@ class RegularizedDualVQRSolver(VQRSolver):
             )
 
             # Invoke callback
-            if self._callback:
-                self._callback(
+            if self._post_iter_callback:
+                self._post_iter_callback(
                     solution=self._create_solution(T, d, k, U, phi, b, net),
                     batch_loss=None,
                     epoch_loss=objective.item(),
@@ -483,7 +490,7 @@ class RegularizedDualVQRSolver(VQRSolver):
                 total_objective = total_objective + objective
 
                 # Invoke callback
-                if self._callback:
+                if self._post_iter_callback:
                     if not self._batchsize_u:
                         phi_all_levels = phi_batch
                     else:
@@ -493,7 +500,7 @@ class RegularizedDualVQRSolver(VQRSolver):
                             phi_all_levels = self._evaluate_phi(
                                 Y_batch, U, psi_batch, epsilon, X_batch, b, net, UY=None
                             )
-                    self._callback(
+                    self._post_iter_callback(
                         solution=self._create_solution(
                             T, d, k, U, phi_all_levels, b, net
                         ),
@@ -652,3 +659,9 @@ class MLPRegularizedDualVQRSolver(RegularizedDualVQRSolver):
             ),
             **solver_opts,
         )
+
+        self._solver_opts = {
+            **self._solver_opts,
+            **get_kwargs(ignore=["solver_opts"]),
+        }
+        self._solver_opts.pop("nn_init")

@@ -8,6 +8,7 @@ from numpy import ndarray as Array
 from scipy.spatial.distance import cdist
 
 from vqr.cvqf import vector_quantile_levels
+from vqr.utils import get_kwargs
 from vqr.solvers.base import VQRSolver, VQRSolution
 
 SIMILARITY_FN_INNER_PROD = lambda x, y: np.dot(x, y)
@@ -32,10 +33,15 @@ class CVXVQRSolver(VQRSolver):
         self.verbose = verbose
         cvxpy_kwargs["verbose"] = verbose
         self.cvxpy_kwargs = cvxpy_kwargs
+        self._solver_opts = get_kwargs()
 
     @classmethod
     def solver_name(cls) -> str:
         return "cvx_primal"
+
+    @property
+    def solver_opts(self) -> dict:
+        return self._solver_opts
 
     def solve_vqr(self, Y: Array, X: Optional[Array] = None) -> VQRSolution:
         T = self.T
