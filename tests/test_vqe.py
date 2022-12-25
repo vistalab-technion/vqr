@@ -151,7 +151,7 @@ class TestPOTVQE:
     @pytest.mark.parametrize("T", [10, 20])
     def test_pot_quantile_vs_sorted_Y_1d(self, N, T):
         Y = np.random.randn(N, 1)
-        est_quantiles = POTVQESolver(T=T).solve_vqr(Y=Y).condition(None)[0]
+        est_quantiles = POTVQESolver(T=T).solve_vqe(Y=Y).values[0]
         sorted_Y = np.sort(Y.squeeze())[:: int(N / T)]
         assert np.allclose(est_quantiles[1:], sorted_Y[1:-1])
 
@@ -160,8 +160,8 @@ class TestPOTVQE:
     @pytest.mark.parametrize("d", [1, 2, 3])
     def test_pot_quantile_vs_sorted_Y_2d(self, N, T, d):
         Y = np.random.randn(N, d)
-        est_quantiles = POTVQESolver(T=T).solve_vqr(Y=Y).condition(None)
-        est_quantiles_cvx = CVXVQRSolver(T=T).solve_vqr(Y=Y).condition(None)
+        est_quantiles = POTVQESolver(T=T).solve_vqe(Y=Y).values
+        est_quantiles_cvx = CVXVQRSolver(T=T).solve_vqe(Y=Y).values
         for Q, Q_cvx in zip(est_quantiles, est_quantiles_cvx):
             assert Q.shape == (T,) * d
             assert Q_cvx.shape == (T,) * d
@@ -171,27 +171,20 @@ class TestPOTVQE:
     @pytest.mark.parametrize("N", [101, 201, 301, 1001])
     def test_vqe_vs_cvx(self, T, N):
         Y = np.random.randn(N, 1)
-        est_quantiles = POTVQESolver(T=T).solve_vqr(Y=Y).condition(None)[0]
-        est_quantiles_cvx = CVXVQRSolver(T=T).solve_vqr(Y=Y).condition(None)[0]
+        est_quantiles = POTVQESolver(T=T).solve_vqe(Y=Y).values[0]
+        est_quantiles_cvx = CVXVQRSolver(T=T).solve_vqe(Y=Y).values[0]
         assert np.allclose(est_quantiles, est_quantiles_cvx)
-
-    def test_no_X(self):
-        Y = np.random.randn(1000, 1)
-        with pytest.raises(AssertionError, match="POTVQESolver can't work with*"):
-            POTVQESolver(T=50).solve_vqr(Y=Y, X=np.random.randn(1000, 2))
 
     @pytest.mark.parametrize("d", [1, 2, 3, 4])
     def test_multiple_d(self, d):
         T = 10
         Y = np.random.randn(1000, d)
-        quantiles = POTVQESolver(T=T).solve_vqr(Y=Y, X=None).condition(None)
+        quantiles = POTVQESolver(T=T).solve_vqe(Y=Y).values
         assert len(quantiles) == d
 
     @pytest.mark.parametrize("N", [1001, 2001, 3001])
     @pytest.mark.parametrize("T", [5, 10, 20, 25, 30])
     def test_comonotonicity(self, N, T):
         Y = np.random.randn(N, 2)
-        vqe_soln = POTVQESolver(T=T).solve_vqr(Y=Y, X=None)
-        quantiles = vqe_soln.condition(None)
-        quantile_grids = vqe_soln.quantile_grid
-        _test_monotonicity(Us=quantile_grids, Qs=tuple(quantiles))
+        vqf = POTVQESolver(T=T).solve_vqe(Y=Y)
+        _test_monotonicity(Us=vqf.levels, Qs=vqf.values)
