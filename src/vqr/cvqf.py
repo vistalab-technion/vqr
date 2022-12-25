@@ -12,6 +12,8 @@ from sklearn.utils import check_array
 class CVQF:
     """
     Represents a conditional vector quantile function, Q_{Y|X}(u;x).
+
+    Y is assumed to be a d-dimensional variable (d>=1), and X a k-dimensional variable.
     """
 
     def __init__(self):
@@ -26,6 +28,44 @@ class CVQF:
         :return: A d-dimensional vector quantile.
         """
         pass
+
+    def condition(self, x: Array) -> VQF:
+        """
+        Conditions the CVQF on a specific covariate vector, x.
+
+        :param x: The covariates on which to condition.
+        :return: A quantile function which then only depends on the level u.
+        """
+        pass
+
+    __call__ = evaluate
+
+
+class VQF:
+    """
+    Represents a vector quantile function, Q_{Y}(u) or a conditional vector quantile
+    function conditioned on a specific value of X=x, i.e. Q_{Y|X=x}(u).
+
+    Y is assumed to be a d-dimensional variable (d>=1).
+    """
+
+    def __init__(self, x: Optional[Array] = None):
+        pass
+
+    def evaluate(self, u: Array) -> Array:
+        """
+        Evaluates the VQF at quantile level u.
+
+        :param u: d-dimensional vector quantile level. Each value should be in [0, 1].
+        :return: A d-dimensional vector quantile.
+        """
+        pass
+
+    __call__ = evaluate
+
+
+class DiscreteVQF(VQF):
+    pass
 
 
 class DiscreteCVQF(CVQF):
