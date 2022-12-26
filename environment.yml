@@ -30,13 +30,13 @@ dependencies:
 
   # VQR lib
   # control pytorch version (won't be installed again by pip install -e .)
-  - pytorch=1.11.*
+  - pytorch=1.13.*
   - cudatoolkit=11.3 # comment out on osx-arm64
   - cudatoolkit-dev=11.3 # comment out on osx-arm64
   - pip:
     - pykeops
     - geomloss
-    # install vqp as a lib with pip (its deps are specified in setup.cfg)
+    # install vqr as a lib with pip (its deps are specified in setup.cfg)
     # Note: For KeOps to work, after installing this env run:
     # conda env config vars set CPATH="${CONDA_PREFIX}/include:${CPATH}"
     # conda env config vars set LD_LIBRARY_PATH="$CONDA_PREFIX/lib64:$LD_LIBRARY_PATH"

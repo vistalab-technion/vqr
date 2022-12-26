@@ -17,7 +17,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 from vqr import VQRSolver, VQRSolution
 from vqr.vqr import vector_quantile_levels
-from vqr.models import MLP
+from vqr.models import MLP, select_torch_device
 
 _LOG = logging.getLogger(__name__)
 
@@ -122,11 +122,7 @@ class RegularizedDualVQRSolver(VQRSolver):
         self._lr_threshold = lr_threshold
         self._lr_max_steps = lr_max_steps
         self._dtype = torch.float64 if full_precision else torch.float32
-        self._device = (
-            torch.device("cuda" if device_num is None else f"cuda:{device_num}")
-            if gpu and torch.cuda.is_available()
-            else torch.device("cpu")
-        )
+        self._device = select_torch_device(use_device=gpu, device_num=device_num)
         self._dtd = dict(dtype=self._dtype, device=self._device)
 
         if nn_init is None:
