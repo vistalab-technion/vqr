@@ -353,6 +353,7 @@ class RegularizedDualVQRSolver(VQRDiscreteSolver):
                 U,
                 A,
                 solution_metrics=solution_metrics,
+                refine=False,
             )
 
     @staticmethod
