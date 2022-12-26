@@ -371,7 +371,7 @@ class DiscreteVQF(VQF, _DiscreteVQS):
         A: Array,
         x: Optional[Array] = None,
         solution_metrics: Optional[Dict[str, Any]] = None,
-        refine: bool = True,
+        refine: bool = False,
     ):
         """
         :param U: Array of shape (T**d, d). Contains the d-dimensional grid on
@@ -405,9 +405,31 @@ class DiscreteVQF(VQF, _DiscreteVQS):
         Q = _decode_quantile_values(self._T, self._d, A)
         if refine:
             Q = vector_monotone_rearrangement(Q)
+        self._is_refined = refine
 
         self._Q = np.stack(Q, axis=0)  # Stack into shape (d,T,T,...,T)
         assert self._Q.shape == tuple([d, *[T] * d])
+
+    def refine(self) -> DiscreteVQF:
+        """
+        :return: A version of this VQF, refined with vector monotone rearrangeament (
+        VMR). Refinement guarantees that the VQF will be a co-monotonic with u.
+        """
+        if self.is_refined:
+            return self
+        return DiscreteVQF(
+            self._T,
+            self._d,
+            self._U,
+            self._A,
+            self._x,
+            self._solution_metrics,
+            refine=True,
+        )
+
+    @property
+    def is_refined(self) -> bool:
+        return self._is_refined
 
     @property
     def values(self) -> Array:
