@@ -1,5 +1,5 @@
 from abc import ABC
-from typing import Any, Dict, Type, Union, Optional, Sequence
+from typing import Any, Dict, Type, Union, Optional, Sequence, cast
 
 import numpy as np
 from numpy import ndarray as Array
@@ -10,16 +10,22 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.utils.validation import check_is_fitted
 
 from vqr.cvqf import (
+    VQF,
+    CVQF,
     DiscreteVQF,
     DiscreteCVQF,
+    DiscreteVQFBase,
     quantile_levels,
     quantile_contour,
     inversion_sampling,
 )
 from vqr.solvers import (
+    Solver,
+    VQESolver,
     VQRSolver,
     CVXVQRSolver,
     POTVQESolver,
+    DiscreteSolver,
     RegularizedDualVQRSolver,
     MLPRegularizedDualVQRSolver,
 )
@@ -38,7 +44,7 @@ SOLVER_TYPES: Dict[str, Type[VQRSolver]] = {
 DEFAULT_SOLVER_NAME = RegularizedDualVQRSolver.solver_name()
 
 
-class VectorQuantileBase(BaseEstimator, ABC):
+class _Base(BaseEstimator, ABC):
     """
     Base class for vector quantile estimation (VQE) and regression (VQR).
     Compatible with the sklearn API.
@@ -46,26 +52,30 @@ class VectorQuantileBase(BaseEstimator, ABC):
 
     def __init__(
         self,
-        solver: Union[str, VQRSolver] = DEFAULT_SOLVER_NAME,
+        solver: Union[str, Solver] = DEFAULT_SOLVER_NAME,
         solver_opts: Optional[Dict[str, Any]] = None,
     ):
         """
         :param solver: Either a supported solver name (see keys of
-            :obj:`SOLVER_TYPES`) or an instance of a :class:`VQRSolver`.
+        :obj:`SOLVER_TYPES`) or an instance of a :class:`VQRSolver`.
         :param solver_opts: If solver is a string, these kwargs will be passed to the
-            constructor of the corresponding solver type.
+        constructor of the corresponding solver type; If it's an instance,
+        it will be copied and these kwargs will be used to override its settings.
         """
 
         solver_instance: VQRSolver
+        solver_opts = solver_opts or {}
+
         if isinstance(solver, str):
             if solver not in SOLVER_TYPES:
                 raise ValueError(
                     f"solver must be one of {[*SOLVER_TYPES.keys()]}, got {solver=}"
                 )
-            solver_opts = solver_opts or {}
             solver_instance = SOLVER_TYPES[solver](**solver_opts)
+
         elif isinstance(solver, VQRSolver):
-            solver_instance = solver
+            solver_instance = solver.copy(**solver_opts)
+
         else:
             raise ValueError(
                 f"solver must be either a string or an instance of VQRSolver"
@@ -76,10 +86,36 @@ class VectorQuantileBase(BaseEstimator, ABC):
 
         # Deliberate trailing underscore to support detection by check_is_fitted on old
         # versions of sklearn.
-        self._fitted_solution_: Optional[DiscreteCVQF] = None
+        self.fitted_vqf_: Optional[VQF] = None
 
     def __sklearn_is_fitted__(self):
-        return self._fitted_solution_ is not None
+        return self.fitted_vqf_ is not None
+
+    @property
+    def fitted_vqf(self) -> VQF:
+        """
+        :return: The fitted vector quantile function.
+        """
+        check_is_fitted(self)
+        return self.fitted_vqf_
+
+    @property
+    def is_discrete(self) -> bool:
+        """
+        :return: Whether this estimator solves a discrete problem.
+        """
+        if self.fitted_vqf_ is None:
+            return isinstance(self.solver, DiscreteSolver)
+        else:
+            return isinstance(self.fitted_vqf, DiscreteVQFBase)
+
+    @property
+    def dim_y(self) -> int:
+        """
+        :return: The dimension of the target variable (Y).
+        """
+        check_is_fitted(self)
+        return self.fitted_vqf.dim_y
 
     @property
     def quantile_grid(self) -> Sequence[Array]:
@@ -89,32 +125,9 @@ class VectorQuantileBase(BaseEstimator, ABC):
             target variable Y.
         """
         check_is_fitted(self)
-        return self.fitted_solution.quantile_grid
-
-    @property
-    def quantile_levels(self) -> Array:
-        """
-        :return: An array containing the levels at which the vector quantiles were
-            estimated along each target dimension.
-        """
-        check_is_fitted(self)
-        return self.fitted_solution.quantile_levels
-
-    @property
-    def dim_y(self) -> int:
-        """
-        :return: The dimension of the target variable (Y).
-        """
-        check_is_fitted(self)
-        return self.fitted_solution.dim_y
-
-    @property
-    def dim_x(self) -> int:
-        """
-        :return: The dimension k, of the covariates (X).
-        """
-        check_is_fitted(self)
-        return self.fitted_solution.dim_x
+        if not self.is_discrete:
+            raise ValueError(f"Quantile grid not defined for non-discrete VQF")
+        return cast(DiscreteVQFBase, self.fitted_vqf).quantile_grid
 
     @property
     def solution_metrics(self) -> Dict[str, Any]:
@@ -122,50 +135,64 @@ class VectorQuantileBase(BaseEstimator, ABC):
         :return: A dict containing solver-specific metrics about the solution.
         """
         check_is_fitted(self)
-        return self.fitted_solution.metrics
-
-    @property
-    def fitted_solution(self) -> DiscreteCVQF:
-        """
-        :return: The low-level VQR solution object.
-        Usually it is recommended to use the high level API on this class instead.
-        """
-        check_is_fitted(self)
-        return self._fitted_solution_
+        return self.fitted_vqf.metrics
 
 
-class VectorQuantileEstimator(VectorQuantileBase):
+class VectorQuantileEstimator(_Base):
     """
     Performs vector quantile estimation.
     """
 
+    def __init__(
+        self,
+        solver: Union[str, VQESolver] = DEFAULT_SOLVER_NAME,
+        solver_opts: Optional[Dict[str, Any]] = None,
+    ):
+        """
+        :param solver: Either a supported solver name (see keys of
+        :obj:`SOLVER_TYPES`) or an instance of a :class:`VQRSolver`.
+        :param solver_opts: If solver is a string, these kwargs will be passed to the
+        constructor of the corresponding solver type; If it's an instance,
+        it will be copied and these kwargs will be used to override its settings.
+        """
+        super().__init__(solver, solver_opts)
+        assert isinstance(self.solver, VQESolver)
+
     def vector_quantiles(self, refine: bool = False) -> DiscreteVQF:
         """
+        Discretizes the solution and returns all vector quantiles as a DiscreteVQF
+        object.
+
         :param refine: Refine the quantile function using vector monotone rearrangement.
         :return: A DiscreteVQF instance, representing a discretized version of
         the quantile function Q_{Y}(u).
         """
+
         check_is_fitted(self)
-        vqf = self.fitted_solution.condition(x=None, refine=refine)
+        vqf = self.fitted_vqf
+        if isinstance(vqf, DiscreteVQF):
+            vqf = vqf.refine() if refine else vqf
+        else:
+            # TODO: Support non-discrete solvers by discretizing the VQF at some
+            #  resolution. Rename to "discretize"?
+            raise ValueError(
+                f"Currently, obtaining all vector quantiles is only supported for "
+                f"discrete solvers."
+            )
         return vqf
 
-    def fit(self, X: Array):
+    def fit(self, Y: Array):
         """
         Fits a quantile estimation model to the given data. In case the data
         is high-dimensional, a vector-quantile model will be fitted.
-        :param X: Data of shape (n, d). Note that this is called X here to conform to
-            sklearn's API. This is the target data, denoted as Y in the VQR
-            problem, and we're ignoring the X in that formulation (thus making this
-            estimation and not regression).
+        :param Y: Data of shape (N, d).
         :return: self.
         """
 
         # Input validation.
-        N = len(X)
-        Y: Array = np.reshape(X, (N, -1))
-
-        self._fitted_solution_ = self.solver.solve_vqr(Y=Y, X=None)
-
+        N = len(Y)
+        Y: Array = np.reshape(Y, (N, -1))
+        self.fitted_vqf_ = self.solver.solve_vqe(Y=Y)
         return self
 
     def sample(self, n: int) -> Array:
@@ -212,7 +239,7 @@ class VectorQuantileEstimator(VectorQuantileBase):
         )
 
 
-class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
+class VectorQuantileRegressor(RegressorMixin, _Base):
     """
     Performs vector quantile regression.
     """
@@ -223,37 +250,50 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
         solver_opts: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(solver, solver_opts)
+        assert isinstance(self.solver, VQRSolver)
         self._scaler = StandardScaler(with_mean=True, with_std=True)
 
-    def fit(self, X: Array, y: Array):
+    @property
+    def fitted_vqf(self) -> CVQF:
+        """
+        :return: The fitted vector quantile function.
+        """
+        check_is_fitted(self)
+        return self.fitted_vqf_
+
+    @property
+    def dim_x(self) -> int:
+        """
+        :return: The dimension k, of the covariates (X).
+        """
+        check_is_fitted(self)
+        return self.fitted_vqf.dim_x
+
+    def fit(self, X: Array, Y: Array):
         """
         Fits a quantile regression model to the given data. In case the target data
         is high-dimensional, a vector-quantile model will be fitted.
-        :param X: Features/covariates of shape (n, k).
-        :param y: Targets/responses of shape (n, d).
+        :param X: Features/covariates of shape (N, k).
+        :param Y: Targets/responses of shape (N, d).
         :return: self.
         """
 
         # Input validation.
-        X, y = check_X_y(X, y, multi_output=True, ensure_2d=True)
+        X, y = check_X_y(X, Y, multi_output=True, ensure_2d=True)
         N = len(X)
-        Y: Array = np.reshape(y, (N, -1))
+        Y: Array = np.reshape(Y, (N, -1))
 
         # Scale features to zero-mean
         X_scaled = self._scaler.fit_transform(X)
 
-        self._fitted_solution_ = self.solver.solve_vqr(Y=Y, X=X_scaled)
-
+        self.fitted_vqf_: CVQF = self.solver.solve_vqr(Y=Y, X=X_scaled)
         return self
 
-    def vector_quantiles(
-        self, X: Optional[Array] = None, refine: bool = False
-    ) -> Sequence[DiscreteVQF]:
+    def vector_quantiles(self, X: Array, refine: bool = False) -> Sequence[DiscreteVQF]:
         """
-        :param X: Covariates, of shape (N, k). Should be None if the fitted solution
-        was for a VQE (un conditional quantiles).
-        :param refine: Refine the conditional quantile function using vector monotone
-        rearrangement.
+        :param X: Covariates, of shape (N, k).
+        :param refine: Whether to refine the conditional quantile function using vector
+        monotone rearrangement.
         :return: A sequence of length N, containing DiscreteVQF instances.
         Each element of the sequence corresponds to one of the covariates in X,
         and contains the discretized conditional quantile function Q_{Y|X=x}(u).
@@ -261,13 +301,18 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
         check_is_fitted(self)
         X = self._validate_X_(X, single=False)
 
-        # TODO: Remove support for X=None
-        if X is not None:
+        vqf = self.fitted_vqf
+        if isinstance(vqf, DiscreteCVQF):
             # Scale X with the fitted transformation before predicting
             X = self._scaler.transform(X)
-            vqfs = [self.fitted_solution.condition(x, refine=refine) for x in X]
+            vqfs = [vqf.condition(x, refine=refine) for x in X]
         else:
-            vqfs = [self.fitted_solution.condition(x=None, refine=refine)]
+            # TODO: Support non-discrete solvers by discretizing the VQF at some
+            #  resolution. Rename to "discretize"?
+            raise ValueError(
+                f"Currently, obtaining all vector quantiles is only supported for "
+                f"discrete solvers."
+            )
 
         return vqfs
 
@@ -291,7 +336,7 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
         )
 
         N = X.shape[0] if X is not None else 1
-        T = vqfs[0].T
+        T = vqfs[0].levels_per_dim
         d = self.dim_y
         assert vqs.shape == (N, d, *[T] * d)
         return vqs
