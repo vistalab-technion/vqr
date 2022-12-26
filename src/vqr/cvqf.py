@@ -9,41 +9,94 @@ from numpy import ndarray as Array
 from sklearn.utils import check_array
 
 
-class CVQF:
+class _VQS:
     """
-    Represents a conditional vector quantile function, Q_{Y|X}(u;x).
-
-    Y is assumed to be a d-dimensional variable (d>=1), and X a k-dimensional variable.
+    Common functionality for VQF/CVQF.
     """
 
-    def __init__(self):
-        pass
-
-    def evaluate(self, u: Array, x: Array) -> Array:
+    def __init__(
+        self,
+        d: int,
+        solution_metrics: Optional[Dict[str, Any]] = None,
+    ):
         """
-        Evaluates the CVQF at quantile level u for covariates x.
-
-        :param u: d-dimensional vector quantile level of shape (d,). Each value
-        should be in [0, 1].
-        :param x: k-dimensional covariates (features) vector, of shape (k,) or (1,k).
-        :return: A d-dimensional vector quantile of shape (d,).
+        :param d: Dimension of target variable.
+        :param solution_metrics: Optional key-value pairs which can contain any
+        metric values which are tracked by the solver, such as losses, runtimes, etc.
+        The keys in this dict are solver-specific and should be specified in the
+        documentation of the corresponding solver.
         """
-        pass
+        assert d >= 1
+        assert solution_metrics is None or isinstance(solution_metrics, dict)
+        self._d = d
+        self._solution_metrics = solution_metrics or {}
 
-    def condition(self, x: Array) -> VQF:
+    @property
+    def dim_y(self) -> int:
         """
-        Conditions the CVQF on a specific covariate vector, x.
-
-        :param x: The covariates on which to condition of shape (k,) or (1,k).
-        :return: A quantile function which then only depends on the level u of shape
-        (d,).
+        :return: The dimension d, of the target variable (Y).
         """
-        pass
+        return self._d
 
-    __call__ = evaluate
+    @property
+    def metrics(self):
+        """
+        :return: A dict containing solver-specific metrics about the solution.
+        """
+        return self._solution_metrics.copy()
 
 
-class VQF:
+class _DiscreteVQS(_VQS):
+    """
+    Common functionality for DiscreteVQF/DiscreteCVQF.
+    """
+
+    def __init__(
+        self,
+        d: int,
+        T: int,
+        U: Array,
+    ):
+        """
+        :param T: Number of vector quantile levels per dimension.
+        :param U: Array of shape (T**d, d). Contains the d-dimensional grid on
+        which the vector quantiles are defined. If can be decoded back into a
+        meshgrid-style sequence of arrays using :obj:`decode_quantile_grid`
+        """
+        super().__init__(d=d)
+        self._T = T
+
+        U = _decode_quantile_grid(self._T, self._d, U)
+        self._U = np.stack(U, axis=0)  # Stack into shape (d,T,T,...,T)
+        assert self._U.shape == tuple([d, *[T] * d])
+
+    @property
+    def levels_per_dim(self) -> int:
+        """
+        :return: T, the number of quantile levels to estimate along each of the d
+        dimensions. The quantile level will be spaced uniformly between 0 and 1.
+        """
+        return self._T
+
+    @property
+    def quantile_grid(self) -> Array:
+        """
+        :return: All the discrete quantile levels of this quantile function.
+        A (d+1)-dimensional array of shape (d, T, T, ... T), where the first axis
+        indexes different quantile surfaces.
+        """
+        return self._U
+
+    @property
+    def quantile_levels(self) -> Array:
+        """
+        :return: An array containing the levels at which the vector quantiles were
+            estimated along each target dimension.
+        """
+        return quantile_levels(self._T)
+
+
+class VQF(_VQS):
     """
     Represents a vector quantile function, Q_{Y}(u) or a conditional vector quantile
     function conditioned on a specific value of X=x, i.e. Q_{Y|X=x}(u).
@@ -51,8 +104,19 @@ class VQF:
     Y is assumed to be a d-dimensional variable (d>=1).
     """
 
-    def __init__(self, x: Optional[Array] = None):
-        pass
+    def __init__(
+        self,
+        d: int,
+        solution_metrics: Optional[Dict[str, Any]] = None,
+    ):
+        """
+        :param d: Dimension of target variable.
+        :param solution_metrics: Optional key-value pairs which can contain any
+        metric values which are tracked by the solver, such as losses, runtimes, etc.
+        The keys in this dict are solver-specific and should be specified in the
+        documentation of the corresponding solver.
+        """
+        super().__init__(d=d, solution_metrics=solution_metrics)
 
     def evaluate(self, u: Array) -> Array:
         """
@@ -67,7 +131,72 @@ class VQF:
     __call__ = evaluate
 
 
-class DiscreteCVQF(CVQF):
+class CVQF(VQF):
+    """
+    Represents a conditional vector quantile function, Q_{Y|X}(u;x).
+
+    Y is assumed to be a d-dimensional variable (d>=1), and X a k-dimensional variable.
+    """
+
+    def __init__(
+        self,
+        d: int,
+        X_transform: Optional[Callable[[Array], Array]] = None,
+        k_in: Optional[int] = None,
+        solution_metrics: Optional[Dict[str, Any]] = None,
+    ):
+        """
+        :param d: Dimension of target variable.
+        :param X_transform: Transformation to apply to covariates (X) for non-linear
+        VQR. Must be provided together with k_in. The transformation is assumed to
+        take input of shape (N, k_in) and return output of shape (N, k).
+        :param k_in: Covariates input dimension of the X_transform.
+        If X_transform is None, must be None or zero.
+        :param solution_metrics: Optional key-value pairs which can contain any
+        metric values which are tracked by the solver, such as losses, runtimes, etc.
+        The keys in this dict are solver-specific and should be specified in the
+        documentation of the corresponding solver.
+        """
+        super().__init__(d=d, solution_metrics=solution_metrics)
+        assert k_in >= 1
+        self._k_in = k_in
+        self._X_transform = X_transform
+
+    @property
+    def dim_x(self) -> int:
+        """
+        :return: The dimension k, of the covariates (X) which are expected to be
+        passed in to obtain conditional quantiles.
+        """
+        # If there was an X_transform, the input dimension of that is what we expect to
+        # receive.
+        return self._k_in
+
+    def evaluate(self, u: Array, x: Array = None) -> Array:
+        """
+        Evaluates the CVQF at quantile level u for covariates x.
+
+        :param u: d-dimensional vector quantile level of shape (d,). Each value
+        should be in [0, 1].
+        :param x: k-dimensional covariates (features) vector, of shape (k,) or (1,k).
+        Note: None is only supported to comply with VQF API; x=None will be
+        treated as x=0 which may not be meaningful for the data distribution.
+        :return: A d-dimensional vector quantile of shape (d,).
+        """
+        pass
+
+    def condition(self, x: Array) -> VQF:
+        """
+        Conditions the CVQF on a specific covariate vector, x.
+
+        :param x: The covariates on which to condition of shape (k,) or (1,k).
+        :return: A quantile function which then only depends on the level u of shape
+        (d,).
+        """
+        pass
+
+
+class DiscreteCVQF(CVQF, _DiscreteVQS):
     """
     Represents a discrete conditional vector quantile function, Q_{Y|X}(u;x) where:
 
@@ -91,6 +220,7 @@ class DiscreteCVQF(CVQF):
         solution_metrics: Optional[Dict[str, Any]] = None,
     ):
         """
+        :param d: Dimension of target variable.
         :param U: Array of shape (T**d, d). Contains the d-dimensional grid on
         which the vector quantiles are defined. If can be decoded back into a
         meshgrid-style sequence of arrays using :obj:`decode_quantile_grid`
@@ -112,6 +242,9 @@ class DiscreteCVQF(CVQF):
         The keys in this dict are solver-specific and should be specified in the
         documentation of the corresponding solver.
         """
+        CVQF.__init__(self, d=d, k_in=k_in, X_transform=X_transform)
+        _DiscreteVQS.__init__(self, d=d, T=T, U=U)
+
         # Validate dimensions
         assert all(x is not None for x in [T, d, U, A])
         assert U.ndim == 2 and A.ndim == 2
@@ -120,25 +253,19 @@ class DiscreteCVQF(CVQF):
         assert A.shape[1] == 1
         assert B is None or (B.ndim == 2 and B.shape[0] == T**d)
         assert (X_transform is not None and k_in) or (X_transform is None and not k_in)
-        assert solution_metrics is None or isinstance(solution_metrics, dict)
 
         # TODO: Remove support for B=None
 
-        self._T = T
-        self._d = d
-        self._U = U
         self._A = A
         self._B = B
         self._k = B.shape[1] if B is not None else 0
-        self._X_transform = X_transform
-        self._k_in = k_in
         self._solution_metrics = solution_metrics or {}
 
     @property
     def is_conditional(self) -> bool:
         return self._B is not None
 
-    def evaluate(self, u: Array, x: Array, refine: bool = False) -> Array:
+    def evaluate(self, u: Array, x: Array = None, refine: bool = False) -> Array:
         """
         Evaluates the CVQF at quantile level u for covariates x.
 
@@ -209,48 +336,13 @@ class DiscreteCVQF(CVQF):
         )
 
     @property
-    def quantile_grid(self) -> Sequence[Array]:
-        """
-        :return: A sequence of quantile level grids as ndarrays. This is a
-            d-dimensional meshgrid (see np.meshgrid) where d is the dimension of the
-            target variable Y.
-        """
-        return _decode_quantile_grid(self._T, self._d, self._U)
-
-    @property
-    def quantile_levels(self) -> Array:
-        """
-        :return: An array containing the levels at which the vector quantiles were
-            estimated along each target dimension.
-        """
-        return quantile_levels(self._T)
-
-    @property
-    def dim_y(self) -> int:
-        """
-        :return: The dimension d, of the target variable (Y).
-        """
-        return self._d
-
-    @property
     def dim_x(self) -> int:
-        """
-        :return: The dimension k, of the covariates (X) which are expected to be
-        passed in to obtain conditional quantiles.
-        """
         # If there was an X_transform, the input dimension of that is what we expect to
         # receive.
         return self._k_in or self._k
 
-    @property
-    def metrics(self):
-        """
-        :return: A dict containing solver-specific metrics about the solution.
-        """
-        return self._solution_metrics.copy()
 
-
-class DiscreteVQF(VQF):
+class DiscreteVQF(VQF, _DiscreteVQS):
     """
     Represents a discretized vector-valued quantile function Q_{Y|X=x}(u)
     of the variable Y|X=x (i.e. pre-conditioned on a specific x), or unconditioned
@@ -297,29 +389,25 @@ class DiscreteVQF(VQF):
         :param refine: Whether to refine the conditional quantile function using vector
         monotone rearrangement.
         """
+        VQF.__init__(self, d=d, solution_metrics=solution_metrics)
+        _DiscreteVQS.__init__(self, d=d, T=T, U=U)
+
         # Validate dimensions
         assert all(x is not None for x in [T, d, U, A])
         assert U.ndim == 2 and A.ndim == 2
         assert U.shape[0] == A.shape[0]
         assert U.shape[0] == T**d
         assert A.shape[1] == 1
-        assert solution_metrics is None or isinstance(solution_metrics, dict)
 
-        self.T = T
-        self.d = d
-        self.x = x
-        self.k = 0 if x is None else x.shape[1]
+        self._x = x
+        self._k = 0 if x is None else x.shape[1]
 
-        U = _decode_quantile_grid(self.T, self.d, U)
-        Q = _decode_quantile_values(self.T, self.d, A)
+        Q = _decode_quantile_values(self._T, self._d, A)
         if refine:
             Q = vector_monotone_rearrangement(Q)
 
         self._Q = np.stack(Q, axis=0)  # Stack into shape (d,T,T,...,T)
         assert self._Q.shape == tuple([d, *[T] * d])
-
-        self._U = np.stack(U, axis=0)  # Stack into shape (d,T,T,...,T)
-        assert self._U.shape == self._Q.shape
 
     @property
     def values(self) -> Array:
@@ -329,15 +417,6 @@ class DiscreteVQF(VQF):
         indexes different quantile surfaces.
         """
         return self._Q
-
-    @property
-    def levels(self) -> Array:
-        """
-        :return: All the discrete quantile levels of this quantile function.
-        A (d+1)-dimensional array of shape (d, T, T, ... T), where the first axis
-        indexes different quantile surfaces.
-        """
-        return self._U
 
     def __iter__(self):
         """
