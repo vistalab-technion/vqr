@@ -7,10 +7,10 @@ from numpy import ndarray as Array
 
 from vqr.cvqf import VQF, CVQF, DiscreteCVQF
 
-TSolver = TypeVar("TSolver", bound="_Solver")
+TSolver = TypeVar("TSolver", bound="Solver")
 
 
-class _Solver(ABC):
+class Solver(ABC):
     @classmethod
     @abstractmethod
     def solver_name(cls) -> str:
@@ -40,7 +40,7 @@ class _Solver(ABC):
         return type(self)(**new_opts)
 
 
-class VQESolver(_Solver, ABC):
+class VQESolver(Solver, ABC):
     """
     Abstraction of a method for solving the Vector Quantile Estimation (VQE) problem.
     """
@@ -82,7 +82,7 @@ class VQRSolver(VQESolver, ABC):
         pass
 
 
-class DiscreteSolver(_Solver, ABC):
+class DiscreteSolver(Solver, ABC):
     """
     Represents a VQR solver which solves the discrete problem, i.e., obtains an
     estimate of the conditional vector quantile function discretized at T quantile
