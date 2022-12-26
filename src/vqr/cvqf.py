@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from typing import Any, Dict, List, Tuple, Callable, Optional, Sequence
 from itertools import repeat
 
@@ -215,9 +216,9 @@ class DiscreteCVQF(CVQF, DiscreteVQFBase):
         d: int,
         U: Array,
         A: Array,
-        B: Optional[Array] = None,
+        B: Array,
+        k_in: int,
         X_transform: Optional[Callable[[Array], Array]] = None,
-        k_in: Optional[int] = None,
         solution_metrics: Optional[Dict[str, Any]] = None,
     ):
         """
@@ -259,18 +260,12 @@ class DiscreteCVQF(CVQF, DiscreteVQFBase):
         assert U.shape[0] == T**d
         assert U.shape[1] == d
         assert A.shape[1] == 1
-        assert B is None or (B.ndim == 2 and B.shape[0] == T**d)
-        assert (X_transform is not None and k_in) or (X_transform is None and not k_in)
-
-        # TODO: Remove support for B=None
+        assert B.ndim == 2 and B.shape[0] == T**d
+        assert k_in
 
         self._A = A
         self._B = B
-        self._k = B.shape[1] if B is not None else 0
-
-    @property
-    def is_conditional(self) -> bool:
-        return self._B is not None
+        self._k = B.shape[1]
 
     def evaluate(self, u: Array, x: Array = None, refine: bool = False) -> Array:
         """
@@ -285,6 +280,11 @@ class DiscreteCVQF(CVQF, DiscreteVQFBase):
         monotone rearrangement.
         :return: A d-dimensional vector quantile of shape (d,).
         """
+        if x is None:
+            # This is only supported to conform to VQF.evaluate(u).
+            warnings.warn(f"Evaluating DiscreteCVQF with X=None not recommended")
+            x = np.zeros(shape=(1, self._k_in))
+
         return self.condition(x, refine=refine).evaluate(u)
 
     def condition(self, x: Array, refine: bool = False) -> DiscreteVQF:
@@ -297,42 +297,31 @@ class DiscreteCVQF(CVQF, DiscreteVQFBase):
         :return: A DiscreteVQF instance corresponding to the given covariates X.
         """
 
-        # TODO: Remove support for x=None
+        x = x.reshape(1, -1)
+        check_array(x, ensure_2d=True, allow_nd=False)
 
-        if not self.is_conditional:
-            if x is not None:
-                raise ValueError(f"VQE was fitted but covariates were supplied")
-
-            Y_hat = self._A
-        else:
-            if x is None:
-                raise ValueError(f"VQR was fitted but no covariates were supplied")
-
-            x = x.reshape(1, -1)
-            check_array(x, ensure_2d=True, allow_nd=False)
-
-            z = x  # z represents the transformed x
-            if self._X_transform is not None:
-                _, k_in = x.shape
-                if k_in != self._k_in:
-                    raise ValueError(
-                        f"VQR model was trained with X_transform expecting k_in"
-                        f"={self._k_in}, but got covariates with {k_in=} features."
-                    )
-
-                z = self._X_transform(x)
-
-            _, k = z.shape
-            if k != self._k:
+        z = x  # z represents the transformed x
+        if self._X_transform is not None:
+            _, k_in = x.shape
+            if k_in != self._k_in:
                 raise ValueError(
-                    f"VQR model was fitted with k={self._k}, "
-                    f"but got data with {k=} features."
+                    f"VQR model was trained with X_transform expecting k_in"
+                    f"={self._k_in}, but got covariates with {k_in=} features."
                 )
 
-            B = self._B  # (T**d, k)
-            A = self._A  # (T**d, 1)
-            Y_hat = B @ z.T + A  # result is (T**d, 1)
-            Y_hat = Y_hat  # (1, T**d)
+            z = self._X_transform(x)
+
+        _, k = z.shape
+        if k != self._k:
+            raise ValueError(
+                f"VQR model was fitted with k={self._k}, "
+                f"but got data with {k=} features."
+            )
+
+        B = self._B  # (T**d, k)
+        A = self._A  # (T**d, 1)
+        Y_hat = B @ z.T + A  # result is (T**d, 1)
+        Y_hat = Y_hat  # (1, T**d)
 
         return DiscreteVQF(
             T=self._T,
