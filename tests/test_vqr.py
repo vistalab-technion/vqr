@@ -114,7 +114,7 @@ class TestVectorQuantileRegressor(object):
 
             # All values of the quantile function
             assert vqf.values.shape == (d, *[T] * d)
-            assert vqf.levels.shape == (d, *[T] * d)
+            assert vqf.quantile_grid.shape == (d, *[T] * d)
 
             for j in range(10):
                 # Obtain a random quantile level

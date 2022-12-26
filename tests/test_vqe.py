@@ -75,7 +75,7 @@ class TestVectorQuantileEstimator(object):
         assert len(vqf) == d
         assert all(q_surface.shape == (T,) * d for q_surface in vqf)
         assert vqf.values.shape == (d, *[T] * d)
-        assert vqf.levels.shape == (d, *[T] * d)
+        assert vqf.quantile_grid.shape == (d, *[T] * d)
 
     def test_sample(self, vqe_fitted, problem_size, test_out_dir):
         d, N, T = problem_size
@@ -187,4 +187,4 @@ class TestPOTVQE:
     def test_comonotonicity(self, N, T):
         Y = np.random.randn(N, 2)
         vqf = POTVQESolver(T=T).solve_vqe(Y=Y)
-        _test_monotonicity(Us=vqf.levels, Qs=vqf.values)
+        _test_monotonicity(Us=vqf.quantile_grid, Qs=vqf.values)
