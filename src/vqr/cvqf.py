@@ -279,6 +279,8 @@ class DiscreteCVQF(CVQF, DiscreteVQFBase):
         :param u: d-dimensional vector quantile level of shape (d,). Each value
         should be in [0, 1].
         :param x: k-dimensional covariates (features) vector, of shape (k,) or (1,k).
+        Note: None is only supported to comply with VQF API; x=None will be
+        treated as x=0 which may not be meaningful for the data distribution.
         :param refine: Whether to refine the conditional quantile function using vector
         monotone rearrangement.
         :return: A d-dimensional vector quantile of shape (d,).
@@ -681,9 +683,6 @@ def vector_monotone_rearrangement(
     Solves an exact OT problem using POT's emd solver with U @ Y.T as the cost matrix.
     Rearrangement is performed by multiplication with the permutation matrix Pi.
 
-    :param T: The number of quantile levels that was used for solving the problem.
-    :param d: The dimension of the target data (Y) that was used for solving the
-        problem.
     :param Qs: Quantile surfaces per dimension of Y. A sequence of length d,
     where each element is of shape (T, T, ..., T).
     :param max_iters: Maximum number of iterations for the emd solver.
@@ -706,9 +705,6 @@ def check_comonotonicity(Qs: Sequence[Array], Us: Sequence[Array]) -> Array:
     all entries in this matrix are positive. Negative entries in this matrix
     represent the quantile crossing problem (and its analogue in higher dimensions).
 
-    :param T: The number of quantile levels that was used for solving the problem.
-    :param d: The dimension of the target data (Y) that was used for solving the
-        problem.
     :param Qs: Quantile surfaces per dimension of Y. A sequence of length d,
     where each element is of shape (T, T, ..., T).
     :param Us: Quantile levels per dimension of Y. A sequence of length d,
