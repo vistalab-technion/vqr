@@ -337,21 +337,21 @@ class RegularizedDualVQRSolver(VQRDiscreteSolver):
             )
 
             return DiscreteCVQF(
-                T,
-                d,
-                U,
-                A,
-                B,
-                X_transform=x_transform_fn,
+                T=T,
+                d=d,
+                U=U,
+                A=A,
+                B=B,
                 k_in=k,
+                X_transform=x_transform_fn,
                 solution_metrics=solution_metrics,
             )
         else:
             return DiscreteVQF(
-                T,
-                d,
-                U,
-                A,
+                T=T,
+                d=d,
+                U=U,
+                A=A,
                 solution_metrics=solution_metrics,
                 refine=False,
             )

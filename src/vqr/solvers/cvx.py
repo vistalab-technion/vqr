@@ -103,4 +103,4 @@ class CVXVQRSolver(VQRDiscreteSolver):
             return DiscreteVQF(T, d, U, A, refine=False)
         else:
             B = AB[:, 1:]  # B is (T**d, k)
-            return DiscreteCVQF(T, d, U, A, B)
+            return DiscreteCVQF(T=T, d=d, U=U, A=A, B=B, k_in=k)
