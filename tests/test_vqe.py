@@ -3,10 +3,10 @@ import pytest
 from matplotlib import pyplot as plt
 from sklearn.exceptions import NotFittedError
 
-from vqr import QuantileFunction, VectorQuantileEstimator
+from vqr import DiscreteVQF, VectorQuantileEstimator
 from tests.conftest import _test_monotonicity, monotonicity_offending_projections
-from vqr.solvers.primal.cvx import CVXVQRSolver
-from vqr.solvers.primal.pot import POTVQESolver
+from vqr.solvers.cvx import CVXVQRSolver
+from vqr.solvers.pot import POTVQESolver
 from experiments.datasets.mvn import IndependentDataProvider
 
 
@@ -23,7 +23,7 @@ class TestVectorQuantileEstimator(object):
         ],
         ids=["rvqr_linear", "cvx_primal", "vqe_pot"],
     )
-    def vqr_solver_opts(self, request):
+    def solver(self, request):
         return request.param
 
     @pytest.fixture(
@@ -39,43 +39,47 @@ class TestVectorQuantileEstimator(object):
             "d=3",
         ],
     )
-    def vqe_fitted(self, request, vqr_solver_opts):
-        params = request.param
-        solver, solver_opts = vqr_solver_opts
-        d, N, T = params["d"], params["N"], params["T"]
+    def problem_size(self, request):
+        param = request.param
+        d, N, T = param["d"], param["N"], param["T"]
+        return (d, N, T)
+
+    @pytest.fixture(scope="class")
+    def vqe_fitted(self, solver, problem_size):
+        d, N, T = problem_size
+        solver_name, solver_opts = solver
+        solver_opts["T"] = T
+
         X, Y = IndependentDataProvider(d=d, k=1).sample(n=N)
         vqe = VectorQuantileEstimator(
-            n_levels=T,
-            solver=solver,
+            solver=solver_name,
             solver_opts=solver_opts,
         )
         vqe.fit(Y)
+
         return Y, vqe
 
-    def test_shapes(self, vqe_fitted):
+    def test_shapes(self, vqe_fitted, problem_size):
+        d, N, T = problem_size
         Y, vqe = vqe_fitted
-        N, d = Y.shape
-        T = vqe.n_levels
 
         assert vqe.dim_y == d
         assert len(vqe.quantile_grid) == d
         assert all(q.shape == (T,) * d for q in vqe.quantile_grid)
 
-    def test_vector_quantiles(self, vqe_fitted):
+    def test_vector_quantiles(self, vqe_fitted, problem_size):
+        d, N, T = problem_size
         Y, vqe = vqe_fitted
-        N, d = Y.shape
-        T = vqe.n_levels
 
-        vqf: QuantileFunction = vqe.vector_quantiles()
+        vqf: DiscreteVQF = vqe.vector_quantiles()
         assert len(vqf) == d
         assert all(q_surface.shape == (T,) * d for q_surface in vqf)
         assert vqf.values.shape == (d, *[T] * d)
-        assert vqf.levels.shape == (d, *[T] * d)
+        assert vqf.quantile_grid.shape == (d, *[T] * d)
 
-    def test_sample(self, vqe_fitted, test_out_dir):
+    def test_sample(self, vqe_fitted, problem_size, test_out_dir):
+        d, N, T = problem_size
         Y, vqe = vqe_fitted
-        N, d = Y.shape[0], Y.shape[1]
-        T = vqe.n_levels
 
         n = 1000
         Y_samp = vqe.sample(n)
@@ -89,20 +93,17 @@ class TestVectorQuantileEstimator(object):
             fig.savefig(test_out_dir.joinpath("vqe_sample.pdf"), bbox_inches="tight")
 
     @pytest.mark.flaky(reruns=1)
-    def test_coverage(self, vqe_fitted, test_out_dir):
+    def test_coverage(self, vqe_fitted, problem_size, test_out_dir):
+        d, N, T = problem_size
         Y, vqe = vqe_fitted
-        N, d = Y.shape
-        T = vqe.n_levels
 
         cov = vqe.coverage(Y, alpha=0.05)
         print(f"{cov=}")
         assert cov > (0.7 if d < 3 else 0.25)
 
-    def test_not_fitted(self, vqr_solver_opts):
-        solver, solver_opts = vqr_solver_opts
-        vq = VectorQuantileEstimator(
-            n_levels=100, solver=solver, solver_opts=solver_opts
-        )
+    def test_not_fitted(self, solver):
+        solver_name, solver_opts = solver
+        vq = VectorQuantileEstimator(solver=solver_name, solver_opts=solver_opts)
         with pytest.raises(NotFittedError):
             _ = vq.quantile_grid
         with pytest.raises(NotFittedError):
@@ -110,39 +111,36 @@ class TestVectorQuantileEstimator(object):
 
     def test_monotonicity(self, vqe_fitted):
         Y, vqe = vqe_fitted
-        N, d = Y.shape
-        T = vqe.n_levels
 
         _test_monotonicity(
             Us=vqe.quantile_grid,
             Qs=list(vqe.vector_quantiles(refine=True)),
-            T=vqe.n_levels,
         )
 
-    def test_vmr_vqe(self, vqr_solver_opts):
-        solver, solver_opts = vqr_solver_opts
+    def test_vmr_vqe(self, solver):
+        solver_name, solver_opts = solver
 
         T = 15
         N = 1000
         d = 2
+        solver_opts["T"] = T
 
         _, Y = IndependentDataProvider(d=d, k=1).sample(n=N)
-        vqe = VectorQuantileEstimator(
-            n_levels=T, solver=solver, solver_opts=solver_opts
-        )
+        vqe = VectorQuantileEstimator(solver=solver_name, solver_opts=solver_opts)
         vqe.fit(Y)
+
         off_projs, _ = monotonicity_offending_projections(
             Us=vqe.quantile_grid,
             Qs=list(vqe.vector_quantiles(refine=False)),
-            T=vqe.n_levels,
             projection_tolerance=0.0,
         )
+
         off_projs_refined, _ = monotonicity_offending_projections(
             Us=vqe.quantile_grid,
             Qs=list(vqe.vector_quantiles(refine=True)),
-            T=vqe.n_levels,
             projection_tolerance=0.0,
         )
+
         print(len(off_projs), len(off_projs_refined))
         assert len(off_projs_refined) <= len(off_projs)
 
@@ -153,7 +151,7 @@ class TestPOTVQE:
     @pytest.mark.parametrize("T", [10, 20])
     def test_pot_quantile_vs_sorted_Y_1d(self, N, T):
         Y = np.random.randn(N, 1)
-        est_quantiles = POTVQESolver().solve_vqr(T=T, Y=Y).vector_quantiles()[0][0]
+        est_quantiles = POTVQESolver(T=T).solve_vqe(Y=Y).values[0]
         sorted_Y = np.sort(Y.squeeze())[:: int(N / T)]
         assert np.allclose(est_quantiles[1:], sorted_Y[1:-1])
 
@@ -162,8 +160,8 @@ class TestPOTVQE:
     @pytest.mark.parametrize("d", [1, 2, 3])
     def test_pot_quantile_vs_sorted_Y_2d(self, N, T, d):
         Y = np.random.randn(N, d)
-        est_quantiles = POTVQESolver().solve_vqr(T=T, Y=Y).vector_quantiles()[0]
-        est_quantiles_cvx = CVXVQRSolver().solve_vqr(T=T, Y=Y).vector_quantiles()[0]
+        est_quantiles = POTVQESolver(T=T).solve_vqe(Y=Y).values
+        est_quantiles_cvx = CVXVQRSolver(T=T).solve_vqe(Y=Y).values
         for Q, Q_cvx in zip(est_quantiles, est_quantiles_cvx):
             assert Q.shape == (T,) * d
             assert Q_cvx.shape == (T,) * d
@@ -173,27 +171,20 @@ class TestPOTVQE:
     @pytest.mark.parametrize("N", [101, 201, 301, 1001])
     def test_vqe_vs_cvx(self, T, N):
         Y = np.random.randn(N, 1)
-        est_quantiles = POTVQESolver().solve_vqr(T=T, Y=Y).vector_quantiles()[0][0]
-        est_quantiles_cvx = CVXVQRSolver().solve_vqr(T=T, Y=Y).vector_quantiles()[0][0]
+        est_quantiles = POTVQESolver(T=T).solve_vqe(Y=Y).values[0]
+        est_quantiles_cvx = CVXVQRSolver(T=T).solve_vqe(Y=Y).values[0]
         assert np.allclose(est_quantiles, est_quantiles_cvx)
-
-    def test_no_X(self):
-        Y = np.random.randn(1000, 1)
-        with pytest.raises(AssertionError, match="POTVQESolver can't work with*"):
-            POTVQESolver().solve_vqr(T=50, Y=Y, X=np.random.randn(1000, 2))
 
     @pytest.mark.parametrize("d", [1, 2, 3, 4])
     def test_multiple_d(self, d):
         T = 10
         Y = np.random.randn(1000, d)
-        quantiles = POTVQESolver().solve_vqr(T=T, Y=Y, X=None).vector_quantiles()[0]
+        quantiles = POTVQESolver(T=T).solve_vqe(Y=Y).values
         assert len(quantiles) == d
 
     @pytest.mark.parametrize("N", [1001, 2001, 3001])
     @pytest.mark.parametrize("T", [5, 10, 20, 25, 30])
     def test_comonotonicity(self, N, T):
         Y = np.random.randn(N, 2)
-        vqe_soln = POTVQESolver().solve_vqr(T=T, Y=Y, X=None)
-        quantiles = vqe_soln.vector_quantiles()[0]
-        quantile_grids = vqe_soln.quantile_grid
-        _test_monotonicity(Us=quantile_grids, Qs=quantiles, T=T)
+        vqf = POTVQESolver(T=T).solve_vqe(Y=Y)
+        _test_monotonicity(Us=vqf.quantile_grid, Qs=vqf.values)

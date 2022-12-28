@@ -71,9 +71,8 @@ class QuantileFunctionDataProviderWrapper(DataProvider):
     def _fit_vqr(self) -> VectorQuantileRegressor:
         X, Y = self.wrapped_provider.sample(n=self._vqr_fit_n)
         return VectorQuantileRegressor(
-            n_levels=self._vqr_n_levels,
             solver=self._vqr_solver_name,
-            solver_opts=self._vqr_solver_opts,
+            solver_opts=dict(**self._vqr_solver_opts, T=self._vqr_n_levels),
         ).fit(X, Y)
 
     def _vqr_from_cache(self):

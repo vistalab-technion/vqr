@@ -1,5 +1,6 @@
 # isort: skip_file
-from vqr.vqr import VQRSolver, VQRSolution, QuantileFunction
+from vqr.cvqf import VQFBase, DiscreteVQFBase, VQF, CVQF, DiscreteVQF, DiscreteCVQF
+from vqr.solvers import VQRSolver
 from vqr.api import VectorQuantileEstimator, VectorQuantileRegressor
 from pkg_resources import DistributionNotFound, get_distribution
 

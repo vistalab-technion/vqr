@@ -10,7 +10,7 @@ from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from mpl_toolkits.mplot3d import Axes3D
 
-from vqr.vqr import quantile_levels, quantile_contour
+from vqr.cvqf import get_d_T, quantile_levels, quantile_contour
 from vqr.coverage import point_in_hull
 
 
@@ -27,8 +27,6 @@ def _level_label(t: float) -> str:
 
 
 def plot_quantiles(
-    T: int,
-    d: int,
     Qs: Sequence[Array],
     Us: Sequence[Array],
     figsize: Optional[Tuple[int, int]] = None,
@@ -41,9 +39,6 @@ def plot_quantiles(
     plotted using a simple line plot, while vector quantiles with d=2 will be plotted
     as an image, where the pixel colors correspond to quantile value.
 
-    :param T: The number of quantile levels that was used for solving the problem.
-    :param d: The dimension of the target data (Y) that was used for solving the
-    problem.
     :param Qs: Quantile surfaces per dimension of Y. A sequence of length d,
     where each element is of shape (T, T, ..., T).
     :param Us: Quantile levels per dimension of U. A sequence of length d,
@@ -51,6 +46,7 @@ def plot_quantiles(
     :param figsize: Size of figure to create. Will be passed to plt.subplots.
     :return: The created figure.
     """
+    d, T = get_d_T(Qs)
     if d > 2:
         raise RuntimeError("Can't plot quantiles with dimension greater than 2")
 
@@ -104,8 +100,6 @@ def plot_quantiles(
 
 
 def plot_quantiles_3d(
-    T,
-    d,
     Qs: Sequence[Array],
     Us: Sequence[Array],
     colorbar: bool = True,
@@ -122,9 +116,6 @@ def plot_quantiles_3d(
     plotted as voxels, where the color of the quantile corresponds to the value of the
     quantile.
 
-    :param T: The number of quantile levels that was used for solving the problem.
-    :param d: The dimension of the target data (Y) that was used for solving the
-        problem.
     :param Qs: Quantile surfaces per dimension of Y. A sequence of length d,
     where each element is of shape (T, T, ..., T).
     :param Us: Quantile levels per dimension of U. A sequence of length d,
@@ -135,6 +126,7 @@ def plot_quantiles_3d(
     :param figsize: Size of figure to create. Will be passed to plt.subplots.
     :return: The created figure.
     """
+    d, T = get_d_T(Qs)
     if not 1 < d < 4:
         raise RuntimeError("Can't plot 3d quantiles with dimension other than 2, 3")
 
@@ -244,11 +236,11 @@ def plot_contour_2d(
             color="k",
             marker=".",
             edgecolor="white",
-            label="Y",
+            label="$Y=(Y_1,Y_2)$",
         )
 
     for i, alpha in enumerate(alphas):
-        Q_contour = quantile_contour(T, d=2, Qs=[Q1, Q2], alpha=alpha)[0]
+        Q_contour = quantile_contour(Qs=[Q1, Q2], alpha=alpha)[0]
 
         label = alpha_labels[i] if alpha_labels else rf"$\alpha$={alpha:.2f}"
         color = alpha_colors[i] if alpha_colors else f"C{i}"
@@ -258,6 +250,8 @@ def plot_contour_2d(
             **surf_kws,
         )
 
+    ax.set_xlabel("$Y_1$")
+    ax.set_ylabel("$Y_2$")
     ax.legend()
     return fig, ax
 
@@ -305,7 +299,7 @@ def plot_coverage_2d(
     else:
         fig, ax = None, ax
 
-    Q_surface = quantile_contour(T, d=2, Qs=[Q1, Q2], alpha=alpha)[0]
+    Q_surface = quantile_contour(Qs=[Q1, Q2], alpha=alpha)[0]
 
     surf_kws = dict(alpha=0.5, color=contour_color, s=200, marker="v")
     ax.scatter(*Q_surface.T, **surf_kws)

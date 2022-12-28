@@ -10,7 +10,7 @@ from numpy.linalg import norm
 from _pytest.fixtures import FixtureRequest
 
 from tests import TESTS_OUT_DIR
-from vqr.vqr import check_comonotonicity, decode_quantile_grid, vector_quantile_levels
+from vqr.cvqf import check_comonotonicity, vector_quantile_levels
 from experiments.log import setup_logging
 
 setup_logging()
@@ -69,12 +69,11 @@ def _test_out_dir(request: FixtureRequest, clear: bool = True, with_pid: bool = 
 def _test_monotonicity(
     Us: Sequence[np.ndarray],
     Qs: Sequence[np.ndarray],
-    T: int,
     projection_tolerance: float = 0.0,
     offending_proportion_limit: float = 0.005,
 ):
     offending_projections, projections = monotonicity_offending_projections(
-        Qs, Us, T, projection_tolerance
+        Qs, Us, projection_tolerance
     )
     n_c, n = len(offending_projections), len(projections)
 
@@ -91,12 +90,11 @@ def _test_monotonicity(
 def monotonicity_offending_projections(
     Qs: Sequence[np.ndarray],
     Us: Sequence[np.ndarray],
-    T: int,
     projection_tolerance: float,
 ) -> Tuple[Sequence[float], Sequence[float]]:
     assert len(Qs) == len(Us)
 
-    pairwise_comonotonicity_mat = check_comonotonicity(T=T, d=len(Qs), Qs=Qs, Us=Us)
+    pairwise_comonotonicity_mat = check_comonotonicity(Qs=Qs, Us=Us)
     offending_projections = pairwise_comonotonicity_mat[
         np.where(np.triu(pairwise_comonotonicity_mat) < projection_tolerance)
     ].tolist()

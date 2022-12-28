@@ -3,7 +3,7 @@ from sklearn.datasets import make_regression
 from sklearn.model_selection import train_test_split
 
 from vqr import VectorQuantileRegressor
-from vqr.solvers.dual.regularized_lse import RegularizedDualVQRSolver
+from vqr.solvers.regularized_lse import RegularizedDualVQRSolver
 
 
 def test_vqr_minimal():
@@ -26,9 +26,9 @@ def test_vqr_minimal():
 
     # Create the VQR solver and regressor.
     vqr_solver = RegularizedDualVQRSolver(
-        verbose=True, epsilon=1e-2, num_epochs=1000, lr=0.9
+        verbose=True, T=T, epsilon=1e-2, num_epochs=1000, lr=0.9
     )
-    vqr = VectorQuantileRegressor(n_levels=T, solver=vqr_solver)
+    vqr = VectorQuantileRegressor(solver=vqr_solver)
 
     # Fit the model on the data.
     vqr.fit(X_train, Y_train)

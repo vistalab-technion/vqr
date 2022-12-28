@@ -1,40 +1,62 @@
 from __future__ import annotations
 
-from typing import Optional
+from typing import Union, Optional
 
 import cvxpy as cp
 import numpy as np
 from numpy import ndarray as Array
 from scipy.spatial.distance import cdist
 
-from vqr import VQRSolver, VQRSolution
-from vqr.vqr import vector_quantile_levels
+from vqr.cvqf import DiscreteVQF, DiscreteCVQF, vector_quantile_levels
+from vqr.utils import get_kwargs
+from vqr.solvers.base import VQRDiscreteSolver
 
 SIMILARITY_FN_INNER_PROD = lambda x, y: np.dot(x, y)
 
 
-class CVXVQRSolver(VQRSolver):
+class CVXVQRSolver(VQRDiscreteSolver):
     """
     Solves the Optimal Transport formulation of Vector Quantile Regression using
     CVXPY as a solver backend.
-
-    See:
-        Carlier, Chernozhukov, Galichon. Vector quantile regression:
-        An optimal transport approach,
-        Annals of Statistics, 2016
     """
+
+    def __init__(self, T: int = 50, verbose: bool = False, **cvxpy_kwargs):
+        """
+
+        :param T: Number of quantile levels to estimate along each of the d
+        dimensions. The quantile level will be spaced uniformly between 0 and 1.
+        :param verbose: Whether to be verbose.
+        :param cvxpy_kwargs: Any kwargs supported by CVXPY's Problem.solve().
+        """
+        super().__init__()
+        self.T = T
+        self.verbose = verbose
+        cvxpy_kwargs["verbose"] = verbose
+        self.cvxpy_kwargs = cvxpy_kwargs
+        self._solver_opts = get_kwargs()
 
     @classmethod
     def solver_name(cls) -> str:
         return "cvx_primal"
 
-    def __init__(self, verbose: bool = False, **cvx_solver_opts):
-        super().__init__()
-        self._verbose = verbose
-        cvx_solver_opts["verbose"] = verbose
-        self._solver_opts = cvx_solver_opts
+    @property
+    def solver_opts(self) -> dict:
+        return self._solver_opts
 
-    def solve_vqr(self, T: int, Y: Array, X: Optional[Array] = None) -> VQRSolution:
+    @property
+    def levels_per_dim(self) -> int:
+        return self.T
+
+    def solve_vqe(self, Y: Array) -> DiscreteVQF:
+        return self._solve(Y)
+
+    def solve_vqr(self, Y: Array, X: Array) -> DiscreteCVQF:
+        return self._solve(Y, X)
+
+    def _solve(
+        self, Y: Array, X: Optional[Array] = None
+    ) -> Union[DiscreteVQF, DiscreteCVQF]:
+        T = self.T
         N = len(Y)
         Y = np.reshape(Y, (N, -1))
 
@@ -71,15 +93,14 @@ class CVXVQRSolver(VQRSolver):
         problem = cp.Problem(objective=cp.Maximize(Pi_S), constraints=constraints)
 
         # Solve the problem
-        problem.solve(**self._solver_opts)
+        problem.solve(**self.cvxpy_kwargs)
 
         # Obtain the lagrange multipliers Alpha (A) and Beta (B)
         AB: Array = constraints[0].dual_value
         AB = np.reshape(AB, newshape=[Td, k + 1])
         A = AB[:, [0]]  # A is (T**d, 1)
         if k == 0:
-            B = None
+            return DiscreteVQF(T, d, U, A, refine=False)
         else:
             B = AB[:, 1:]  # B is (T**d, k)
-
-        return VQRSolution(T, d, U, A, B)
+            return DiscreteCVQF(T=T, d=d, U=U, A=A, B=B, k_in=k)
