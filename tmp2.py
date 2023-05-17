@@ -2,6 +2,7 @@ import pickle
 
 import numpy as np
 import torch
+import scipy.stats
 from numpy import exp, array, zeros, arange, histogram
 from torch import Tensor, tensor
 from matplotlib import cm
@@ -9,16 +10,13 @@ from matplotlib import pyplot as plt
 from scipy.special import xlogy
 
 from vqr.api import VectorQuantileEstimator, VectorQuantileRegressor
+from experiments.data.shapes import StarDataProvider
 from experiments.optimization import _compare_conditional_quantiles
 from experiments.utils.metrics import kde, ranks, kde_l1, w2_pot, w2_keops
 from experiments.data.cond_banana import ConditionalBananaDataProvider
 from vqr.solvers.dual.regularized_lse import (
     RegularizedDualVQRSolver,
     MLPRegularizedDualVQRSolver,
-)
-from vqr.solvers.dual.alt_regularized_lse import (
-    AlternativeRegularizedDualVQRSolver,
-    MLPAlternativeRegularizedDualVQRSolver,
 )
 
 
@@ -50,23 +48,31 @@ n = 20000
 d = 2
 k = 1
 T = 50
-num_epochs = 10000
-linear = False
-sigma = 0.1
+num_epochs = 20000
+linear = True
+sigma = 0.035
 GPU_DEVICE_NUM = 1
 device = f"cuda:{GPU_DEVICE_NUM}" if GPU_DEVICE_NUM is not None else "cpu"
 dtype = torch.float32
-epsilon = 0.2 * 1e-1
-
-data_provider = ConditionalBananaDataProvider(k=k, d=d, nonlinear=True)
-X, Y = data_provider.sample(n=n)
+epsilon = 5e-3
+data_provider = StarDataProvider(
+    initial_rotation_deg=90, noise_std=0.01, x_max_deg=20, x_discrete=True
+)
+Xs = array([0, 10, 20, 30, 40, 50, 60])
+X = []
+Y = []
+for X_ in Xs:
+    X_co, Y_co = data_provider.sample(n=int(n / len(Xs)), x=X_)
+    X.append(X_co)
+    Y.append(Y_co)
+X = np.concatenate(X)
+Y = np.concatenate(Y)
 
 if linear:
-    solver = AlternativeRegularizedDualVQRSolver(
+    solver = RegularizedDualVQRSolver(
         verbose=True,
         num_epochs=num_epochs,
         epsilon=epsilon,
-        # lr=0.001,
         lr=2.9,
         gpu=True,
         full_precision=False,
@@ -79,7 +85,7 @@ if linear:
         lr_threshold=0.5 * 0.01,
     )
 else:
-    solver = MLPAlternativeRegularizedDualVQRSolver(
+    solver = MLPRegularizedDualVQRSolver(
         verbose=True,
         num_epochs=num_epochs,
         epsilon=epsilon,
@@ -93,9 +99,8 @@ else:
         batchsize_u=None,
         inference_batch_size=100,
         lr_factor=0.9,
-        lr_patience=500,
+        lr_patience=300,
         lr_threshold=0.5 * 0.01,
-        lr_max_steps=100,
     )
 
 vqr_est = VectorQuantileRegressor(n_levels=T, solver=solver)
@@ -103,7 +108,7 @@ vqr_est = VectorQuantileRegressor(n_levels=T, solver=solver)
 vqr_est.fit(X, Y)
 
 # Generate conditional distributions for the below X's
-Xs = [tensor(array([[x] * k]), dtype=dtype) for x in np.linspace(1.0, 3.0, 20)]
+Xs = [tensor(array([[x]]), dtype=dtype) for x in Xs]
 kde_l1_dists = []
 entropies_is = []
 entropies_oos = []
@@ -163,7 +168,7 @@ for cond_X in Xs:
         kde_orig.T,
         kde_est.T,
         kde_l1_dist,
-        f"Y_given_X={cond_X.squeeze().item():.1f}_{linear=}",
+        f"star-Y_given_X={cond_X.squeeze().item():.1f}_{linear=}",
     )
 
     # get quantiles
@@ -193,10 +198,10 @@ for cond_X in Xs:
     ax[1].hist(ranks_oos, bins=100)
     ax[1].set_title(f"OOS - entropy: {entropy_oos:.3f}")
     fig.suptitle(f"(X={cond_X.item():.1f})")
-    plt.savefig(f"Entropy_Y_given_X={cond_X.squeeze().item():.1f}_{linear=}.png")
+    plt.savefig(f"star-entropy_Y_given_X={cond_X.squeeze().item():.1f}_{linear=}.png")
 
 
-with open(f"./cond-banana-{linear=}.pkl", "wb") as f:
+with open(f"./stars-{linear=}.pkl", "wb") as f:
     pickle.dump(
         {
             "kde_dists": kde_l1_dists,

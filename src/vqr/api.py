@@ -24,12 +24,18 @@ from vqr.solvers.dual.regularized_lse import (
     RegularizedDualVQRSolver,
     MLPRegularizedDualVQRSolver,
 )
+from vqr.solvers.dual.alt_regularized_lse import (
+    AlternativeRegularizedDualVQRSolver,
+    ImplicitAlternativeRegularizedDualVQRSolver,
+)
 
 SOLVER_TYPES: Dict[str, Type[VQRSolver]] = {
     solver_class.solver_name(): solver_class
     for solver_class in [
         CVXVQRSolver,
         RegularizedDualVQRSolver,
+        AlternativeRegularizedDualVQRSolver,
+        ImplicitAlternativeRegularizedDualVQRSolver,
         MLPRegularizedDualVQRSolver,
         POTVQESolver,
     ]
@@ -338,7 +344,9 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
         # Sample from the quantile function
         return inversion_sampling(T=self.n_levels, d=self.dim_y, n=n, Qs=q_surfaces)
 
-    def coverage(self, Y: Array, x: Array, alpha: float = 0.05) -> float:
+    def coverage(
+        self, Y: Array, x: Array, alpha: float = 0.05, refine: bool = False
+    ) -> float:
         """
         Calculates the conditional coverage of given data points using the quantiles
         fitted by this model, conditioned on X=x.
@@ -358,7 +366,7 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
         x = self._validate_X_(X=x, single=True)
 
         # Calculate vector quantiles given sample X=x
-        vqf: QuantileFunction = self.vector_quantiles(X=x)[0]
+        vqf: QuantileFunction = self.vector_quantiles(X=x, refine=refine)[0]
         q_surfaces = tuple(vqf)  # d x (T, T, ..., T) where each is d-dimensional
 
         return measure_coverage(
@@ -368,7 +376,7 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
             data=Y,
         )
 
-    def width(self, x: Array, alpha: float = 0.05) -> float:
+    def width(self, x: Array, alpha: float = 0.05, refine: bool = False) -> float:
         """
         Calculates the width of given data points using the quantiles
         fitted by this model, conditioned on X=x.
@@ -387,13 +395,26 @@ class VectorQuantileRegressor(RegressorMixin, VectorQuantileBase):
         x = self._validate_X_(X=x, single=True)
 
         # Calculate vector quantiles given sample X=x
-        vqf: QuantileFunction = self.vector_quantiles(X=x)[0]
+        vqf: QuantileFunction = self.vector_quantiles(X=x, refine=refine)[0]
         q_surfaces = tuple(vqf)  # d x (T, T, ..., T) where each is d-dimensional
 
         return measure_width(
             quantile_contour=quantile_contour(
                 T=self.n_levels, d=self.dim_y, Qs=q_surfaces, alpha=alpha
             )[0],
+        )
+
+    def quantile_contour(
+        self, x: Array, alpha: float = 0.05, refine: bool = True
+    ) -> Sequence[Array]:
+        check_is_fitted(self)
+        x = self._validate_X_(X=x, single=True)
+
+        # Calculate vector quantiles given sample X=x
+        vqf: QuantileFunction = self.vector_quantiles(X=x, refine=refine)[0]
+        q_surfaces = tuple(vqf)  # d x (T, T, ..., T) where each is d-dimensional
+        return quantile_contour(
+            T=self.n_levels, d=self.dim_y, Qs=q_surfaces, alpha=alpha
         )
 
     def _validate_X_(self, X: Optional[Array], single: bool = False) -> Optional[Array]:

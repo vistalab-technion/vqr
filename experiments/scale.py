@@ -157,6 +157,7 @@ def single_scale_exp(
 def scale_exp(
     ctx: click.Context,
     validation_proportion: float,
+    solver_name: str,
     cov_n: int,
     cov_alpha: float,
     dist_n: int,
@@ -173,6 +174,7 @@ def scale_exp(
             dist_n=dist_n,
             validation_proportion=validation_proportion,
             seed=seed,
+            solver=solver_name,
             **vqr_option.to_dict(),
         )
         for vqr_option in vqr_options

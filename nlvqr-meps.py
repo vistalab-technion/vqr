@@ -13,7 +13,7 @@ from vqr.solvers.dual.regularized_lse import (
 dataset = "meps_20"
 DATA_FILE_NAME = f"{dataset}.pkl"
 DATA_FOLDER_NAME = "./data/"
-num_trials = 10
+num_trials = 1
 
 with open(f"{DATA_FOLDER_NAME}{DATA_FILE_NAME}", "rb") as f:
     all_data = pickle.load(f)
@@ -31,7 +31,8 @@ global_coverages = []
 global_widths = []
 
 for trial_num in range(num_trials):
-    permuted_indices = np.random.permutation(np.arange(0, train_size + valid_size))
+    # permuted_indices = np.random.permutation(np.arange(0, train_size + valid_size))
+    permuted_indices = np.arange(0, train_size + valid_size)
     train_X, train_Y = (
         all_X[permuted_indices[:train_size], :],
         all_Y[permuted_indices[:train_size], :],
@@ -54,7 +55,7 @@ for trial_num in range(num_trials):
     T = 50
     num_epochs = 40000
     linear = False
-    GPU_DEVICE_NUM = 0
+    GPU_DEVICE_NUM = 1
     device = f"cuda:{GPU_DEVICE_NUM}" if GPU_DEVICE_NUM is not None else "cpu"
     epsilon = 1e-2
 
@@ -62,11 +63,11 @@ for trial_num in range(num_trials):
         verbose=True,
         num_epochs=num_epochs,
         epsilon=epsilon,
-        lr=0.3,
+        lr=0.2,
         gpu=True,
-        skip=False,
+        skip=True,
         batchnorm=False,
-        hidden_layers=(100, 60, 20),
+        hidden_layers=(100, 100, 100),
         activation="relu",
         device_num=GPU_DEVICE_NUM,
         batchsize_y=None,
@@ -82,18 +83,34 @@ for trial_num in range(num_trials):
 
     test_X, test_Y = scaler_x.transform(test_X), scaler_y.transform(test_Y)
     coverages = []
+    contours = []
     widths = []
+    alpha = 0.02
 
     for X_test_i, Y_test_i in zip(test_X, test_Y):
+        contour_i = vqr_est.quantile_contour(x=X_test_i, alpha=alpha, refine=True)[0]
         coverage_i = vqr_est.coverage(
-            Y=Y_test_i[None, :], x=X_test_i[None, :], alpha=0.02
+            Y=Y_test_i[None, :], x=X_test_i[None, :], alpha=alpha
         )
-        width_i = vqr_est.width(x=X_test_i[None, :], alpha=0.02)
+        width_i = vqr_est.width(x=X_test_i[None, :], alpha=alpha)
         coverages.append(coverage_i)
         widths.append(width_i)
+        contours.append(contour_i)
 
     print(f"Trial {trial_num}, Coverage: {np.round(np.mean(coverages), 3)}")
     print(f"Trial {trial_num}, Area: {np.round(np.mean(widths), 3)}")
+
+    with open(f"nl-vqr-{dataset}-contours.pkl", "wb") as f:
+        pickle.dump(
+            {
+                "test_set": [test_X, test_Y],
+                "coverages": coverages,
+                "widths": widths,
+                "contours": contours,
+                "vqr_est": vqr_est,
+            },
+            f,
+        )
 
     global_coverages.append(np.mean(coverages))
     global_widths.append(np.mean(widths))

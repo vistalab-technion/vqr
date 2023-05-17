@@ -1,3 +1,4 @@
+import os
 import pickle
 
 import numpy as np
@@ -19,6 +20,8 @@ from vqr.solvers.dual.regularized_lse import (
 from vqr.solvers.dual.alt_regularized_lse import (
     AlternativeRegularizedDualVQRSolver,
     MLPAlternativeRegularizedDualVQRSolver,
+    ImplicitAlternativeRegularizedDualVQRSolver,
+    ImplicitMLPAlternativeRegularizedDualVQRSolver,
 )
 
 
@@ -58,16 +61,19 @@ device = f"cuda:{GPU_DEVICE_NUM}" if GPU_DEVICE_NUM is not None else "cpu"
 dtype = torch.float32
 epsilon = 0.2 * 1e-1
 
+os.makedirs(f"{linear=}", exist_ok=True)
+
 data_provider = ConditionalBananaDataProvider(k=k, d=d, nonlinear=True)
 X, Y = data_provider.sample(n=n)
 
 if linear:
-    solver = AlternativeRegularizedDualVQRSolver(
+    # solver = AlternativeRegularizedDualVQRSolver(
+    solver = ImplicitAlternativeRegularizedDualVQRSolver(
         verbose=True,
         num_epochs=num_epochs,
         epsilon=epsilon,
-        # lr=0.001,
-        lr=2.9,
+        lr=0.001,
+        # lr=2.9,
         gpu=True,
         full_precision=False,
         device_num=GPU_DEVICE_NUM,
@@ -79,11 +85,12 @@ if linear:
         lr_threshold=0.5 * 0.01,
     )
 else:
-    solver = MLPAlternativeRegularizedDualVQRSolver(
+    # solver = MLPAlternativeRegularizedDualVQRSolver(
+    solver = ImplicitMLPAlternativeRegularizedDualVQRSolver(
         verbose=True,
         num_epochs=num_epochs,
         epsilon=epsilon,
-        lr=0.4,
+        lr=0.001,
         gpu=True,
         skip=False,
         batchnorm=False,
@@ -163,7 +170,7 @@ for cond_X in Xs:
         kde_orig.T,
         kde_est.T,
         kde_l1_dist,
-        f"Y_given_X={cond_X.squeeze().item():.1f}_{linear=}",
+        f"{linear=}/kde_Y_given_X={cond_X.squeeze().item():.1f}",
     )
 
     # get quantiles
@@ -193,7 +200,9 @@ for cond_X in Xs:
     ax[1].hist(ranks_oos, bins=100)
     ax[1].set_title(f"OOS - entropy: {entropy_oos:.3f}")
     fig.suptitle(f"(X={cond_X.item():.1f})")
-    plt.savefig(f"Entropy_Y_given_X={cond_X.squeeze().item():.1f}_{linear=}.png")
+    plt.savefig(
+        f"{linear=}/Entropy_Y_given_X={cond_X.squeeze().item():.1f}_{linear=}.png"
+    )
 
 
 with open(f"./cond-banana-{linear=}.pkl", "wb") as f:

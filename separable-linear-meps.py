@@ -9,7 +9,20 @@ from vqr.solvers.dual.regularized_lse import RegularizedDualVQRSolver
 dataset = "meps_20"
 DATA_FILE_NAME = f"{dataset}.pkl"
 DATA_FOLDER_NAME = "./data/"
-num_trials = 10
+num_trials = 1
+
+
+def separable_contour(contour_x, contour_y):
+    points_ver_1 = [(contour_x[0][0], contour_y[i][0]) for i in range(len(contour_y))]
+    points_ver_2 = [(contour_x[-1][0], contour_y[i][0]) for i in range(len(contour_y))]
+
+    points_hor_1 = [(contour_x[i][0], contour_y[0][0]) for i in range(len(contour_x))]
+    points_hor_2 = [(contour_x[i][0], contour_y[-1][0]) for i in range(len(contour_x))]
+
+    points = [*points_hor_1, *points_ver_1, *points_hor_2, *points_ver_2]
+    points_array = np.array(points)
+    return points_array
+
 
 with open(f"{DATA_FOLDER_NAME}{DATA_FILE_NAME}", "rb") as f:
     all_data = pickle.load(f)
@@ -27,7 +40,8 @@ global_coverages = []
 global_widths = []
 
 for trial_num in range(num_trials):
-    permuted_indices = np.random.permutation(np.arange(0, train_size + valid_size))
+    # permuted_indices = np.random.permutation(np.arange(0, train_size + valid_size))
+    permuted_indices = np.arange(0, train_size + valid_size)
     train_X, train_Y = (
         all_X[permuted_indices[:train_size], :],
         all_Y[permuted_indices[:train_size], :],
@@ -94,9 +108,14 @@ for trial_num in range(num_trials):
     test_X, test_Y = scaler_x.transform(test_X), scaler_y.transform(test_Y)
     coverages = []
     widths = []
+    contours = []
     alpha = 0.01
 
     for X_test_i, Y_test_i in zip(test_X, test_Y):
+        contour_i = separable_contour(
+            vqr_est_1.quantile_contour(x=X_test_i, alpha=alpha, refine=True)[0],
+            vqr_est_2.quantile_contour(x=X_test_i, alpha=alpha, refine=True)[0],
+        )
         coverage_1_i = vqr_est_1.coverage(
             Y=Y_test_i[None, [0]], x=X_test_i[None, :], alpha=alpha, refine=True
         )
@@ -112,9 +131,23 @@ for trial_num in range(num_trials):
 
         coverages.append(coverage_i)
         widths.append(width_i)
+        contours.append(contour_i)
 
     print(f"Trial {trial_num}, Coverage: {np.round(np.mean(coverages), 3)}")
     print(f"Trial {trial_num}, Area: {np.round(np.mean(widths), 3)}")
+
+    with open(f"sep-qr-{dataset}-contours.pkl", "wb") as f:
+        pickle.dump(
+            {
+                "test_set": [test_X, test_Y],
+                "coverages": coverages,
+                "widths": widths,
+                "contours": contours,
+                "vqr_est_1": vqr_est_1,
+                "vqr_est_2": vqr_est_2,
+            },
+            f,
+        )
 
     global_coverages.append(np.mean(coverages))
     global_widths.append(np.mean(widths))

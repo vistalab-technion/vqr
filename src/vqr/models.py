@@ -1,6 +1,7 @@
-from typing import Union, Sequence
+from typing import Union, Optional, Sequence
 
 import torch
+import torch.nn.functional as F
 from numpy import array
 from torch import Tensor, nn, eye, diag
 from torch import ones as ones_th
@@ -32,7 +33,18 @@ NLS = {
     "logsoftmax": nn.LogSoftmax,
     "silu": nn.SiLU,
     "lrelu": nn.LeakyReLU,
+    "celu": nn.CELU,
 }
+
+
+def get_nl(nl: Union[str, nn.Module]):
+    if isinstance(nl, nn.Module):
+        non_linearity = nl
+    else:
+        if nl not in NLS:
+            raise ValueError(f"got {nl=} but must be one of {[*NLS.keys()]}")
+        non_linearity = NLS[nl]
+    return non_linearity
 
 
 class MLP(nn.Module):
@@ -53,6 +65,7 @@ class MLP(nn.Module):
         skip: bool = False,
         batchnorm: bool = False,
         dropout: float = 0,
+        last_nl: Optional[Union[str, nn.Module]] = None,
     ):
         """
         :param in_dim: Input feature dimension.
@@ -82,12 +95,7 @@ class MLP(nn.Module):
         if not hidden_dims:
             raise ValueError(f"got {hidden_dims=} but must have at least one")
 
-        if isinstance(nl, nn.Module):
-            non_linearity = nl
-        else:
-            if nl not in NLS:
-                raise ValueError(f"got {nl=} but must be one of {[*NLS.keys()]}")
-            non_linearity = NLS[nl]
+        non_linearity = get_nl(nl)
 
         if not 0 <= dropout < 1:
             raise ValueError(f"got {dropout=} but must be in [0, 1)")
@@ -110,6 +118,9 @@ class MLP(nn.Module):
         # Always end with FC
         layers.append(nn.Linear(fc_dims[-1], out_dim, bias=True))
 
+        if last_nl is not None:
+            layers.append(get_nl(last_nl)())
+
         self.fc_layers = nn.Sequential(*layers)
         self.skip = skip
 
@@ -121,3 +132,113 @@ class MLP(nn.Module):
             z += x
 
         return z
+
+    def init_weights(self):
+        def _init_weights(mod: nn.Module):
+            if isinstance(mod, nn.Linear):
+                nn.init.constant_(mod.weight, val=0.01)
+                nn.init.constant_(mod.bias, val=0.0)
+
+        self.apply(_init_weights)
+
+
+class DenseICNN(nn.Module):
+    """Fully connected ICNN with input-quadratic skip connections"""
+
+    def __init__(
+        self,
+        in_dim: int,
+        out_dim: int,
+        hidden_dims: Sequence[int] = (32, 32, 32),
+        nl: str = "celu",
+        dropout: float = 0.0,
+        rank: int = 1,
+        strong_convexity: float = 1e-6,
+        quadratic: bool = False,
+    ):
+        super(DenseICNN, self).__init__()
+        self.strong_convexity = strong_convexity
+        self.activation = get_nl(nl)()
+        self.unconstrained_layers = nn.ModuleList(
+            [
+                nn.Sequential(
+                    ConvexQuadratic(in_dim, out_features, rank=rank, bias=True)
+                    if quadratic
+                    else nn.Linear(in_dim, out_features, bias=True),
+                    nn.Dropout(dropout),
+                )
+                for out_features in hidden_dims
+            ]
+        )
+
+        sizes = zip(hidden_dims[:-1], hidden_dims[1:])
+        self.nonnegative_layers = nn.ModuleList(
+            [
+                nn.Sequential(
+                    nn.Linear(in_features, out_features, bias=False),
+                    nn.Dropout(dropout),
+                )
+                for (in_features, out_features) in sizes
+            ]
+        )
+        self.final_layer = nn.Linear(hidden_dims[-1], out_dim, bias=False)
+
+    def forward(self, input_tensor: Tensor):
+        self.convexify()
+
+        output = self.unconstrained_layers[0](input_tensor)
+        for quadratic_layer, convex_layer in zip(
+            self.unconstrained_layers[1:], self.nonnegative_layers
+        ):
+            output = convex_layer(output) + quadratic_layer(input_tensor)
+            output = self.activation(output)
+
+        return self.final_layer(output) + 0.5 * self.strong_convexity * (
+            input_tensor**2
+        ).sum(dim=1).reshape(-1, 1)
+
+    def convexify(self):
+        layer: nn.Sequential
+        for layer in self.nonnegative_layers:
+            for sublayer in layer:
+                if isinstance(sublayer, nn.Linear):
+                    sublayer.weight.data.clamp_(0)
+        self.final_layer.weight.data.clamp_(0)
+
+
+class ConvexQuadratic(nn.Module):
+    """Convex Quadratic Layer"""
+
+    __constants__ = [
+        "in_features",
+        "out_features",
+        "quadratic_decomposed",
+        "weight",
+        "bias",
+    ]
+
+    def __init__(
+        self, in_features: int, out_features: int, bias: bool = True, rank: int = 1
+    ):
+        super(ConvexQuadratic, self).__init__()
+
+        self.quadratic_decomposed = nn.Parameter(
+            torch.Tensor(torch.randn(in_features, rank, out_features))
+        )
+        self.weight = nn.Parameter(torch.Tensor(torch.randn(out_features, in_features)))
+        if bias:
+            self.bias = nn.Parameter(torch.Tensor(out_features))
+        else:
+            self.register_parameter("bias", None)
+
+    def forward(self, input_tensor: Tensor):
+        quad = (
+            (
+                input_tensor.matmul(
+                    self.quadratic_decomposed.transpose(1, 0)
+                ).transpose(1, 0)
+            )
+            ** 2
+        ).sum(dim=1)
+        linear = F.linear(input_tensor, self.weight, self.bias)
+        return quad + linear

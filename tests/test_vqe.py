@@ -20,8 +20,22 @@ class TestVectorQuantileEstimator(object):
             ),
             ("cvx_primal", {"verbose": True}),
             ("vqe_pot", {}),
+            (
+                "alt_regularized_dual",
+                {"verbose": True, "lr": 0.1, "epsilon": 1e-6},
+            ),
+            (
+                "implicit_alt_regularized_dual",
+                {"verbose": True, "lr": 0.1, "epsilon": 1e-6},
+            ),
         ],
-        ids=["rvqr_linear", "cvx_primal", "vqe_pot"],
+        ids=[
+            "rvqr_linear",
+            "cvx_primal",
+            "vqe_pot",
+            "alt_regularized_dual",
+            "implicit_alt_regularized_dual",
+        ],
     )
     def vqr_solver_opts(self, request):
         return request.param

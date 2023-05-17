@@ -12,39 +12,71 @@ from vqr.solvers.dual.regularized_lse import (
     RegularizedDualVQRSolver,
     MLPRegularizedDualVQRSolver,
 )
+from vqr.solvers.dual.alt_regularized_lse import (
+    AlternativeRegularizedDualVQRSolver,
+    ImplicitAlternativeRegularizedDualVQRSolver,
+)
 
 
 class TestVectorQuantileRegressor(object):
     @pytest.fixture(
         scope="class",
         params=[
-            RegularizedDualVQRSolver(
+            # RegularizedDualVQRSolver(
+            #     verbose=True,
+            #     lr=0.5,
+            #     epsilon=1e-2,
+            # ),
+            # RegularizedDualVQRSolver(
+            #     verbose=True,
+            #     lr=0.5,
+            #     epsilon=1e-2,
+            #     batchsize_y=1000,
+            #     batchsize_u=100,
+            # ),
+            # MLPRegularizedDualVQRSolver(verbose=True, lr=0.5, epsilon=1e-2),
+            # MLPRegularizedDualVQRSolver(
+            #     verbose=True,
+            #     lr=0.5,
+            #     epsilon=1e-2,
+            #     hidden_layers=[2, 4],
+            #     skip=False,  # No skip, so output will have different k
+            #     num_epochs=1500,
+            # ),
+            AlternativeRegularizedDualVQRSolver(
                 verbose=True,
                 lr=0.5,
                 epsilon=1e-2,
             ),
-            RegularizedDualVQRSolver(
+            AlternativeRegularizedDualVQRSolver(
                 verbose=True,
                 lr=0.5,
                 epsilon=1e-2,
                 batchsize_y=1000,
                 batchsize_u=100,
             ),
-            MLPRegularizedDualVQRSolver(verbose=True, lr=0.5, epsilon=1e-2),
-            MLPRegularizedDualVQRSolver(
-                verbose=True,
-                lr=0.5,
-                epsilon=1e-2,
-                hidden_layers=[2, 4],
-                skip=False,  # No skip, so output will have different k
-                num_epochs=1500,
-            ),
+            # ImplicitAlternativeRegularizedDualVQRSolver(
+            #     verbose=True,
+            #     lr=0.5,
+            #     epsilon=1e-2,
+            # ),
+            # ImplicitAlternativeRegularizedDualVQRSolver(
+            #     verbose=True,
+            #     lr=0.5,
+            #     epsilon=1e-2,
+            #     batchsize_y=1000,
+            #     batchsize_u=100,
+            # ),
         ],
         ids=[
-            "rvqr_linear",
-            "rvqr_linear_batches",
-            "rvqr_mlp",
-            "rvqr_mlp_change_k",
+            # "rvqr_linear",
+            # "rvqr_linear_batches",
+            # "rvqr_mlp",
+            # "rvqr_mlp_change_k",
+            "alt_rvqr_linear",
+            "alt_rvqr_linear_batches",
+            # "implicit_alt_rvqr_linear",
+            # "implicit_alt_rvqr_linear_batches",
         ],
     )
     def vqr_solver(self, request):

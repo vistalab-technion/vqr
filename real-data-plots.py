@@ -573,6 +573,7 @@ for dataset_name in ["bio", "blog_data", "House Prices", "MEPS-20"]:
         label="Requested Coverage",
     )
     coverage_means = np.mean(coverages, axis=0)
+    print(dataset_name, area_means, coverage_means)
     ax_.scatter(
         coverage_x_tick_pos, coverage_means, marker="x", color="black", s=30, zorder=3
     )

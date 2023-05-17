@@ -13,6 +13,7 @@ import pandas as pd
 from _socket import gethostname
 
 from experiments import EXPERIMENTS_OUT_DIR
+from vqr.solvers.primal.cvx import CVXVQRSolver
 from experiments.utils.helpers import stable_hash
 from experiments.utils.parallel import run_parallel_exp
 from vqr.solvers.dual.regularized_lse import (
@@ -387,6 +388,7 @@ class VQROptions(_CLIOptions):
             click.option(
                 _p("--mlp/--no-mlp"), type=bool, default=False, help="NL-VQR with MLP"
             ),
+            click.option(_p("--cvx"), type=bool, default=False, help="Use CVX."),
             click.option(
                 _p("--mlp-layers"),
                 type=str,
@@ -440,6 +442,8 @@ class VQROptions(_CLIOptions):
             if p[_n("mlp")]
             else RegularizedDualVQRSolver.solver_name()
         )
+        if p[_n("cvx")]:
+            solver_name = CVXVQRSolver.solver_name()
 
         vqr_options = tuple(
             VQROptions(
