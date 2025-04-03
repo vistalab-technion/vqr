@@ -116,9 +116,9 @@ X_train, X_test, Y_train, Y_test = train_test_split(
 
 # Create the VQR solver and regressor.
 vqr_solver = RegularizedDualVQRSolver(
-    verbose=True, epsilon=1e-2, num_epochs=1000, lr=0.9
+    T=50, verbose=True, epsilon=1e-2, num_epochs=1000, lr=0.9
 )
-vqr = VectorQuantileRegressor(n_levels=T, solver=vqr_solver)
+vqr = VectorQuantileRegressor(solver=vqr_solver)
 
 # Fit the model on the data.
 vqr.fit(X_train, Y_train)
